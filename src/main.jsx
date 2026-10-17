@@ -1,6 +1,5 @@
 import { StrictMode, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import NetworkBg from './NetworkBg';
 import './styles.css';
 
 const rounds = [
@@ -28,51 +27,18 @@ function App() {
 
   return (
     <div className="app-shell">
-      <aside className="side-rail cc-sb">
-        <NetworkBg />
-        <button className="rail-brand" onClick={() => setView('home')} aria-label="Go to CypherClash home">
-          <img src="/club-logo.jpg" alt="Club logo" /><span><strong>CypherClash</strong><strong className="rail-byline">by OsCode</strong></span>
-        </button>
-        <nav class="cc-sb__nav" aria-label="Event navigation">
-  <span class="cc-sb__indicator" aria-hidden="true"><i class="cc-sb__bubble"></i></span>
-
-  <a class="cc-sb__link" href="#event-brief" data-accent="#00c8eb">
-    <span class="cc-sb__icon">
-      <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-        <polyline points="14 2 14 8 20 8"/>
-        <line x1="16" y1="13" x2="8" y2="13"/>
-        <line x1="16" y1="17" x2="8" y2="17"/>
-      </svg>
-    </span>
-    <span class="cc-sb__label">Event brief</span>
-  </a>
-
-  <a class="cc-sb__link" href="#rounds" data-accent="#00c8eb">
-    <span class="cc-sb__icon">
-      <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-        <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/>
-        <line x1="4" y1="22" x2="4" y2="15"/>
-      </svg>
-    </span>
-    <span class="cc-sb__label">Rounds</span>
-  </a>
-
-  <a class="cc-sb__link" href="#scoreboard" data-accent="#d4f04a">
-    <span class="cc-sb__icon">
-      <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-        <path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/>
-        <path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/>
-        <path d="M4 22h16"/>
-        <path d="M10 14.66V17c0 .55-.47.98-1.97 1.21C7.85 18.75 7 20.24 7 22"/>
-        <path d="M14 14.66V17c0 .55.47.98 1.97 1.21C16.15 18.75 17 20.24 17 22"/>
-        <path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/>
-      </svg>
-    </span>
-    <span class="cc-sb__label">Scoreboard</span>
-  </a>
-</nav>
-      </aside>
+      <header className="cc-top">
+        <nav className="cc-top__nav" aria-label="Event navigation">
+          <span className="cc-top__pill" aria-hidden="true"></span>
+          <a className="cc-top__link" href="#event-brief" data-accent="#ffc933">Event brief</a>
+          <a className="cc-top__link" href="#rounds" data-accent="#22c1f1">Rounds</a>
+          <a className="cc-top__link" href="#scoreboard" data-accent="#ff4d5e">Scoreboard</a>
+        </nav>
+        <a className="cc-top__logo" href="#event-brief">
+          <img src="/club-logo.jpg" alt="OsCode club logo" />
+        </a>
+        <a className="cc-top__cta" href="#scoreboard" onClick={(event) => { event.preventDefault(); setView('portal'); }}>Register your team <span aria-hidden="true">↗</span></a>
+      </header>
       <div className="page-shell">
         {notice && <div className="notice" role="status">{notice}<button onClick={() => setNotice('')} aria-label="Dismiss notification">×</button></div>}
         {view === 'home' && <Landing setView={setView} />}
@@ -86,12 +52,49 @@ function App() {
 function Landing({ setView }) {
   const [practice, setPractice] = useState(null);
   return <main>
-    <section className="hero content-grid" id="event-brief">
-      <div className="hero-copy"><h1>Cypher<span>Clash</span></h1><p className="tagline">Because writing secure code was too much work.</p><p className="intro">A beginner-friendly computer-lab tournament for curious minds, fast teams, and anyone who has ever wondered what happens behind the button.</p><div className="hero-actions"><button className="button primary" onClick={() => setView('portal')}>Enter participant portal <span>↗</span></button><button className="text-button" onClick={() => document.getElementById('rounds').scrollIntoView({ behavior: 'smooth' })}>Explore the rounds ↓</button></div></div>
-      <div className="hero-mark"><div className="hero-file"><strong>04</strong><small>ROUNDS IN PLAY</small></div></div>
+    <section className="cc-hero" id="event-brief">
+      <p className="cc-hero__eyebrow">Student cybersecurity tournament</p>
+      <h1 className="cc-hero__title"><span className="cc-hero__w1">Cypher</span><span className="cc-hero__w2">Clash</span></h1>
+      <p className="cc-hero__tag">Because writing secure code was too much work.</p>
+      <div className="cc-hero__actions">
+        <a className="cc-btn cc-btn--solid" href="#portal" onClick={(event) => { event.preventDefault(); setView('portal'); }}>Enter participant portal <span aria-hidden="true">↗</span></a>
+        <a className="cc-btn cc-btn--ghost" href="#rounds">Explore the rounds <span aria-hidden="true">↓</span></a>
+      </div>
+      <dl className="cc-facts">
+        <div className="cc-fact cc-fact--stat"><dt>Rounds in play</dt><dd>04</dd></div>
+        <div className="cc-fact"><dt>Format</dt><dd>4-round tournament</dd></div>
+        <div className="cc-fact"><dt>Team size</dt><dd>2–3 members</dd></div>
+        <div className="cc-fact"><dt>Entry level</dt><dd>Zero prerequisites</dd></div>
+        <div className="cc-fact"><dt>When / Where</dt><dd>To be announced</dd></div>
+      </dl>
     </section>
-    <section className="facts content-grid"><div><span className="label">FORMAT</span><strong>4-round tournament</strong></div><div><span className="label">TEAM SIZE</span><strong>2–3 members</strong></div><div><span className="label">ENTRY LEVEL</span><strong>Zero prerequisites</strong></div><div><span className="label">WHEN / WHERE</span><strong className="muted">To be announced</strong></div></section>
-    <section className="round-section" id="rounds"><div className="section-heading"><p className="eyebrow">THE CHALLENGE MAP</p><h2>Four ways to <span>think sideways.</span></h2><p>Every round rewards a different kind of attention. No security background required.</p></div><div className="round-list">{rounds.map((round, index) => <article className={`round-row ${index === 3 ? 'finale' : ''}`} data-number={round.number} key={round.number}><div className="round-number">{round.number}</div><div className="round-info"><p className="label">{round.mode} <span>/ {round.time}</span></p><h3>{round.title}</h3><p>{round.desc}</p></div><div className="round-focus"><span>SKILL FOCUS</span><strong>{round.focus}</strong>{index === 3 && <b className="finale-tag">FINALE</b>}{index === 0 && <button className="text-button practice-button" onClick={() => setPractice('Phish or Legit?')}>Try a practice sample <span>↗</span></button>}</div></article>)}</div></section>
+    <section className="cc-rounds" id="rounds">
+      <h2 className="cc-rounds__title">Four ways to <span>think sideways.</span></h2>
+      <div className="cc-fan">
+        {rounds.map((round, index) => <article className={`cc-card cc-card--${index + 1}`} tabIndex="0" key={round.number}>
+          <div className="cc-card__top">
+            <span className="cc-card__num">{round.number}</span>
+            <span className="cc-card__icon">
+              <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                {index === 0 && <><line x1="6" x2="10" y1="11" y2="11" /><line x1="8" x2="8" y1="9" y2="13" /><line x1="15" x2="15.01" y1="12" y2="12" /><line x1="18" x2="18.01" y1="10" y2="10" /><path d="M17.32 5H6.68a4 4 0 0 0-3.978 3.59c-.006.052-.01.101-.017.152C2.604 9.416 2 14.456 2 16a3 3 0 0 0 3 3c1 0 1.5-.5 2-1l1.414-1.414A2 2 0 0 1 9.828 16h4.344a2 2 0 0 1 1.414.586L17 18c.5.5 1 1 2 1a3 3 0 0 0 3-3c0-1.545-.604-6.584-.685-7.258-.007-.05-.011-.1-.017-.151A4 4 0 0 0 17.32 5z" /></>}
+                {index === 1 && <><polyline points="16 18 22 12 16 6" /><polyline points="8 6 2 12 8 18" /></>}
+                {index === 2 && <><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /><circle cx="11.5" cy="14.5" r="2.5" /><path d="M13.3 16.3 15 18" /></>}
+                {index === 3 && <><rect width="18" height="11" x="3" y="11" rx="2" ry="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4" /></>}
+              </svg>
+            </span>
+          </div>
+          <div className="cc-card__body">
+            <p className="cc-card__eyebrow">{round.mode} / {round.time} {index === 3 && <span className="cc-card__tag">Finale</span>}</p>
+            <h3 className="cc-card__name">{round.title}</h3>
+            <div className="cc-card__more"><div>
+              <p className="cc-card__desc">{round.desc}</p>
+              <p className="cc-card__skill"><span>Skill focus</span>{round.focus}</p>
+              {index === 0 && <a className="cc-card__btn" href="#practice" onClick={(event) => { event.preventDefault(); setPractice('Phish or Legit?'); }}>Try a practice sample <span aria-hidden="true">↗</span></a>}
+            </div></div>
+          </div>
+        </article>)}
+      </div>
+    </section>
     <section className="scoreboard content-grid" id="scoreboard"><p className="eyebrow">SCOREBOARD</p><p className="scoreboard-message">Live scoreboard opens when the event starts.</p><button className="text-button" onClick={() => setView('portal')}>Register your team <span>↗</span></button></section>
     <footer><span>CYPHERCLASH / 2026</span><span>Made for curious beginners.</span></footer>
     {practice && <Practice onClose={() => setPractice(null)} />}
@@ -112,7 +115,6 @@ createRoot(document.getElementById('root')).render(<StrictMode><App /></StrictMo
   function init() {
     const nav = document.querySelector('.cc-sb__nav');
     if (!nav) {
-      setTimeout(init, 0);
       return;
     }
 
@@ -199,172 +201,120 @@ createRoot(document.getElementById('root')).render(<StrictMode><App /></StrictMo
   }
 })();
 
-/* === HERO NETWORK BG (delete this block to remove) === */
+/* === TOP NAV + PAGE NETWORK (delete this block to remove) === */
 (function () {
-  const PANEL_SELECTOR = '';   // optional: e.g. '.hero-stat'. Leave empty to auto-detect.
-
-  function findPanel() {
-    if (PANEL_SELECTOR) return document.querySelector(PANEL_SELECTOR);
-    const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
-    let node;
-    while ((node = walker.nextNode())) {
-      if (/rounds\s+in\s+play/i.test(node.nodeValue)) {
-        let el = node.parentElement;
-        while (el && el !== document.body) {
-          if (el.offsetWidth >= 300 && el.offsetHeight >= 220) return el;
-          el = el.parentElement;
-        }
-      }
+  function initNav() {
+    const nav = document.querySelector('.cc-top__nav');
+    if (!nav) { setTimeout(initNav, 0); return; }
+    const pill = nav.querySelector('.cc-top__pill');
+    const links = Array.from(nav.querySelectorAll('.cc-top__link'));
+    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    let current = null, lockUntil = 0;
+    const targets = links.map(function (l) {
+      const id = (l.getAttribute('href') || '').replace('#', '');
+      return { link: l, el: id ? document.getElementById(id) : null };
+    }).filter(function (t) { return t.el; });
+    if (!targets.length) { console.warn('[cc-top] no sections found for nav links'); return; }
+    function place(link) {
+      pill.style.width = link.offsetWidth + 'px';
+      pill.style.transform = 'translateX(' + link.offsetLeft + 'px)';
+      const c = link.dataset.accent || '#00c8e9';
+      pill.style.backgroundColor = c;
+      pill.style.boxShadow = '0 0 18px ' + c + '73';
     }
-    return null;
+    function setActive(link) {
+      if (!link || link === current) return;
+      current = link;
+      links.forEach(function (l) {
+        const on = l === link;
+        l.classList.toggle('is-active', on);
+        if (on) l.setAttribute('aria-current', 'location'); else l.removeAttribute('aria-current');
+      });
+      place(link);
+    }
+    function update() {
+      if (Date.now() < lockUntil) return;
+      const line = window.innerHeight * 0.35;
+      let best = targets[0];
+      targets.forEach(function (t) { if (t.el.getBoundingClientRect().top <= line) best = t; });
+      if (window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 4) best = targets[targets.length - 1];
+      setActive(best.link);
+    }
+    setActive(links[0]);
+    requestAnimationFrame(function () { nav.classList.add('is-ready'); update(); });
+    document.addEventListener('scroll', update, { passive: true, capture: true });
+    window.addEventListener('resize', function () { if (current) place(current); update(); });
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(function () { if (current) place(current); });
+    links.forEach(function (link) {
+      link.addEventListener('click', function (e) {
+        const t = targets.find(function (x) { return x.link === link; });
+        if (!t) return;
+        e.preventDefault();
+        lockUntil = Date.now() + 800;
+        setActive(link);
+        t.el.scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth', block: 'start' });
+        history.replaceState(null, '', link.getAttribute('href'));
+        setTimeout(update, 850);
+      });
+    });
   }
 
-  function startHeroNetwork(panel, canvas) {
+  function initNetwork() {
+    if (document.querySelector('.cc-bgnet')) return;
+    const canvas = document.createElement('canvas');
+    canvas.className = 'cc-bgnet';
+    canvas.setAttribute('aria-hidden', 'true');
+    document.body.prepend(canvas);
     const ctx = canvas.getContext('2d');
-    const DENSITY = 1500;     // lower = more dots
-    const LINK_DIST = 110;    // higher = more connecting lines
-    const SPEED = 0.22;       // drift speed
-    const COLORS = ['0,200,235', '0,200,235', '0,200,235', '120,170,255', '212,240,74'];
+    const DENSITY = 13000;
+    const LINK_DIST = 125;
+    const SPEED = 0.2;
+    const COLORS = ['255,255,255', '255,255,255', '163,163,173'];
     const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    let w = 0, h = 0, dots = [], mouse = null, rafId = 0;
-
+    let w = 0, h = 0, dots = [], mouse = null;
     function resize() {
       const dpr = window.devicePixelRatio || 1;
-      w = panel.clientWidth;
-      h = panel.clientHeight;
-      canvas.width = w * dpr;
-      canvas.height = h * dpr;
+      w = window.innerWidth; h = window.innerHeight;
+      canvas.width = w * dpr; canvas.height = h * dpr;
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      const count = Math.max(24, Math.round((w * h) / DENSITY));
+      const count = Math.max(30, Math.round((w * h) / DENSITY));
       dots = Array.from({ length: count }, function () {
-        const z = 0.3 + Math.random() * 0.7;
-        const a = Math.random() * Math.PI * 2;
-        return {
-          x: Math.random() * w,
-          y: Math.random() * h,
-          vx: Math.cos(a) * SPEED * z,
-          vy: Math.sin(a) * SPEED * z,
-          z: z,
-          r: 1 + z * 1.8,
-          c: COLORS[(Math.random() * COLORS.length) | 0]
-        };
+        const z = 0.3 + Math.random() * 0.7, a = Math.random() * Math.PI * 2;
+        return { x: Math.random() * w, y: Math.random() * h, vx: Math.cos(a) * SPEED * z, vy: Math.sin(a) * SPEED * z, z: z, r: 1 + z * 1.6, c: COLORS[(Math.random() * COLORS.length) | 0] };
       });
     }
-
     function draw() {
       ctx.clearRect(0, 0, w, h);
-
       for (let i = 0; i < dots.length; i++) {
         const a = dots[i];
         for (let j = i + 1; j < dots.length; j++) {
-          const b = dots[j];
-          const dx = a.x - b.x, dy = a.y - b.y;
-          const d = Math.sqrt(dx * dx + dy * dy);
-          if (d < LINK_DIST) {
-            const alpha = (1 - d / LINK_DIST) * 0.5 * Math.min(a.z, b.z);
-            ctx.strokeStyle = 'rgba(' + a.c + ',' + alpha + ')';
-            ctx.lineWidth = 0.8;
-            ctx.beginPath();
-            ctx.moveTo(a.x, a.y);
-            ctx.lineTo(b.x, b.y);
-            ctx.stroke();
-          }
+          const b = dots[j], dx = a.x - b.x, dy = a.y - b.y, d = Math.sqrt(dx * dx + dy * dy);
+          if (d < LINK_DIST) { ctx.strokeStyle = 'rgba(' + a.c + ',' + (1 - d / LINK_DIST) * 0.45 * Math.min(a.z, b.z) + ')'; ctx.lineWidth = 0.8; ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke(); }
         }
         if (mouse) {
-          const dx = a.x - mouse.x, dy = a.y - mouse.y;
-          const d = Math.sqrt(dx * dx + dy * dy);
-          if (d < LINK_DIST * 1.4) {
-            ctx.strokeStyle = 'rgba(212,240,74,' + (1 - d / (LINK_DIST * 1.4)) * 0.6 + ')';
-            ctx.lineWidth = 1;
-            ctx.beginPath();
-            ctx.moveTo(a.x, a.y);
-            ctx.lineTo(mouse.x, mouse.y);
-            ctx.stroke();
-          }
+          const dx = a.x - mouse.x, dy = a.y - mouse.y, d = Math.sqrt(dx * dx + dy * dy);
+          if (d < LINK_DIST * 1.4) { ctx.strokeStyle = 'rgba(255,255,255,' + (1 - d / (LINK_DIST * 1.4)) * 0.55 + ')'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(mouse.x, mouse.y); ctx.stroke(); }
         }
       }
-
       dots.forEach(function (p) {
         if (p.z < 0.55) {
           const g = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.r * 4);
-          g.addColorStop(0, 'rgba(' + p.c + ',0.35)');
-          g.addColorStop(1, 'rgba(' + p.c + ',0)');
-          ctx.fillStyle = g;
-          ctx.beginPath();
-          ctx.arc(p.x, p.y, p.r * 4, 0, Math.PI * 2);
-          ctx.fill();
-        } else {
-          ctx.fillStyle = 'rgba(' + p.c + ',' + (0.5 + p.z * 0.5) + ')';
-          ctx.beginPath();
-          ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
-          ctx.fill();
-        }
+          g.addColorStop(0, 'rgba(' + p.c + ',0.35)'); g.addColorStop(1, 'rgba(' + p.c + ',0)');
+          ctx.fillStyle = g; ctx.beginPath(); ctx.arc(p.x, p.y, p.r * 4, 0, Math.PI * 2); ctx.fill();
+        } else { ctx.fillStyle = 'rgba(' + p.c + ',' + (0.5 + p.z * 0.5) + ')'; ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2); ctx.fill(); }
       });
     }
-
     function move() {
-      dots.forEach(function (p) {
-        p.x += p.vx;
-        p.y += p.vy;
-        if (p.x < -10) p.x = w + 10;
-        if (p.x > w + 10) p.x = -10;
-        if (p.y < -10) p.y = h + 10;
-        if (p.y > h + 10) p.y = -10;
-      });
+      dots.forEach(function (p) { p.x += p.vx; p.y += p.vy; if (p.x < -10) p.x = w + 10; if (p.x > w + 10) p.x = -10; if (p.y < -10) p.y = h + 10; if (p.y > h + 10) p.y = -10; });
     }
-
-    function loop() {
-      rafId = requestAnimationFrame(loop);
-      move();
-      draw();
-    }
-
-    function onMove(e) {
-      const r = panel.getBoundingClientRect();
-      mouse = { x: e.clientX - r.left, y: e.clientY - r.top };
-    }
-    function onLeave() { mouse = null; }
-
+    function loop() { requestAnimationFrame(loop); move(); draw(); }
     resize();
-    if (reduceMotion) draw(); else rafId = requestAnimationFrame(loop);
-
-    const ro = new ResizeObserver(function () { resize(); if (reduceMotion) draw(); });
-    ro.observe(panel);
-    panel.addEventListener('mousemove', onMove);
-    panel.addEventListener('mouseleave', onLeave);
+    if (reduceMotion) draw(); else requestAnimationFrame(loop);
+    window.addEventListener('resize', function () { resize(); if (reduceMotion) draw(); });
+    window.addEventListener('mousemove', function (e) { mouse = { x: e.clientX, y: e.clientY }; });
+    document.addEventListener('mouseleave', function () { mouse = null; });
   }
-
-  function init(tries) {
-    const panel = findPanel();
-    if (!panel) {
-      if (tries < 10) setTimeout(function () { init(tries + 1); }, 400);
-      else console.warn('[hero-net] Panel not found. Set PANEL_SELECTOR.');
-      return;
-    }
-    if (panel.querySelector('.cc-hero-net')) return;
-
-    // only change positioning if the panel isn't already positioned (avoids layout shifts)
-    if (getComputedStyle(panel).position === 'static') panel.style.position = 'relative';
-    panel.style.isolation = 'isolate';
-
-    // hide the old static decorative SVG network (it is restored if you delete this block)
-    panel.querySelectorAll('svg[aria-hidden="true"]').forEach(function (s) {
-      s.style.display = 'none';
-    });
-
-    const canvas = document.createElement('canvas');
-    canvas.className = 'cc-hero-net';
-    canvas.setAttribute('aria-hidden', 'true');
-    canvas.style.cssText =
-      'position:absolute;inset:0;width:100%;height:100%;z-index:-1;pointer-events:none;';
-    panel.prepend(canvas);
-    startHeroNetwork(panel, canvas);
-  }
-
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', function () { init(0); });
-  } else {
-    init(0);
-  }
+  function init() { initNav(); initNetwork(); }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();
 })();
-/* === END HERO NETWORK BG === */
+/* === END TOP NAV + PAGE NETWORK === */
