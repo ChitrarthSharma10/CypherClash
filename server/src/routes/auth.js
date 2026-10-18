@@ -3,7 +3,7 @@ import rateLimit from 'express-rate-limit';
 import { z } from 'zod';
 import { Admin } from '../models/Admin.js';
 import { Team } from '../models/Team.js';
-import { comparePassword } from '../utils/passwords.js';
+import { comparePassword, hashPassword } from '../utils/passwords.js';
 import { logEvent } from '../utils/logging.js';
 import { validateBody } from '../middleware/validation.js';
 import { loadActiveTeam } from '../middleware/auth.js';
@@ -24,6 +24,7 @@ const adminLoginSchema = z.object({
 }).strict();
 
 const emptyBodySchema = z.object({}).strict();
+const DUMMY_PASSWORD_HASH = await hashPassword('invalid-team-dummy-password');
 
 const teamLoginKeys = new Map();
 
@@ -109,9 +110,10 @@ router.post(
     const { teamId, password } = req.body;
     try {
       const team = await Team.findOne({ teamId }).select('+passwordHash');
-      const passwordMatches = team
-        ? await comparePassword(password, team.passwordHash)
-        : false;
+      const passwordMatches = await comparePassword(
+        password,
+        team?.passwordHash || DUMMY_PASSWORD_HASH,
+      );
 
       if (!team || !team.active || !passwordMatches) {
         await logEvent({

@@ -11,26 +11,29 @@ await connectDatabase();
 try {
   await ScoreEntry.syncIndexes();
   const indexes = await ScoreEntry.collection.indexes();
+  console.info(`ScoreEntry indexes: ${indexes.map(({ name }) => name).join(', ')}`);
   const gameResultIndex = indexes.find(
     (index) => index.name === 'teamId_1_round_1_attemptNo_1_game_1',
   );
+  const gameResultIndexes = indexes.filter(
+    (index) => index.unique && index.partialFilterExpression?.kind === 'game_result',
+  );
   if (
     !gameResultIndex
+    || gameResultIndexes.length !== 1
     || !gameResultIndex.unique
     || gameResultIndex.key.teamId !== 1
     || gameResultIndex.key.round !== 1
     || gameResultIndex.key.attemptNo !== 1
     || gameResultIndex.key.game !== 1
     || gameResultIndex.partialFilterExpression?.kind !== 'game_result'
+    || indexes.some((index) => index.name === 'teamId_1_round_1_game_1')
   ) {
-    console.warn('ScoreEntry game-result unique index is missing or misconfigured');
+    throw new Error('ScoreEntry game-result unique index is missing or misconfigured');
   }
 } catch (error) {
-  console.warn(
-    'Unable to verify the ScoreEntry game-result unique index',
-    error.name,
-    error.code || 'unknown error',
-  );
+  console.error('Unable to sync or verify ScoreEntry indexes', error.name, error.code || 'unknown error');
+  throw error;
 }
 await initializeRoundStates();
 await rebuildLeaderboard();

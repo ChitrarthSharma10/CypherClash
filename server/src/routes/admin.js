@@ -260,6 +260,7 @@ router.patch('/teams/:teamId', validateBody(updateTeamSchema), async (req, res, 
 });
 
 router.post('/teams/:teamId/reset-password', validateBody(emptyBodySchema), async (req, res, next) => {
+  res.set('Cache-Control', 'no-store');
   try {
     const password = generatePassword(12);
     const passwordHash = await hashPassword(password);
@@ -279,7 +280,6 @@ router.post('/teams/:teamId/reset-password', validateBody(emptyBodySchema), asyn
       actorId: req.session.adminId,
       teamId: req.params.teamId,
     });
-    res.set('Cache-Control', 'no-store');
     return res.json({ teamId: req.params.teamId, password });
   } catch (error) {
     return next(error);
