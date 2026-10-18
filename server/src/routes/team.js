@@ -1,15 +1,37 @@
 import express from 'express';
 import { z } from 'zod';
-import { Player } from '../models/Player.js';
 import { requirePlayer } from '../middleware/auth.js';
 import { validateBody } from '../middleware/validation.js';
+import { getTotals } from '../services/scoring.js';
+import { listRoundStates } from '../services/roundState.js';
+import { isPlayerOnline, recordPlayerPresence } from '../services/presence.js';
 
 const router = express.Router();
 router.use(requirePlayer);
 const emptyBodySchema = z.object({}).strict();
 
-function isOnline(lastSeenAt) {
-  return Boolean(lastSeenAt && Date.now() - lastSeenAt.getTime() <= 45_000);
+function currentRound() {
+  const rounds = listRoundStates();
+  const now = Date.now();
+  const round = rounds.at(-1);
+  if (!round) {
+    return { round: null, status: 'not_started', deadline: null, pausedAt: null, remainingMs: null };
+  }
+  const status = round.status === 'running' && round.deadline?.getTime() <= now
+    ? 'ended'
+    : round.status;
+  const referenceTime = round.status === 'paused' && round.pausedAt
+    ? round.pausedAt.getTime()
+    : now;
+  return {
+    round: round.round,
+    status,
+    deadline: round.deadline || null,
+    pausedAt: round.pausedAt || null,
+    remainingMs: round.deadline
+      ? Math.max(0, round.deadline.getTime() - referenceTime)
+      : null,
+  };
 }
 
 router.get('/me', async (req, res, next) => {
@@ -21,16 +43,25 @@ router.get('/me', async (req, res, next) => {
       });
       return res.status(401).json({ error: 'Authentication required' });
     }
-    const players = await Player.find({ teamId: team.teamId }).select('slot lastSeenAt').lean();
+    recordPlayerPresence(team.teamId, req.player.slot);
     return res.json({
       teamId: team.teamId,
       name: team.name,
       biasPoints: team.biasPoints,
-      players: ['P1', 'P2'].map((slot) => {
-        const player = players.find((item) => item.slot === slot);
-        return { slot, online: Boolean(player && isOnline(player.lastSeenAt)) };
-      }),
+      players: ['P1', 'P2'].map((slot) => ({
+        slot,
+        online: isPlayerOnline(team.teamId, slot),
+      })),
+      currentRound: currentRound(),
     });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.get('/score', async (req, res, next) => {
+  try {
+    return res.json(await getTotals(req.team.teamId));
   } catch (error) {
     return next(error);
   }
@@ -38,10 +69,7 @@ router.get('/me', async (req, res, next) => {
 
 router.post('/heartbeat', validateBody(emptyBodySchema), async (req, res, next) => {
   try {
-    await Player.updateOne(
-      { _id: req.session.playerId, teamId: req.session.teamId, slot: req.session.slot },
-      { lastSeenAt: new Date() },
-    );
+    recordPlayerPresence(req.team.teamId, req.player.slot);
     return res.status(204).send();
   } catch (error) {
     return next(error);

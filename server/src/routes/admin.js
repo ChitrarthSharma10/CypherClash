@@ -10,6 +10,17 @@ import { generatePassword, hashPassword } from '../utils/passwords.js';
 import { logEvent } from '../utils/logging.js';
 import { destroyPlayerSessions } from '../sessionStore.js';
 import { clearPlayerTeamLoginLockout, TEAM_ID_PATTERN } from './auth.js';
+import {
+  endRound,
+  listRoundStates,
+  pauseRound,
+  resumeRound,
+  startRound,
+} from '../services/roundState.js';
+import { addAdjustment, getAllTotals } from '../services/scoring.js';
+import { disconnectTeamSockets } from '../realtime/socketHub.js';
+import { isPlayerOnline } from '../services/presence.js';
+import { invalidateLeaderboard } from '../services/leaderboard.js';
 
 const router = express.Router();
 router.use(requireAdmin);
@@ -17,6 +28,13 @@ router.param('teamId', (req, res, next, teamId) => {
   if (!TEAM_ID_PATTERN.test(teamId)) {
     return res.status(400).json({ error: 'Invalid team ID' });
   }
+  return next();
+});
+router.param('n', (req, res, next, value) => {
+  if (!/^\d+$/.test(value) || Number(value) < 1) {
+    return res.status(400).json({ error: 'Invalid round number' });
+  }
+  req.roundNumber = Number(value);
   return next();
 });
 
@@ -33,6 +51,14 @@ const updateTeamSchema = z.object({
 
 const slotSchema = z.object({ slot: z.enum(['P1', 'P2']) }).strict();
 const emptyBodySchema = z.object({}).strict();
+const startRoundSchema = z.object({
+  durationSec: z.number().int().min(1).max(86400),
+}).strict();
+const adjustmentSchema = z.object({
+  round: z.number().int().min(1),
+  amount: z.number().int().min(-1000).max(1000),
+  reason: z.string().trim().min(1).max(200),
+}).strict();
 
 async function nextTeamId() {
   const latest = await Team.findOne().sort({ teamId: -1 }).select('teamId').lean();
@@ -43,10 +69,105 @@ async function nextTeamId() {
 function playerView(player) {
   return {
     slot: player.slot,
-    online: Boolean(player.lastSeenAt && Date.now() - player.lastSeenAt.getTime() <= 45_000),
-    lastLoginAt: player.lastLoginAt,
+    online: isPlayerOnline(player.teamId, player.slot),
   };
 }
+
+function serviceErrorStatus(error) {
+  if (error.code === 'TEAM_NOT_FOUND') return 404;
+  if ([
+    'RESULT_ALREADY_SUBMITTED',
+    'ROUND_ALREADY_STARTED',
+    'ROUND_NOT_RUNNING',
+    'ROUND_NOT_PAUSED',
+    'ROUND_NOT_ACTIVE',
+  ].includes(error.code)) return 409;
+  if (['INVALID_ADJUSTMENT', 'INVALID_GAME', 'INVALID_POINTS'].includes(error.code)) {
+    return 400;
+  }
+  return 500;
+}
+
+router.post('/rounds/:n/start', validateBody(startRoundSchema), async (req, res, next) => {
+  try {
+    return res.status(201).json(await startRound(req.roundNumber, req.body.durationSec, req.session.adminId));
+  } catch (error) {
+    if (serviceErrorStatus(error) !== 500) {
+      return res.status(serviceErrorStatus(error)).json({ error: error.message });
+    }
+    return next(error);
+  }
+});
+
+router.post('/rounds/:n/pause', validateBody(emptyBodySchema), async (req, res, next) => {
+  try {
+    return res.json(await pauseRound(req.roundNumber, req.session.adminId));
+  } catch (error) {
+    if (serviceErrorStatus(error) !== 500) {
+      return res.status(serviceErrorStatus(error)).json({ error: error.message });
+    }
+    return next(error);
+  }
+});
+
+router.post('/rounds/:n/resume', validateBody(emptyBodySchema), async (req, res, next) => {
+  try {
+    return res.json(await resumeRound(req.roundNumber, req.session.adminId));
+  } catch (error) {
+    if (serviceErrorStatus(error) !== 500) {
+      return res.status(serviceErrorStatus(error)).json({ error: error.message });
+    }
+    return next(error);
+  }
+});
+
+router.post('/rounds/:n/end', validateBody(emptyBodySchema), async (req, res, next) => {
+  try {
+    return res.json(await endRound(req.roundNumber, req.session.adminId));
+  } catch (error) {
+    if (serviceErrorStatus(error) !== 500) {
+      return res.status(serviceErrorStatus(error)).json({ error: error.message });
+    }
+    return next(error);
+  }
+});
+
+router.get('/rounds', (req, res) => res.json(listRoundStates()));
+
+router.post('/teams/:teamId/adjust', validateBody(adjustmentSchema), async (req, res, next) => {
+  try {
+    const before = await getAllTotals();
+    const entry = await addAdjustment(
+      req.params.teamId,
+      req.body.round,
+      req.body.amount,
+      req.body.reason,
+      req.session.adminId,
+    );
+    const after = await getAllTotals();
+    await logEvent({
+      type: 'score adjustment',
+      actorType: 'admin',
+      actorId: req.session.adminId,
+      teamId: req.params.teamId,
+      details: { old: before.find((item) => item.teamId === req.params.teamId) || { teamId: req.params.teamId, total: 0, rounds: {} }, new: after.find((item) => item.teamId === req.params.teamId), entryId: entry._id.toString() },
+    });
+    return res.status(201).json(entry);
+  } catch (error) {
+    if (serviceErrorStatus(error) !== 500) {
+      return res.status(serviceErrorStatus(error)).json({ error: error.message });
+    }
+    return next(error);
+  }
+});
+
+router.get('/scores', async (req, res, next) => {
+  try {
+    return res.json(await getAllTotals());
+  } catch (error) {
+    return next(error);
+  }
+});
 
 router.post('/teams', validateBody(createTeamSchema), async (req, res, next) => {
   let team;
@@ -73,6 +194,7 @@ router.post('/teams', validateBody(createTeamSchema), async (req, res, next) => 
       createdPlayerIds.push(player._id);
       credentials[slot] = passwords[slot];
     }
+    invalidateLeaderboard();
     await logEvent({
       type: 'team created',
       actorType: 'admin',
@@ -101,13 +223,10 @@ router.post('/teams', validateBody(createTeamSchema), async (req, res, next) => 
 
 router.get('/teams', async (req, res, next) => {
   try {
-    const [teams, players] = await Promise.all([
-      Team.find().sort({ teamId: 1 }).lean(),
-      Player.find().select('teamId slot lastSeenAt lastLoginAt').lean(),
-    ]);
+    const teams = await Team.find().sort({ teamId: 1 }).lean();
     return res.json(teams.map((team) => ({
       ...team,
-      players: players.filter((player) => player.teamId === team.teamId).map(playerView),
+      players: ['P1', 'P2'].map((slot) => playerView({ teamId: team.teamId, slot })),
     })));
   } catch (error) {
     return next(error);
@@ -154,9 +273,17 @@ router.patch('/teams/:teamId', validateBody(updateTeamSchema), async (req, res, 
         details: { oldValue: previousTeam.biasPoints, newValue: team.biasPoints },
       });
     }
+    if (
+      (req.body.name !== undefined && req.body.name !== previousTeam.name)
+      || (req.body.biasPoints !== undefined && req.body.biasPoints !== previousTeam.biasPoints)
+      || (req.body.active !== undefined && req.body.active !== previousTeam.active)
+    ) {
+      invalidateLeaderboard();
+    }
     if (req.body.active === false) {
       const players = await Player.find({ teamId: team.teamId }).select('_id').lean();
       await Promise.all(players.map((player) => destroyPlayerSessions(player._id.toString())));
+      disconnectTeamSockets(team.teamId);
     }
     return res.json({ team });
   } catch (error) {
@@ -174,6 +301,7 @@ router.post('/teams/:teamId/reset-password', validateBody(slotSchema), async (re
     player.passwordHash = await hashPassword(password);
     await player.save();
     await destroyPlayerSessions(player._id.toString());
+    disconnectTeamSockets(req.params.teamId);
     await logEvent({
       type: 'password reset',
       actorType: 'admin',

@@ -1,5 +1,6 @@
-import { StrictMode, useEffect, useState } from 'react';
+import { StrictMode, useEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
+import { io } from 'socket.io-client';
 import './styles.css';
 import {
   CodeInspectionIcon,
@@ -75,10 +76,12 @@ function App() {
         {notice && <div className="notice" role="status">{notice}<button onClick={() => setNotice('')} aria-label="Dismiss notification">×</button></div>}
         {path === '/' && <Landing />}
         {path === '/login' && <Login onSuccess={() => navigate('/dashboard')} />}
-        {path === '/dashboard' && <Dashboard onLogout={() => navigate('/login')} />}
+        {path === '/dashboard' && <Dashboard onLogout={() => navigate('/login')} onPlay={() => navigate('/dashboard/circuit-sync')} />}
+        {path === '/dashboard/circuit-sync' && <CircuitSyncScreen onBack={() => navigate('/dashboard')} onLogout={() => navigate('/login')} />}
+        {path === '/leaderboard' && <LeaderboardScreen onBack={() => navigate('/dashboard')} onLogout={() => navigate('/login')} />}
         {path === '/admin/login' && <AdminLogin onSuccess={() => navigate('/admin')} />}
         {path === '/admin' && <AdminDashboard onLogout={() => navigate('/admin/login')} />}
-        {!['/', '/login', '/dashboard', '/admin/login', '/admin'].includes(path) && <NotFound />}
+        {!['/', '/login', '/dashboard', '/dashboard/circuit-sync', '/leaderboard', '/admin/login', '/admin'].includes(path) && <NotFound />}
       </div>
     </div>
   );
@@ -260,18 +263,17 @@ function Status({ online, label }) {
   return <span className={`product-status ${online ? 'is-online' : ''}`}><i />{label || (online ? 'Online' : 'Offline')}</span>;
 }
 
-function Dashboard({ onLogout }) {
-  const [state, setState] = useState({ loading: true, error: '', team: null });
+function Dashboard({ onLogout, onPlay }) {
+  const [state, setState] = useState({ loading: true, error: '', team: null, score: null });
+  const [clockNow, setClockNow] = useState(Date.now());
 
   const loadTeam = async () => {
     try {
-      const me = await apiRequest('/api/auth/me');
-      if (me.role !== 'player') {
-        onLogout();
-        return;
-      }
-      const team = await apiRequest('/api/team/me');
-      setState({ loading: false, error: '', team });
+      const [team, score] = await Promise.all([
+        apiRequest('/api/team/me'),
+        apiRequest('/api/team/score'),
+      ]);
+      setState({ loading: false, error: '', team, score });
     } catch (error) {
       if (error.message === 'Authentication required') onLogout();
       else setState((current) => ({ ...current, loading: false, error: error.message }));
@@ -280,13 +282,11 @@ function Dashboard({ onLogout }) {
 
   useEffect(() => {
     loadTeam();
-    const refresh = window.setInterval(loadTeam, 10_000);
-    const heartbeat = window.setInterval(() => {
-      apiRequest('/api/team/heartbeat', { method: 'POST', body: JSON.stringify({}) }).catch(() => {});
-    }, 20_000);
+    const refresh = window.setInterval(loadTeam, 20_000);
+    const clock = window.setInterval(() => setClockNow(Date.now()), 1000);
     return () => {
       window.clearInterval(refresh);
-      window.clearInterval(heartbeat);
+      window.clearInterval(clock);
     };
   }, []);
 
@@ -301,6 +301,12 @@ function Dashboard({ onLogout }) {
   if (state.loading) return <LoadingState label="Loading team dashboard…" />;
   if (state.error) return <ErrorState message={state.error} onRetry={loadTeam} />;
   const players = state.team.players || [];
+  const round = state.team.currentRound;
+  const roundDeadline = round?.deadline ? new Date(round.deadline).getTime() : null;
+  const pausedAt = round?.pausedAt ? new Date(round.pausedAt).getTime() : null;
+  const remainingMs = roundDeadline === null
+    ? null
+    : Math.max(0, roundDeadline - (round.status === 'paused' && pausedAt !== null ? pausedAt : clockNow));
   return <main className="product-page dashboard-page">
     <div className="product-heading">
       <div><p className="product-eyebrow">PARTICIPANT PORTAL / TEAM DASHBOARD</p><h1>{state.team.name}</h1><p className="product-subtitle">Team ID <strong>{state.team.teamId}</strong></p></div>
@@ -308,14 +314,360 @@ function Dashboard({ onLogout }) {
     </div>
     <section className="product-stat-grid">
       <div className="product-stat"><span>BIAS POINTS</span><strong>{state.team.biasPoints}</strong></div>
-      <div className="product-stat"><span>TEAM STATUS</span><strong>{players.filter((player) => player.online).length} / 2 online</strong></div>
+      <div className="product-stat"><span>TEAM SCORE</span><strong>{state.score?.total ?? 0}</strong></div>
     </section>
-    <section className="product-section"><div className="product-section-heading"><p className="product-eyebrow">TEAM MEMBERS</p><h2>Signal crew</h2></div><div className="player-grid">{['P1', 'P2'].map((slot) => {
+    <section className="product-section"><div className="product-section-heading"><p className="product-eyebrow">TEAM MEMBERS / {players.filter((player) => player.online).length} OF 2 ONLINE</p><h2>Signal crew</h2></div><div className="player-grid">{['P1', 'P2'].map((slot) => {
       const player = players.find((item) => item.slot === slot);
       return <article className="product-panel player-panel" key={slot}><span className="product-mono">{slot === 'P1' ? 'PLAYER 1' : 'PLAYER 2'}</span><h3>{slot}</h3><Status online={Boolean(player?.online)} /></article>;
     })}</div></section>
-    <section className="product-section"><div className="product-section-heading"><p className="product-eyebrow">EVENT STATUS</p><h2>Workspace preview</h2></div><div className="placeholder-grid">{['Current round: none yet', 'Score: 0', 'Time remaining: —', 'Leaderboard: coming soon'].map((label) => <div className="product-panel placeholder-panel" key={label}><span>{label}</span></div>)}</div></section>
+    <section className="product-section cc-dashboard-round">
+      <div className="product-section-heading"><p className="product-eyebrow">ROUND STATUS</p><h2>{round?.round ? `Round ${String(round.round).padStart(2, '0')}` : 'No round started'}</h2></div>
+      <div className="cc-dashboard-round__detail">
+        <span className={`cc-round-status cc-round-status--${round?.status || 'not_started'}`}>{round?.status === 'paused' ? 'PAUSED' : (round?.status || 'not started').replaceAll('_', ' ')}</span>
+        <strong>{formatDuration(remainingMs)}</strong>
+        {round?.status === 'running' && <button className="product-btn product-btn--primary" onClick={onPlay}>Open Circuit Sync <span aria-hidden="true">↗</span></button>}
+        {round?.status === 'not_started' && <p>The next round has not started yet.</p>}
+        {round?.status === 'paused' && <p>Play is paused. Your remaining time is frozen.</p>}
+        {round?.status === 'ended' && <p>This round has ended.</p>}
+      </div>
+    </section>
+    <section className="product-section">
+      <div className="product-section-heading"><p className="product-eyebrow">YOUR SCORE / LEDGER TOTALS</p><h2>Round breakdown</h2></div>
+      <div className="cc-score-breakdown">
+        {Object.entries(state.score?.rounds || {}).sort(([first], [second]) => Number(first) - Number(second)).map(([roundNumber, points]) => (
+          <div className="product-panel cc-score-row" key={roundNumber}><span>ROUND {String(roundNumber).padStart(2, '0')}</span><strong>{points}</strong></div>
+        ))}
+        {!Object.keys(state.score?.rounds || {}).length && <p className="product-subtitle">No score has been recorded yet.</p>}
+      </div>
+    </section>
+    <div className="cc-dashboard-leaderboard-link">
+      <button className="product-btn product-btn--light" onClick={() => navigate('/leaderboard')}>View live leaderboard <span aria-hidden="true">↗</span></button>
+    </div>
   </main>;
+}
+
+function LeaderboardScreen({ onBack, onLogout }) {
+  const socketRef = useRef(null);
+  const connectedRef = useRef(false);
+  const previousRanks = useRef(new Map());
+  const [board, setBoard] = useState({ rows: [], updatedAt: null, youIndex: null });
+  const [state, setState] = useState({ loading: true, error: '' });
+  const [connected, setConnected] = useState(false);
+  const [now, setNow] = useState(Date.now());
+  const [changedTeams, setChangedTeams] = useState(new Set());
+
+  const applyBoard = (next) => {
+    if (!next || !Array.isArray(next.rows)) return;
+    const nextRanks = new Map(next.rows.map((row) => [row.name, row.rank]));
+    const changed = new Set(next.rows
+      .filter((row) => previousRanks.current.has(row.name) && previousRanks.current.get(row.name) !== row.rank)
+      .map((row) => row.name));
+    previousRanks.current = nextRanks;
+    setChangedTeams(changed);
+    setBoard(next);
+    setState({ loading: false, error: '' });
+  };
+
+  const loadBoard = async () => {
+    try {
+      applyBoard(await apiRequest('/api/leaderboard'));
+    } catch (error) {
+      if (error.message === 'Authentication required') onLogout();
+      else setState((current) => ({ ...current, loading: false, error: error.message }));
+    }
+  };
+
+  useEffect(() => {
+    const socket = io(API_URL, { withCredentials: true });
+    socketRef.current = socket;
+    void loadBoard();
+    socket.on('connect', () => {
+      connectedRef.current = true;
+      setConnected(true);
+      setState((current) => ({ ...current, error: '' }));
+    });
+    socket.on('disconnect', () => {
+      connectedRef.current = false;
+      setConnected(false);
+    });
+    socket.on('connect_error', (error) => {
+      connectedRef.current = false;
+      setConnected(false);
+      if (error.message.toLowerCase().includes('authentication')) {
+        setState({ loading: false, error: 'Your player session is no longer valid.' });
+      }
+    });
+    socket.on('lb:update', applyBoard);
+    const fallback = window.setInterval(() => {
+      if (!connectedRef.current) void loadBoard();
+    }, 30_000);
+    const clock = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => {
+      window.clearInterval(fallback);
+      window.clearInterval(clock);
+      socket.disconnect();
+      socketRef.current = null;
+      connectedRef.current = false;
+    };
+  }, []);
+
+  const logout = async () => {
+    try {
+      await apiRequest('/api/auth/logout', { method: 'POST', body: JSON.stringify({}) });
+    } finally {
+      onLogout();
+    }
+  };
+
+  const topThree = board.rows.slice(0, 3);
+  const remainingRows = board.rows.slice(3);
+  const updatedSeconds = board.updatedAt
+    ? Math.max(0, Math.floor((now - new Date(board.updatedAt).getTime()) / 1000))
+    : null;
+  if (state.loading) return <LoadingState label="Loading live leaderboard…" />;
+  if (state.error && !board.updatedAt) return <ErrorState message={state.error} onRetry={loadBoard} />;
+  return <main className="product-page cc-leaderboard-page">
+    <div className="product-heading cc-leaderboard-heading">
+      <div><p className="product-eyebrow">LIVE EVENT / SCOREBOARD</p><h1>Leaderboard</h1><p className="product-subtitle">Ranked by round points. Bias Points are separate.</p></div>
+      <div className="cc-leaderboard-actions">
+        <span className={`cc-circuit-connection ${connected ? 'is-connected' : ''}`}><i />{connected ? 'LIVE UPDATES' : 'LIVE UPDATES RECONNECTING'}</span>
+        <button className="product-btn product-btn--light" onClick={onBack}>Back to dashboard</button>
+      </div>
+    </div>
+    <div className="cc-leaderboard-meta" aria-live="polite">
+      <span>{updatedSeconds === null ? 'Waiting for first update' : `Updated ${updatedSeconds}s ago`}</span>
+      {!connected && <span>Refresh fallback active (30 seconds)</span>}
+    </div>
+    {state.error && <FormMessage error={state.error} />}
+    {!board.rows.length ? <section className="product-panel cc-leaderboard-empty"><p className="product-eyebrow">NO SCORES YET</p><h2>The leaderboard is empty.</h2><p>Active teams and rankings will appear here.</p></section> : <>
+      <section className="cc-leaderboard-podium" aria-label="Top three teams">
+        {topThree.map((row, index) => <article
+          key={`${row.name}-${index}`}
+          className={`product-panel cc-leaderboard-podium__card cc-leaderboard-podium__card--${index + 1} ${board.youIndex === index ? 'is-you' : ''} ${changedTeams.has(row.name) ? 'rank-changed' : ''}`}
+        >
+          <span className="product-mono">RANK {row.rank}{board.youIndex === index ? ' / YOUR TEAM' : ''}</span>
+          <h2>{row.name}</h2>
+          <strong className="cc-leaderboard-podium__total">{row.total}</strong>
+          <LeaderboardRoundDetails row={row} />
+        </article>)}
+      </section>
+      {remainingRows.length > 0 && <section className="product-section">
+        <div className="product-section-heading"><p className="product-eyebrow">RANK 4+</p><h2>Team standings</h2></div>
+        <div className="table-wrap">
+          <table className="product-table cc-leaderboard-table">
+            <thead><tr><th>Rank</th><th>Team</th><th>Bias Points</th><th>R1</th><th>R2</th><th>R3</th><th>Total</th></tr></thead>
+            <tbody>{remainingRows.map((row, index) => {
+              const absoluteIndex = index + 3;
+              const isYou = board.youIndex === absoluteIndex;
+              return <tr key={`${row.name}-${absoluteIndex}`} className={`${isYou ? 'is-you' : ''} ${changedTeams.has(row.name) ? 'rank-changed' : ''}`}>
+                <td>{row.rank}</td><td className="cc-leaderboard-table__team">{row.name}{isYou && <small>YOUR TEAM</small>}</td>
+                <td>{row.bias}</td><td>{formatLeaderboardRound(row.r1)}</td><td>{formatLeaderboardRound(row.r2)}</td><td>{formatLeaderboardRound(row.r3)}</td><td className="cc-leaderboard-table__total">{row.total}</td>
+              </tr>;
+            })}</tbody>
+          </table>
+        </div>
+      </section>}
+    </>}
+  </main>;
+}
+
+function formatLeaderboardRound(points) {
+  return points === null ? '–' : points;
+}
+
+function LeaderboardRoundDetails({ row }) {
+  return <dl className="cc-leaderboard-podium__details">
+    {[['BIAS', row.bias], ['R1', formatLeaderboardRound(row.r1)], ['R2', formatLeaderboardRound(row.r2)], ['R3', formatLeaderboardRound(row.r3)]].map(([label, value]) => (
+      <div key={label}><dt>{label}</dt><dd>{value}</dd></div>
+    ))}
+  </dl>;
+}
+
+function CircuitSyncScreen({ onBack, onLogout }) {
+  const socketRef = useRef(null);
+  const [connected, setConnected] = useState(false);
+  const [reconnecting, setReconnecting] = useState(false);
+  const [presence, setPresence] = useState({ teammateConnected: false });
+  const [gameState, setGameState] = useState(null);
+  const [roundState, setRoundState] = useState({ status: 'connecting', round: null, remainingMs: null });
+  const [message, setMessage] = useState({ type: '', text: '' });
+  const [lockedMs, setLockedMs] = useState(0);
+
+  useEffect(() => {
+    const socket = io(API_URL, { withCredentials: true });
+    socketRef.current = socket;
+    setReconnecting(true);
+    socket.on('connect', () => {
+      setConnected(true);
+      setReconnecting(false);
+      setMessage({ type: '', text: '' });
+    });
+    socket.on('disconnect', () => {
+      setConnected(false);
+      setReconnecting(true);
+    });
+    socket.on('connect_error', (error) => {
+      setConnected(false);
+      setReconnecting(true);
+      if (error.message.toLowerCase().includes('authentication')) {
+        setMessage({ type: 'error', text: 'Your player session is no longer valid. Please sign in again.' });
+        socket.disconnect();
+      } else {
+        setMessage({ type: 'error', text: 'Connection failed. Reconnecting automatically…' });
+      }
+    });
+    socket.on('cs:presence', setPresence);
+    socket.on('cs:state', (nextState) => {
+      setGameState(nextState);
+      setLockedMs(nextState.lockedMs || 0);
+      if (nextState.done) setMessage({ type: 'success', text: `Circuit Sync complete. Your team earned ${nextState.points} points.` });
+    });
+    socket.on('cs:round', setRoundState);
+    socket.on('cs:message', setMessage);
+    return () => {
+      socket.disconnect();
+      socketRef.current = null;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (lockedMs <= 0) return undefined;
+    const timer = window.setInterval(() => setLockedMs((remaining) => Math.max(0, remaining - 1000)), 1000);
+    return () => window.clearInterval(timer);
+  }, [lockedMs]);
+
+  const emit = (event, payload) => {
+    const socket = socketRef.current;
+    if (socket?.connected) socket.emit(event, payload);
+  };
+
+  if (message.text && message.text.includes('session is no longer valid')) {
+    return <main className="product-page cc-circuit-page"><section className="product-panel state-panel"><p className="product-eyebrow">SESSION ENDED</p><h1>Sign in to continue</h1><p className="product-message is-error">{message.text}</p><button className="product-btn product-btn--primary" onClick={onLogout}>Go to login</button></section></main>;
+  }
+
+  return <main className="product-page cc-circuit-page">
+    <div className="product-heading cc-circuit-heading">
+      <div><p className="product-eyebrow">ROUND 01 / CIRCUIT SYNC</p><h1>Circuit Sync</h1><p className="product-subtitle">Coordinate across two roles to repair the circuit.</p></div>
+      <div className="cc-circuit-heading__actions">
+        <span className={`cc-circuit-connection ${connected ? 'is-connected' : ''}`}><i />{connected ? 'CONNECTED' : reconnecting ? 'RECONNECTING' : 'OFFLINE'}</span>
+        <button className="product-btn product-btn--light" onClick={onBack}>Back to dashboard</button>
+      </div>
+    </div>
+    {message.text && <p className={`product-message ${message.type === 'success' ? 'is-success' : 'is-error'}`} role="status">{message.text}</p>}
+    <section className="cc-circuit-roundbar" aria-live="polite">
+      <span className="product-mono">{roundState.round ? `ROUND ${String(roundState.round).padStart(2, '0')}` : 'ROUND STATUS'}</span>
+      <strong>{formatDuration(roundState.remainingMs)}</strong>
+      <span className="cc-circuit-roundbar__status">{roundState.status.replaceAll('_', ' ')}</span>
+    </section>
+    {!connected && <section className="product-panel cc-circuit-wait"><h2>{reconnecting ? 'Reconnecting to the circuit…' : 'Connection unavailable'}</h2><p>{reconnecting ? 'Your session and game state will be restored automatically.' : 'Connect to continue.'}</p></section>}
+    {connected && !presence.teammateConnected && <section className="product-panel cc-circuit-wait"><h2>Waiting for your teammate</h2><p>The circuit will open when both players are connected.</p></section>}
+    {connected && presence.teammateConnected && !gameState && <section className="product-panel cc-circuit-wait"><h2>{roundState.status === 'running' ? 'Preparing your circuit…' : 'Waiting for the round to start'}</h2><p>Both players are connected. Your view will appear when the round is live.</p></section>}
+    {connected && gameState?.done && <section className="product-panel cc-circuit-finished"><p className="product-eyebrow">GAME COMPLETE</p><h2>Team signal restored.</h2><strong>{gameState.points} POINTS</strong><button className="product-btn product-btn--light" onClick={onBack}>Return to dashboard</button></section>}
+    {connected && presence.teammateConnected && gameState && !gameState.done && roundState.status === 'ended' && <section className="product-panel cc-circuit-finished"><p className="product-eyebrow">ROUND ENDED</p><h2>Circuit Sync was not completed.</h2><p>Your progress was not submitted as a game result.</p><button className="product-btn product-btn--light" onClick={onBack}>Return to dashboard</button></section>}
+    {connected && presence.teammateConnected && gameState && !gameState.done && roundState.status !== 'ended' && (
+      <CircuitRoleView
+        state={gameState}
+        lockedMs={lockedMs}
+        canAct={connected && roundState.status === 'running'}
+        roundStatus={roundState.status}
+        onToggle={(idx) => emit('cs:toggle', { idx })}
+        onSubmit={() => emit('cs:submit', {})}
+      />
+    )}
+  </main>;
+}
+
+function formatDuration(milliseconds) {
+  if (milliseconds === null || milliseconds === undefined) return '—:—';
+  const seconds = Math.ceil(milliseconds / 1000);
+  return `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`;
+}
+
+function CircuitRoleView({ state, lockedMs, canAct, roundStatus, onToggle, onSubmit }) {
+  if (state.role === 'analyst') {
+    return <section className="cc-circuit-game product-panel">
+      <div className="cc-circuit-game__meta"><span className="product-mono">ANALYST VIEW</span><span>STAGE {state.stage} / {state.stages}</span><span>WRONG {state.wrong} / {state.maxWrong}</span></div>
+      <h2>Trace the signal path</h2>
+      <p className="cc-circuit-instructions">{roundStatus === 'paused' ? 'Round paused. The circuit is frozen until play resumes.' : 'Read the gate chain and guide your teammate. Your view does not include switch positions.'}</p>
+      <CircuitDiagram state={state} />
+    </section>;
+  }
+  if (state.role === 'operator') {
+    return <section className="cc-circuit-game product-panel">
+      <div className="cc-circuit-game__meta"><span className="product-mono">OPERATOR VIEW</span><span>STAGE {state.stage} / {state.stages}</span><span>WRONG {state.wrong} / {state.maxWrong}</span></div>
+      <h2>Configure the switches</h2>
+      <p className="cc-circuit-instructions">{roundStatus === 'paused' ? 'Round paused. Inputs are frozen until play resumes.' : 'Follow your teammate’s directions, then submit the circuit for a check.'}</p>
+      <div className="cc-circuit-switches">
+        {state.switches.map((active, idx) => <button
+          className={`cc-circuit-switch ${active ? 'is-on' : ''}`}
+          type="button"
+          role="switch"
+          aria-checked={active}
+          aria-label={`Switch ${idx + 1} ${active ? 'on' : 'off'}`}
+          disabled={!canAct}
+          onClick={() => onToggle(idx)}
+          key={idx}
+        ><span className="cc-circuit-switch__track"><i /></span><span>S{idx + 1}<small>{active ? 'ON' : 'OFF'}</small></span></button>)}
+      </div>
+      {state.lastFeedback && <p className="cc-circuit-feedback" role="status">{state.lastFeedback.correct === state.lastFeedback.of ? 'Signal matched' : 'Not yet'} — {state.lastFeedback.correct} of {state.lastFeedback.of} lamps correct</p>}
+      <div className="cc-circuit-submit">
+        <button className="product-btn product-btn--primary" disabled={!canAct || lockedMs > 0} onClick={onSubmit}>Submit circuit</button>
+        {lockedMs > 0 && <span>Try again in {Math.ceil(lockedMs / 1000)}s</span>}
+      </div>
+    </section>;
+  }
+  return <section className="product-panel cc-circuit-wait"><h2>Waiting for your game view</h2><p>The server has not assigned a player role yet.</p></section>;
+}
+
+function CircuitDiagram({ state }) {
+  const switchCount = state.switchCount;
+  const nodeCount = switchCount + state.gates.length;
+  const depths = Array(switchCount).fill(0);
+  state.gates.forEach((gate, index) => {
+    depths.push(Math.max(depths[gate.a], depths[gate.b]) + 1);
+  });
+  const nodePositions = depths.map((depth, index) => ({
+    x: depth === 0 ? 95 : 125 + depth * 190,
+    y: 52 + index * 76,
+  }));
+  const maxDepth = Math.max(...depths);
+  const width = 280 + maxDepth * 190;
+  const height = Math.max(230, 100 + nodeCount * 76);
+  const firstLamp = nodeCount - state.lampCount;
+  return <div className="cc-circuit-diagram" role="img" aria-label="Analyst circuit schematic">
+    <svg viewBox={`0 0 ${width} ${height}`} width={width} height={height}>
+      {state.gates.map((gate, gateIndex) => {
+        const nodeIndex = switchCount + gateIndex;
+        const output = nodePositions[nodeIndex];
+        const first = nodePositions[gate.a];
+        const second = nodePositions[gate.b];
+        const gateX = output.x - 52;
+        const firstY = output.y - 14;
+        const secondY = output.y + 14;
+        const firstMid = (first.x + gateX) / 2;
+        const secondMid = (second.x + gateX) / 2;
+        const lampIndex = nodeIndex - firstLamp;
+        return <g key={nodeIndex}>
+          <path className="cc-circuit-wire" d={`M ${first.x + 18} ${first.y} H ${firstMid} V ${firstY} H ${gateX}`} />
+          <path className="cc-circuit-wire" d={`M ${second.x + 18} ${second.y} H ${secondMid} V ${secondY} H ${gateX}`} />
+          <rect className="cc-circuit-gate" x={gateX} y={output.y - 25} width="104" height="50" rx="8" />
+          <text className="cc-circuit-gate__label" x={gateX + 52} y={output.y + 4} textAnchor="middle">{gate.op}</text>
+          {lampIndex >= 0 && <g>
+            <path className="cc-circuit-wire" d={`M ${output.x + 52} ${output.y} H ${output.x + 95}`} />
+            <circle className={`cc-circuit-lamp ${state.target[lampIndex] ? 'is-on' : ''}`} cx={output.x + 111} cy={output.y} r="12" />
+            <text className="cc-circuit-lamp__label" x={output.x + 132} y={output.y + 4}>L{lampIndex + 1} {state.target[lampIndex] ? 'ON' : 'OFF'}</text>
+          </g>}
+        </g>;
+      })}
+      {Array.from({ length: switchCount }, (_, index) => {
+        const position = nodePositions[index];
+        return <g key={`switch-${index}`}>
+          <rect className="cc-circuit-switch-node" x={position.x - 40} y={position.y - 18} width="56" height="36" rx="7" />
+          <text className="cc-circuit-switch-label" x={position.x - 12} y={position.y + 4} textAnchor="middle">S{index + 1}</text>
+        </g>;
+      })}
+    </svg>
+  </div>;
 }
 
 function LoadingState({ label }) {
@@ -343,30 +695,108 @@ function CredentialBox({ credentials }) {
 
 function AdminDashboard({ onLogout }) {
   const [teams, setTeams] = useState([]);
+  const [rounds, setRounds] = useState([]);
+  const [scores, setScores] = useState([]);
   const [logs, setLogs] = useState([]);
   const [form, setForm] = useState({ name: '', biasPoints: 0 });
   const [credentials, setCredentials] = useState(null);
   const [edits, setEdits] = useState({});
+  const [clockNow, setClockNow] = useState(Date.now());
   const [state, setState] = useState({ loading: true, error: '', success: '' });
 
-  const load = async () => {
+  const load = async ({ includeLogs = false } = {}) => {
     try {
-      const me = await apiRequest('/api/auth/me');
-      if (me.role !== 'admin') {
-        onLogout();
-        return;
-      }
-      const [teamData, logData] = await Promise.all([apiRequest('/api/admin/teams'), apiRequest('/api/admin/logs')]);
+      const [teamData, roundData, scoreData, logData] = await Promise.all([
+        apiRequest('/api/admin/teams'),
+        apiRequest('/api/admin/rounds'),
+        apiRequest('/api/admin/scores'),
+        includeLogs ? apiRequest('/api/admin/logs') : Promise.resolve(null),
+      ]);
       setTeams(teamData);
-      setLogs(logData);
-      setState({ loading: false, error: '', success: '' });
+      setRounds(roundData);
+      setScores(scoreData);
+      if (logData) setLogs(logData);
+      setState((current) => ({ ...current, loading: false, error: '' }));
     } catch (error) {
       if (error.message === 'Admin access required' || error.message === 'Authentication required') onLogout();
-      else setState({ loading: false, error: error.message, success: '' });
+      else setState((current) => ({ ...current, loading: false, error: error.message }));
     }
   };
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    load({ includeLogs: true });
+    const refresh = window.setInterval(() => load({ includeLogs: true }), 15_000);
+    const clock = window.setInterval(() => setClockNow(Date.now()), 1000);
+    return () => {
+      window.clearInterval(refresh);
+      window.clearInterval(clock);
+    };
+  }, []);
+
+  const runAction = async (action, success) => {
+    try {
+      await action();
+      setState({ loading: false, error: '', success });
+      await load();
+    } catch (error) {
+      setState((current) => ({ ...current, loading: false, error: error.message, success: '' }));
+    }
+  };
+
+  const changeRound = (round, action, body = {}) => runAction(
+    () => apiRequest(`/api/admin/rounds/${round}/${action}`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+    `Round ${round} ${({ start: 'started', pause: 'paused', resume: 'resumed', end: 'ended' })[action]}.`,
+  );
+
+  const startRound = (round) => {
+    const rawDuration = window.prompt('Round duration in seconds (1–86400):', '1800');
+    if (rawDuration === null) return;
+    const durationSec = Number(rawDuration);
+    if (!Number.isInteger(durationSec) || durationSec < 1 || durationSec > 86400) {
+      setState((current) => ({ ...current, error: 'Duration must be a whole number from 1 to 86400 seconds.', success: '' }));
+      return;
+    }
+    if (!window.confirm(`Start round ${round} for ${durationSec} seconds?`)) return;
+    void changeRound(round, 'start', { durationSec });
+  };
+
+  const adjustScore = (team) => {
+    const round = window.prompt(`Round number for ${team.teamId}:`);
+    if (round === null) return;
+    const amount = window.prompt('Adjustment amount (-1000 to 1000):');
+    if (amount === null) return;
+    const reason = window.prompt('Reason (required, max 200 characters):');
+    if (reason === null) return;
+    const adjustment = { round: Number(round), amount: Number(amount), reason: reason.trim() };
+    if (!Number.isInteger(adjustment.round) || adjustment.round < 1
+      || !Number.isInteger(adjustment.amount) || adjustment.amount < -1000 || adjustment.amount > 1000
+      || !adjustment.reason || adjustment.reason.length > 200) {
+      setState((current) => ({ ...current, error: 'Enter a valid round, adjustment amount, and reason.', success: '' }));
+      return;
+    }
+    if (!window.confirm(`Apply ${adjustment.amount} points to ${team.teamId} in round ${adjustment.round}?\nReason: ${adjustment.reason}`)) return;
+    void runAction(
+      () => apiRequest(`/api/admin/teams/${team.teamId}/adjust`, {
+        method: 'POST',
+        body: JSON.stringify(adjustment),
+      }),
+      `Score adjustment recorded for ${team.teamId}.`,
+    );
+  };
+
+  const clearLockout = (teamId) => {
+    if (!window.confirm(`Clear login lockout for ${teamId}?`)) return;
+    void runAction(
+      () => apiRequest(`/api/admin/teams/${teamId}/clear-login-lockout`, {
+        method: 'POST',
+        body: JSON.stringify({}),
+      }),
+      `Login lockout cleared for ${teamId}.`,
+    );
+  };
 
   const createTeam = async (event) => {
     event.preventDefault();
@@ -393,6 +823,7 @@ function AdminDashboard({ onLogout }) {
   };
 
   const resetPassword = async (teamId, slot) => {
+    if (!window.confirm(`Reset the ${slot} password for ${teamId}?`)) return;
     try {
       const result = await apiRequest(`/api/admin/teams/${teamId}/reset-password`, { method: 'POST', body: JSON.stringify({ slot }) });
       setCredentials({ [slot]: result.password });
@@ -412,12 +843,42 @@ function AdminDashboard({ onLogout }) {
 
   if (state.loading && !teams.length) return <LoadingState label="Loading admin control center…" />;
   if (state.error && !teams.length) return <ErrorState message={state.error} onRetry={load} />;
+  const scoresByTeam = new Map(scores.map((score) => [score.teamId, score.total]));
+  const nextRoundNumber = rounds.reduce((next, round) => Math.max(next, round.round + 1), 1);
+  const displayedRounds = [...rounds, { round: nextRoundNumber, status: 'not_started', deadline: null, pausedAt: null }];
   return <main className="product-page admin-dashboard">
-    <div className="product-heading"><div><p className="product-eyebrow">CONTROL CENTER / ADMIN</p><h1>Team operations</h1><p className="product-subtitle">Manage access without exposing stored credentials.</p></div><button className="product-btn product-btn--light" onClick={logout}>Log out</button></div>
+    <div className="product-heading"><div><p className="product-eyebrow">CONTROL CENTER / ADMIN</p><h1>Event operations</h1><p className="product-subtitle">Manage teams, rounds and audit activity.</p></div><button className="product-btn product-btn--light" onClick={logout}>Log out</button></div>
     <FormMessage error={state.error} success={state.success} />
+    <section className="product-section">
+      <div className="product-section-heading"><p className="product-eyebrow">ROUND CONTROL</p><h2>Rounds</h2></div>
+      <div className="cc-admin-round-grid">
+        {displayedRounds.map((round) => {
+          const deadline = round.deadline ? new Date(round.deadline).getTime() : null;
+          const pausedAt = round.pausedAt ? new Date(round.pausedAt).getTime() : null;
+          const remainingMs = deadline === null
+            ? null
+            : Math.max(0, deadline - (round.status === 'paused' && pausedAt !== null ? pausedAt : clockNow));
+          return <article className="product-panel cc-admin-round" key={round.round}>
+            <div className="cc-admin-round__heading"><span className="product-mono">ROUND {String(round.round).padStart(2, '0')}</span><span className={`cc-round-status cc-round-status--${round.status}`}>{round.status.replaceAll('_', ' ')}</span></div>
+            <dl>
+              <div><dt>Deadline</dt><dd>{deadline === null ? 'Not scheduled' : new Date(deadline).toLocaleString()}</dd></div>
+              <div><dt>Time remaining</dt><dd>{formatDuration(remainingMs)}</dd></div>
+            </dl>
+            <div className="cc-admin-round__actions">
+              <button className="product-btn product-btn--small product-btn--primary" disabled={round.status !== 'not_started'} onClick={() => startRound(round.round)}>Start</button>
+              <button className="product-btn product-btn--small product-btn--light" disabled={round.status !== 'running'} onClick={() => void changeRound(round.round, 'pause')}>Pause</button>
+              <button className="product-btn product-btn--small product-btn--light" disabled={round.status !== 'paused'} onClick={() => void changeRound(round.round, 'resume')}>Resume</button>
+              <button className="product-btn product-btn--small product-btn--light" disabled={!['running', 'paused'].includes(round.status)} onClick={() => {
+                if (window.confirm(`End round ${round.round}? This cannot be undone.`)) void changeRound(round.round, 'end');
+              }}>End</button>
+            </div>
+          </article>;
+        })}
+      </div>
+    </section>
     <section className="product-section"><div className="product-section-heading"><p className="product-eyebrow">NEW TEAM</p><h2>Create team</h2></div><form className="admin-create-form" onSubmit={createTeam}><Field label="TEAM NAME"><input required value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} /></Field><Field label="BIAS POINTS"><input type="number" value={form.biasPoints} onChange={(event) => setForm({ ...form, biasPoints: event.target.value })} /></Field><button className="product-btn product-btn--primary">Create team</button></form><CredentialBox credentials={credentials} /></section>
-    <section className="product-section"><div className="product-section-heading"><p className="product-eyebrow">ACCESS CONTROL</p><h2>Teams</h2></div><div className="table-wrap"><table className="product-table"><thead><tr><th>Team ID</th><th>Name</th><th>Bias points</th><th>Active</th><th>Players</th><th>Actions</th></tr></thead><tbody>{teams.map((team) => <tr key={team.teamId}><td className="product-mono">{team.teamId}</td><td>{team.name}</td><td><input className="table-input" type="number" value={edits[team.teamId] ?? team.biasPoints} onChange={(event) => setEdits({ ...edits, [team.teamId]: event.target.value })} /><button className="table-action" onClick={() => updateTeam(team.teamId, { biasPoints: Number(edits[team.teamId] ?? team.biasPoints) })}>Save</button></td><td><Status online={team.active} label={team.active ? 'Active' : 'Disabled'} /><button className="table-action" onClick={() => updateTeam(team.teamId, { active: !team.active })}>{team.active ? 'Disable' : 'Enable'}</button></td><td>{(team.players || []).map((player) => <div className="player-line" key={player.slot}><span>{player.slot} <Status online={player.online} /></span><small>{player.lastLoginAt ? new Date(player.lastLoginAt).toLocaleString() : 'Never logged in'}</small></div>)}</td><td><div className="action-stack">{['P1', 'P2'].map((slot) => <button className="table-action" key={slot} onClick={() => resetPassword(team.teamId, slot)}>Reset {slot}</button>)}</div></td></tr>)}</tbody></table></div></section>
-    <section className="product-section"><div className="product-section-heading"><p className="product-eyebrow">AUDIT TRAIL</p><h2>Latest event logs</h2></div><div className="table-wrap"><table className="product-table logs-table"><thead><tr><th>Time</th><th>Type</th><th>Actor</th><th>Team</th></tr></thead><tbody>{logs.map((log) => <tr key={log._id}><td>{new Date(log.createdAt).toLocaleString()}</td><td>{log.type}</td><td>{log.actorType} / {log.actorId}</td><td>{log.teamId || '—'}</td></tr>)}</tbody></table></div></section>
+    <section className="product-section"><div className="product-section-heading"><p className="product-eyebrow">ACCESS CONTROL / LIVE LEDGER TOTALS</p><h2>Teams</h2></div><div className="table-wrap"><table className="product-table cc-admin-team-table"><thead><tr><th>Team ID</th><th>Name</th><th>Bias Points</th><th>Active</th><th>P1 online</th><th>P2 online</th><th>Total score</th><th>Actions</th></tr></thead><tbody>{teams.map((team) => <tr key={team.teamId}><td className="product-mono">{team.teamId}</td><td><input className="table-input cc-team-name-input" value={edits[`${team.teamId}:name`] ?? team.name} onChange={(event) => setEdits({ ...edits, [`${team.teamId}:name`]: event.target.value })} /><button className="table-action" onClick={() => updateTeam(team.teamId, { name: edits[`${team.teamId}:name`] ?? team.name })}>Save name</button></td><td><input className="table-input" type="number" value={edits[team.teamId] ?? team.biasPoints} onChange={(event) => setEdits({ ...edits, [team.teamId]: event.target.value })} /><button className="table-action" onClick={() => updateTeam(team.teamId, { biasPoints: Number(edits[team.teamId] ?? team.biasPoints) })}>Save</button></td><td><Status online={team.active} label={team.active ? 'Enabled' : 'Disabled'} /><button className="table-action" onClick={() => { if (window.confirm(`${team.active ? 'Disable' : 'Enable'} ${team.teamId}?`)) void updateTeam(team.teamId, { active: !team.active }); }}>{team.active ? 'Disable' : 'Enable'}</button></td><td><Status online={Boolean(team.players?.find((player) => player.slot === 'P1')?.online)} /></td><td><Status online={Boolean(team.players?.find((player) => player.slot === 'P2')?.online)} /></td><td>{scoresByTeam.get(team.teamId) ?? 0}</td><td><div className="action-stack"><button className="table-action" onClick={() => adjustScore(team)}>Adjust score</button>{['P1', 'P2'].map((slot) => <button className="table-action" key={slot} onClick={() => resetPassword(team.teamId, slot)}>Reset {slot} password</button>)}<button className="table-action" onClick={() => clearLockout(team.teamId)}>Clear lockout</button></div></td></tr>)}</tbody></table></div></section>
+    <section className="product-section"><div className="product-section-heading"><p className="product-eyebrow">AUDIT TRAIL / REFRESHES EVERY 15 SECONDS</p><h2>Recent logs</h2></div><div className="table-wrap"><table className="product-table logs-table"><thead><tr><th>Time</th><th>Type</th><th>Actor type</th><th>Team</th></tr></thead><tbody>{logs.map((log) => <tr key={log._id}><td>{new Date(log.createdAt).toLocaleString()}</td><td>{log.type}</td><td>{log.actorType}</td><td>{log.teamId || '—'}</td></tr>)}</tbody></table></div></section>
   </main>;
 }
 
