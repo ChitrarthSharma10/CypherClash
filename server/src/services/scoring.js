@@ -33,16 +33,12 @@ function formatTotals(rows, teamId) {
 }
 
 export async function getTotals(teamId) {
-  const rows = await ScoreEntry.aggregate([
-    { $match: { teamId } },
-    { $group: { _id: { round: '$round' }, amount: { $sum: '$amount' } } },
-    { $sort: { '_id.round': 1 } },
-  ]);
-  return formatTotals(rows, teamId);
+  const totals = await getAllTotals();
+  return totals.find((item) => item.teamId === teamId) || formatTotals([], teamId);
 }
 
 export async function getAllTotals() {
-  if (allTotalsCache && allTotalsCache.expiresAt > Date.now()) {
+  if (allTotalsCache) {
     return allTotalsCache.value;
   }
   const rows = await ScoreEntry.aggregate([
@@ -56,7 +52,7 @@ export async function getAllTotals() {
     grouped.get(teamId).push({ _id: { round: row._id.round }, amount: row.amount });
   }
   const value = [...grouped.entries()].map(([teamId, teamRows]) => formatTotals(teamRows, teamId));
-  allTotalsCache = { value, expiresAt: Date.now() + 5000 };
+  allTotalsCache = { value };
   return value;
 }
 
