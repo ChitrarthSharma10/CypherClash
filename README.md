@@ -15,13 +15,16 @@ whole event should run through one website: team login, games, clues,
 submissions, scoring, leaderboard, round progression, and admin controls.
 Organisers should not need to manage small event operations by hand.
 
-- Each team has two players: `P1` and `P2`.
-- Both players must actively participate. No game may be solvable by one
-  person alone.
+- Each team has one login: a Team ID and password. There are no P1/P2 slots or
+  per-player accounts, and each team may have only one active session.
+- Each team plays on one shared screen and keyboard. Both players must
+  participate in person; game controls should require cooperative input where
+  practical (for example, one player uses `W` and the other `ArrowRight` in
+  Runner).
 - Participants are cybersecurity students and may attack the platform through
   DevTools or forged requests. Security is a first-class requirement.
-- The event is supervised, so software controls against one person playing both
-  roles are not required.
+- The event is supervised, so software controls to prove which player pressed
+  each key are not required.
 - Plan for a maximum of approximately 65 people online simultaneously.
 
 ## 2. Deadline and priorities
@@ -48,12 +51,13 @@ Implemented:
 
 - Approved public landing page dark design.
 - Express/Mongoose backend under `/server`.
-- Player/admin login, Mongo-backed sessions, player dashboard API, admin team
+- Team/admin login, Mongo-backed sessions, team dashboard API, admin team
   API, and event logging.
 - Frontend routes `/login`, `/dashboard`, `/admin/login`, and `/admin`.
-- The player dashboard shows team identity, seat presence, server-provided
-  round state and deadline, a locally ticking countdown, and the player's
-  own ledger totals. It refreshes the player APIs every 20 seconds.
+- The team dashboard shows team identity, team online status, server-provided
+  round state and deadline, a locally ticking countdown, and the team's own
+  ledger totals. Dashboard, timer, presence, and leaderboard refresh by HTTP
+  every 25 seconds while the browser tab is visible.
 - The admin control room uses the existing round, team, score, and log APIs for
   round controls, team operations, score adjustments, and recent audit logs.
   Logs refresh every 15 seconds and the UI does not render log details or
@@ -62,32 +66,30 @@ Implemented:
   now includes current round status, deadline, paused timestamp, and server
   remaining time; the client computes its display countdown from the deadline
   and paused timestamp.
-- Player presence is held in memory for recent dashboard requests and active
-  sockets. The admin teams endpoint reads online state from that presence data
-  rather than querying player records per request. Presence expires after 45
-  seconds without an active socket or player request.
+- Team presence, round state, team totals, and leaderboard snapshots are held
+  in memory. Poll responses reuse these caches; only auth middleware verifies
+  the active team against MongoDB on protected team requests.
 - Session hardening, validation, rate limiting, audit logging, and credential
   protection described below.
-- Minimal scoring foundation on branch `feature-core-platform`:
+- Minimal scoring foundation:
   append-only `ScoreEntry` ledger, persisted `RoundState`, in-memory round
   cache with startup reload, automatic deadline expiry, global
   start/pause/resume/end controls, team score totals, and admin adjustments.
+- An ended round can be restarted as a new attempt. Earlier ledger entries are
+  retained and continue to count toward the round total; game results are
+  unique per team, round, attempt, and game.
 - The scoring foundation has been smoke-tested for duplicate result rejection,
-  deadline rejection, pause/resume deadline extension, and player denial from
+  deadline rejection, pause/resume deadline extension, and team-session denial from
   admin routes.
 - Automated scoring tests now cover paused submissions, simultaneous duplicate
   submissions, simultaneous resume calls, admin adjustments whose reason is
   `game_result`, paused-round reload, and team-score isolation. Run them with
   `cd server && npm test` using valid local environment values.
-- On branch `feature-realtime`, Socket.IO shares the Express session and
-  session store, validates player/team state and Origin, limits each seat to
-  one active connection, and registers Circuit Sync as the first realtime
-  game module. Team sockets are disconnected when an admin disables a team or
-  resets a player password.
-- Circuit Sync tests verify seat-private views, refresh recovery, team
-  presence, pause behavior, full three-stage completion, and score visibility.
-  The complete backend test suite runs sequentially with `cd server && npm
-  test`.
+- Socket.IO and WebSocket support have been removed. `circuitSync.js` remains
+  unregistered legacy game code and must not be wired back into the app.
+- The complete backend test suite runs sequentially with `cd server && npm
+  test`; update or replace legacy two-seat tests as the single-screen game
+  implementation is built.
 
 In progress / not started:
 
@@ -105,12 +107,13 @@ code. Verify each item when working in the relevant area.
 - Frontend: React, Vite, npm, lightweight pathname/history routing.
 - Backend: Node.js, Express, Mongoose, `express-session`, `connect-mongo`,
   `bcryptjs`, `helmet`, `express-rate-limit`, `zod`, `cors`, and `dotenv`.
-- Realtime transport: Socket.IO in `/server`, sharing the Express session
-  middleware.
+- Transport: ordinary HTTP requests and polling only. Do not add Socket.IO or
+  WebSockets. Dashboard, round timer, presence, and leaderboard poll every
+  25 seconds while visible and use in-memory server caches.
 - Database: MongoDB Atlas free tier. It has limited storage and throughput;
   use a small connection pool and avoid unnecessary per-request operations.
-- Hosting is not yet decided. Production needs HTTPS, WebSocket support if
-  live games use it, and a host that will not sleep during the event.
+- Hosting is not yet decided. Production needs HTTPS and a host that will not
+  sleep during the event.
 
 Important backend files:
 
@@ -125,17 +128,17 @@ ignored `server/.env` file.
 
 | Method | Path | Access |
 |---|---|---|
-| POST | `/api/auth/login` | Player |
+| POST | `/api/auth/login` | Team |
 | POST | `/api/auth/admin/login` | Admin |
 | POST | `/api/auth/logout` | Any session |
 | GET | `/api/auth/me` | Any session |
-| GET | `/api/team/me` | Current player/team |
-| GET | `/api/team/score` | Current player; own totals and round breakdown |
-| POST | `/api/team/heartbeat` | Current player |
-| POST | `/api/admin/teams` | Admin; creates team and both players |
+| GET | `/api/team/me` | Authenticated team |
+| GET | `/api/team/score` | Authenticated team; own totals and round breakdown |
+| POST | `/api/team/heartbeat` | Authenticated team |
+| POST | `/api/admin/teams` | Admin; creates a team and its login credentials |
 | GET | `/api/admin/teams` | Admin |
 | PATCH | `/api/admin/teams/:teamId` | Admin |
-| POST | `/api/admin/teams/:teamId/reset-password` | Admin |
+| POST | `/api/admin/teams/:teamId/reset-password` | Admin; resets the team's shared password |
 | POST | `/api/admin/teams/:teamId/clear-login-lockout` | Admin |
 | POST | `/api/admin/rounds/:n/start` | Admin |
 | POST | `/api/admin/rounds/:n/pause` | Admin |
@@ -147,16 +150,19 @@ ignored `server/.env` file.
 | GET | `/api/admin/logs` | Admin |
 | GET | `/api/health` | Public |
 
-Player login uses a `CC-###`-style team ID, `P1`/`P2` slot, and password.
-Admin login uses username and password. Sessions are httpOnly cookies stored in
-MongoDB. The current models are `Team`, `Player`, `Admin`, `EventLog`,
-`ScoreEntry`, and `RoundState`.
+Team login uses a `CC-###`-style Team ID and one shared team password. Admin
+login uses username and password. Sessions are httpOnly cookies stored in
+MongoDB, with at most one active session per team. Do not expose seat slots or
+per-player accounts in the product or API. Team password hashes are stored on `Team` and excluded from normal queries.
+Current models include `Team`, `Admin`, `EventLog`, `ScoreEntry`, and
+`RoundState`; the `Player` model has been removed. `circuitSync.js` remains
+unregistered legacy game code.
 
 Frontend routes are `/`, `/login`, `/dashboard`, `/admin/login`, and `/admin`.
 
 ## 6. Product requirements
 
-The team dashboard should eventually show team identity, both player statuses,
+The team dashboard should eventually show team identity and online status,
 current round, score, round breakdown, initial Bias Points, time remaining,
 progress, rank, leaderboard access, instructions, and submissions where
 needed.
@@ -172,10 +178,13 @@ penalties, submitted answers, qualification/elimination, clues and answers,
 team/game reset, monitoring, completion status, and technical intervention.
 
 Timers, auto-save, server-side score validation, session persistence,
-player-specific permissions, round locking, final-answer confirmation,
-admin override, activity monitoring, responsive layout, and stable
-performance are required. The browser must never be the authority for score,
-identity, time, answers, or game state.
+team-level permissions, one-active-session-per-team enforcement, round
+locking, final-answer confirmation, admin override, activity monitoring,
+responsive layout, and stable performance are required. The browser must
+never be the authority for score, identity, time, answers, or validated game
+state. For browser-run games, the server issues a seed and start time and
+derives the validated outcome by deterministic replay of the submitted input
+log.
 
 ## 7. Round 1 direction
 
@@ -183,22 +192,25 @@ Round 1 is planned as three mini-games under one overall time limit. Both
 players must participate, and scoring should reflect performance rather than
 simply first-to-finish.
 
-1. **Dual-Control Maze:** P1 controls horizontal movement and P2 controls
-   vertical movement through walls, checkpoints, collectibles, switches,
-   barriers, and an exit. A teammate is building this game.
-2. **Cyber Runner:** an approximately 90-120 second shared runner. P1 moves
-   left with `W`; P2 moves right with `ArrowRight`. Score can include coins,
+1. **Dual-Control Maze:** both players share one keyboard and cooperate through
+   walls, checkpoints, collectibles, switches, barriers, and an exit.
+2. **Cyber Runner:** an approximately 90-120 second shared runner. One player
+   uses `W` and the other uses `ArrowRight`. Score can include coins,
    distance, checkpoints, collisions, and game-over state.
-3. **Circuit Sync / Code Repair:** one player sees a target and gives hints;
-   the other operates switches, wires, or nodes. Wrong connections penalise or
-   reset; correct configurations unlock stages.
+3. **Circuit Sync / Code Repair:** its one-screen design is an OPEN DECISION:
+   use a paper clue, replace it with another game, or show everything on the
+   shared screen. Wrong connections may penalise or reset; correct
+   configurations unlock stages.
 
-The device arrangement (one computer or two devices per team) is undecided.
-Two devices may require a live server connection. Agree with the Maze
-implementer on a common module contract: start, receive state, send inputs, and
-finish. The server decides positions, collisions, deadlines, and points; the
-browser renders and sends inputs. Store only final results durably unless a
-game requires otherwise.
+There is one shared screen and keyboard per team. There is no live connection
+between two browsers. For real-time-action games, the server issues a
+per-team random seed and authoritative start time. The browser runs the game
+and records timestamped inputs. On finish, it submits the input log, never a
+score. The server deterministically replays the log, validates duration, input
+rate, and impossible moves, then calls `submitGameResult` once. The server is
+the authority for the replay result. Puzzle-style games may instead submit
+each step to the server for validation. Persist only the final validated
+result unless a game requires otherwise.
 
 If time is short, prefer an asymmetric-information puzzle engine over the
 runner. Do not guess the rules for later rounds.
@@ -209,7 +221,8 @@ Always:
 
 - The browser talks only to the API, never directly to MongoDB.
 - Identity, role, team, score, time, and answer authority comes from the
-  server-side session and server state.
+  server-side session and server state. A team's identity comes from its
+  authenticated Team ID, never from a client-submitted identity.
 - Never send answers or private team data to the wrong player/team.
 - Validate request bodies strictly with Zod, reject unknown fields, cap
   lengths, and validate URL parameters.
@@ -217,10 +230,10 @@ Always:
   strings.
 - Store credentials only as bcrypt hashes. Generated passwords use
   `crypto.randomInt`, are 12 characters, and are shown once.
-- Regenerate the session ID after successful player/admin login and save the
+- Regenerate the session ID after successful team/admin login and save the
   session.
-- Reload the player and team on every protected player request. Missing
-  players and inactive teams must lose access immediately.
+- Reload the team on every protected team request. Missing or inactive teams
+  must lose access immediately.
 - Use the exported Mongo session store with an httpOnly cookie, configurable
   secure/SameSite settings, 12-hour expiry, and `touchAfter`.
 - Keep API response shapes stable.
@@ -228,7 +241,7 @@ Always:
   credential responses.
 - Audit admin actions with the admin actor ID and old/new values where
   applicable.
-- Keep player/admin rate limiters separate, count failed attempts only, and
+- Keep team/admin rate limiters separate, count failed attempts only, and
   key shared-IP-sensitive limiters so one client cannot lock out others.
 - Use the configured `TRUST_PROXY` value; do not hardcode proxy trust.
 
@@ -238,7 +251,8 @@ username/password limits, recursive event-log truncation, configurable
 `TRUST_PROXY` and `BCRYPT_COST`, secure password generation, all-or-nothing
 team creation, admin audit events, Bias Points bounds, `req.team` reuse in
 `GET /api/team/me`, team-ID validation, no-store middleware, and
-IP+username/IP+team+slot limiter keys.
+IP+username/IP+team-ID limiter keys. Team disable and password reset revoke
+the team's sessions.
 
 Still verify before production:
 
@@ -255,10 +269,13 @@ routes are not. Do not build game scoring until the round specifications are
 available. The current implementation provides:
 
 - `ScoreEntry` append-only records.
-- A unique partial index allowing only one `game_result` per team/game.
+- A unique partial index allowing only one `game_result` per team/round/attempt/game.
 - `submitGameResult(teamId, game, points)` as a service-only entry point for
-  future server-controlled games. It requires a running, unexpired round,
-  clamps points to `0..1000`, and returns a clear duplicate-submission error.
+  validated server results. It requires a running, unexpired round, clamps
+  points to `0..1000`, and returns a clear duplicate-submission error. Never
+  accept the score from the browser: replay and validate a timestamped input
+  log against the server-issued per-team seed and start time, or validate each
+  puzzle step on the server, before calling it once.
 - `getTotals(teamId)` and cached `getAllTotals()`.
 - `RoundState` start, global pause, resume with deadline extension, end, and
   timer-based automatic expiry.
@@ -284,12 +301,12 @@ may remain a simple initial team field.
 
 - Branch: `feature-core-platform`.
 - No scoring or round files should be deleted or rewritten into mutable totals.
-- Do not expose `submitGameResult` directly to arbitrary clients. Future game
-  routes must derive team identity from the authenticated session and validate
-  game state on the server.
-- Do not add another realtime transport or a leaderboard until the game/device
-  decision and round specifications are confirmed. Socket.IO and the first
-  Circuit Sync module now exist on `feature-realtime`.
+- Do not expose `submitGameResult` directly to arbitrary clients. Game
+  endpoints must derive team identity from the authenticated session and
+  validate input logs or puzzle steps on the server.
+- Do not add Socket.IO or WebSockets. The socket transport and hub have been
+  removed; `circuitSync.js` remains unregistered. The approved design uses
+  cached HTTP polling and one shared screen.
 - Before continuing, inspect:
   [`ScoreEntry`](./server/src/models/ScoreEntry.js),
   [`RoundState`](./server/src/models/RoundState.js),
@@ -298,29 +315,33 @@ may remain a simple initial team field.
 - The implementation was smoke-tested with a temporary MongoDB-backed round:
   the first result succeeded, a duplicate failed with `Game result already
   submitted`, a post-deadline result failed with `Round is not running`, pause
-  and resume moved the deadline by the pause duration, and a player calling
+  and resume moved the deadline by the pause duration, and a team session calling
   `/api/admin/rounds` received `403 Admin access required`.
 - The focused automated suite is
-  [`server/test/scoring.test.js`](./server/test/scoring.test.js). It passed all
-  six tests on 18 October 2026. The round-restart case is exercised by
-  reloading a persisted paused state through `initializeRoundStates()`.
+  [`server/test/scoring.test.js`](./server/test/scoring.test.js); it covers
+  rejection while paused or after deadline, duplicate submissions, one active
+  round, round-attempt restart, pause/resume, ledger indexing, and team score
+  isolation.
 
 ## 10. Performance
 
 Atlas M0 has limited throughput and no automated backups. Plan around
 approximately 65 concurrent users:
 
-- Avoid per-request database writes.
+- Avoid per-poll database reads or writes.
 - Keep presence and leaderboard snapshots in server memory where appropriate.
-- Poll no more often than every 20-30 seconds unless measurement justifies it.
+- Poll the dashboard, round timer, team presence, and leaderboard every 25
+  seconds while the tab is visible; show the latest successful update time and
+  an offline message after failures.
 - Keep a small Mongoose connection pool.
 - Ask participants to log in before round start.
 - Export teams, scores, and logs before and during the event.
 - Run a load test with roughly 65 simulated players, simultaneous login, round
   start, and submissions before the event.
 
-The current frontend heartbeat/dashboard polling is a starting point, not a
-measured production capacity guarantee.
+Polling is paused while a tab is hidden. Countdown displays continue locally
+from the latest server deadline and re-synchronize on each poll. Polling is not
+a measured production capacity guarantee.
 
 ## 11. Design system
 
@@ -343,7 +364,8 @@ New screens should use namespaced `cc-` classes and the existing dark system:
 
 Ask the owner one question at a time instead of guessing:
 
-1. One computer or two devices per team?
+1. Circuit Sync on one shared screen: paper clue, replacement game, or show
+   everything?
 2. How do Bias Points combine with round points, and how are starting amounts
    decided?
 3. Team count, hosting provider, and deployment domains?
@@ -374,11 +396,14 @@ Ask the owner one question at a time instead of guessing:
 For custom agent instruction files, the short version is:
 
 > CypherClash is an Express/MongoDB event platform with a Vite frontend.
-> Read this README first. Security is first: the server owns identity, timers,
-> scores, answers, and game state. Validate strict input, never trust client
-> values, never log secrets, work in small steps, preserve the landing page,
-> use append-only score records, avoid unnecessary Atlas operations, and list
-> every changed file.
+> Read this README first. Each team has one login and plays on one shared
+> screen. Use HTTP polling and in-memory caches only; do not add Socket.IO or
+> WebSockets. The server owns identity, time, scores, answers, and validation:
+> replay timestamped game inputs from a server-issued seed/start time or
+> validate puzzle steps before scoring. Validate strict input, never log
+> secrets, work in small steps, preserve the landing page, use append-only
+> score records, avoid unnecessary Atlas operations, and list every changed
+> file.
 
 ## 14. Local development
 

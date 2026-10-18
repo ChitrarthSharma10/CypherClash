@@ -8,7 +8,8 @@ export const sessionStore = MongoStore.create({
   stringify: false,
 });
 
-export async function destroyPlayerSessions(playerId) {
+export async function destroyTeamSessions(teamId) {
   const collection = await sessionStore.collectionP;
-  await collection.deleteMany({ 'session.playerId': playerId });
+  const query = { 'session.role': 'team', 'session.teamId': teamId };
+  await collection.deleteMany(query);
 }

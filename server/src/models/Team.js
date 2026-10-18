@@ -4,8 +4,11 @@ const teamSchema = new mongoose.Schema(
   {
     teamId: { type: String, required: true, unique: true, trim: true },
     name: { type: String, required: true, trim: true },
+    passwordHash: { type: String, required: true, select: false },
     biasPoints: { type: Number, default: 0 },
     active: { type: Boolean, default: true },
+    lastSeenAt: { type: Date, default: null },
+    lastLoginAt: { type: Date, default: null },
   },
   { timestamps: { createdAt: true, updatedAt: false } },
 );

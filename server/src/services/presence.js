@@ -1,27 +1,21 @@
 const ONLINE_WINDOW_MS = 45_000;
 const lastPresence = new Map();
-const connectedPlayers = new Set();
+const connectedTeams = new Set();
 
-function playerKey(teamId, slot) {
-  return `${teamId}:${slot}`;
+export function recordTeamPresence(teamId, at = Date.now()) {
+  lastPresence.set(teamId, at);
 }
 
-export function recordPlayerPresence(teamId, slot, at = Date.now()) {
-  lastPresence.set(playerKey(teamId, slot), at);
+export function setTeamConnected(teamId, connected) {
+  if (connected) connectedTeams.add(teamId);
+  else connectedTeams.delete(teamId);
 }
 
-export function setPlayerConnected(teamId, slot, connected) {
-  const key = playerKey(teamId, slot);
-  if (connected) connectedPlayers.add(key);
-  else connectedPlayers.delete(key);
-}
-
-export function isPlayerOnline(teamId, slot, now = Date.now()) {
-  const key = playerKey(teamId, slot);
-  if (connectedPlayers.has(key)) return true;
-  const lastSeen = lastPresence.get(key);
+export function isTeamOnline(teamId, now = Date.now()) {
+  if (connectedTeams.has(teamId)) return true;
+  const lastSeen = lastPresence.get(teamId);
   if (!lastSeen || now - lastSeen > ONLINE_WINDOW_MS) {
-    lastPresence.delete(key);
+    lastPresence.delete(teamId);
     return false;
   }
   return true;

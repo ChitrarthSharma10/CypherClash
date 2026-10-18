@@ -1,5 +1,4 @@
 import { Admin } from './models/Admin.js';
-import { Player } from './models/Player.js';
 import { Team } from './models/Team.js';
 import { connectDatabase, disconnectDatabase } from './db.js';
 import { config } from './config.js';
@@ -13,6 +12,7 @@ await Admin.findOneAndUpdate(
   { username: config.adminUsername, passwordHash: adminPasswordHash },
   { upsert: true, new: true, setDefaultsOnInsert: true },
 );
+await Admin.deleteMany({ username: { $ne: config.adminUsername } });
 console.log(`Admin seeded: ${config.adminUsername}`);
 
 if (config.seedSampleTeams) {
@@ -24,19 +24,14 @@ if (config.seedSampleTeams) {
       continue;
     }
 
-    const team = await Team.create({ teamId, name: `Sample Team ${index}`, biasPoints: 0 });
-    const credentials = {};
-    for (const slot of ['P1', 'P2']) {
-      const password = generatePassword();
-      credentials[slot] = password;
-      await Player.create({
-        team: team._id,
-        teamId,
-        slot,
-        passwordHash: await hashPassword(password),
-      });
-    }
-    console.log(`${teamId}: ${JSON.stringify(credentials)}`);
+    const password = generatePassword(12);
+    await Team.create({
+      teamId,
+      name: `Sample Team ${index}`,
+      biasPoints: 0,
+      passwordHash: await hashPassword(password),
+    });
+    console.log(`${teamId} seeded; use the admin reset-password action to issue its login password.`);
   }
 }
 

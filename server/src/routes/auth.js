@@ -2,19 +2,19 @@ import express from 'express';
 import rateLimit from 'express-rate-limit';
 import { z } from 'zod';
 import { Admin } from '../models/Admin.js';
-import { Player } from '../models/Player.js';
 import { Team } from '../models/Team.js';
 import { comparePassword } from '../utils/passwords.js';
 import { logEvent } from '../utils/logging.js';
 import { validateBody } from '../middleware/validation.js';
-import { loadActivePlayer } from '../middleware/auth.js';
+import { loadActiveTeam } from '../middleware/auth.js';
+import { destroyTeamSessions } from '../sessionStore.js';
+import { recordTeamPresence } from '../services/presence.js';
 
 const router = express.Router();
 export const TEAM_ID_PATTERN = /^CC-\d{3,}$/;
 
-const playerLoginSchema = z.object({
-  teamId: z.string().trim().regex(TEAM_ID_PATTERN).max(50),
-  slot: z.string().trim().min(1).max(10),
+const teamLoginSchema = z.object({
+  teamId: z.string().trim().regex(TEAM_ID_PATTERN).max(20),
   password: z.string().min(1).max(128),
 }).strict();
 
@@ -25,22 +25,25 @@ const adminLoginSchema = z.object({
 
 const emptyBodySchema = z.object({}).strict();
 
-const playerIpLoginLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  limit: 500,
-  skipSuccessfulRequests: true,
-  standardHeaders: 'draft-8',
-  legacyHeaders: false,
-  message: { error: 'Too many login attempts. Try again later.' },
-});
+const teamLoginKeys = new Map();
 
-const playerTeamSlotLoginLimiter = rateLimit({
+function teamLoginKey(req) {
+  const teamId = req.body?.teamId || '';
+  if (teamId) {
+    const keys = teamLoginKeys.get(teamId) || new Set();
+    keys.add(`${req.ip}:${teamId}`);
+    teamLoginKeys.set(teamId, keys);
+  }
+  return `${req.ip}:${teamId}`;
+}
+
+const teamLoginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   limit: 30,
   skipSuccessfulRequests: true,
   standardHeaders: 'draft-8',
   legacyHeaders: false,
-  keyGenerator: (req) => `${req.ip}:${req.body?.teamId || ''}:${req.body?.slot || ''}`,
+  keyGenerator: teamLoginKey,
   message: { error: 'Too many login attempts. Try again later.' },
 });
 
@@ -63,12 +66,27 @@ const adminUsernameLoginLimiter = rateLimit({
   message: { error: 'Too many login attempts. Try again later.' },
 });
 
-export async function clearPlayerTeamLoginLockout(teamId) {
-  // Keys now include the client IP, so these legacy-shaped resets intentionally do not target active keys.
-  await Promise.all([
-    playerTeamSlotLoginLimiter.resetKey(`${teamId}:P1`),
-    playerTeamSlotLoginLimiter.resetKey(`${teamId}:P2`),
-  ]);
+const teamLoginLocks = new Map();
+
+export async function clearTeamLoginLockout(teamId, ip) {
+  if (ip) {
+    await teamLoginLimiter.resetKey(`${ip}:${teamId}`);
+    return;
+  }
+  const keys = teamLoginKeys.get(teamId);
+  if (keys) {
+    await Promise.all([...keys].map((key) => teamLoginLimiter.resetKey(key)));
+    teamLoginKeys.delete(teamId);
+  }
+}
+
+function withTeamLoginLock(teamId, operation) {
+  const previous = teamLoginLocks.get(teamId) || Promise.resolve();
+  const current = previous.catch(() => {}).then(operation);
+  teamLoginLocks.set(teamId, current);
+  return current.finally(() => {
+    if (teamLoginLocks.get(teamId) === current) teamLoginLocks.delete(teamId);
+  });
 }
 
 function saveSession(req) {
@@ -85,40 +103,41 @@ function regenerateSession(req) {
 
 router.post(
   '/login',
-  validateBody(playerLoginSchema),
-  playerIpLoginLimiter,
-  playerTeamSlotLoginLimiter,
+  validateBody(teamLoginSchema),
+  teamLoginLimiter,
   async (req, res, next) => {
-    const { teamId, slot, password } = req.body;
+    const { teamId, password } = req.body;
     try {
-      const team = await Team.findOne({ teamId });
-      const player = await Player.findOne({ teamId, slot }).select('+passwordHash');
-      const passwordMatches = player ? await comparePassword(password, player.passwordHash) : false;
+      const team = await Team.findOne({ teamId }).select('+passwordHash');
+      const passwordMatches = team
+        ? await comparePassword(password, team.passwordHash)
+        : false;
 
-      if (!team || !player || !team.active || !passwordMatches) {
+      if (!team || !team.active || !passwordMatches) {
         await logEvent({
           type: 'login failure',
-          actorType: 'player',
-          actorId: `${teamId}:${slot}`,
+          actorType: 'team',
+          actorId: teamId,
           teamId,
         });
         return res.status(401).json({ error: 'Invalid credentials' });
       }
 
-      const now = new Date();
-      await Player.updateOne({ _id: player._id }, { lastSeenAt: now, lastLoginAt: now });
-      await regenerateSession(req);
-      req.session.role = 'player';
-      req.session.playerId = player._id.toString();
-      req.session.teamId = team.teamId;
-      req.session.slot = player.slot;
-      await saveSession(req);
-      await logEvent({ type: 'login success', actorType: 'player', actorId: player._id.toString(), teamId });
+      await withTeamLoginLock(team.teamId, async () => {
+        await regenerateSession(req);
+        await destroyTeamSessions(team.teamId);
+        const now = new Date();
+        await Team.updateOne({ _id: team._id }, { $set: { lastSeenAt: now, lastLoginAt: now } });
+        req.session.role = 'team';
+        req.session.teamId = team.teamId;
+        await saveSession(req);
+      });
+      recordTeamPresence(team.teamId);
+      await logEvent({ type: 'login success', actorType: 'team', actorId: team.teamId, teamId });
 
       return res.json({
-        role: 'player',
+        role: 'team',
         team: { teamId: team.teamId, name: team.name },
-        slot: player.slot,
       });
     } catch (error) {
       return next(error);
@@ -157,7 +176,7 @@ router.post(
 
 router.post('/logout', validateBody(emptyBodySchema), async (req, res, next) => {
   const actorType = req.session.role || 'anonymous';
-  const actorId = req.session.playerId || req.session.adminId || 'anonymous';
+  const actorId = req.session.teamId || req.session.adminId || 'anonymous';
   const teamId = req.session.teamId;
   try {
     if (req.session.role) {
@@ -171,18 +190,14 @@ router.post('/logout', validateBody(emptyBodySchema), async (req, res, next) => 
   }
 });
 
-router.get('/me', (req, res, next) => {
-  if (req.session.role === 'player') {
-    return loadActivePlayer(req)
-      .then((result) => {
-        if (!result) {
+router.get('/me', async (req, res, next) => {
+  if (req.session.role === 'team') {
+    return loadActiveTeam(req)
+      .then((team) => {
+        if (!team) {
           return res.status(401).json({ error: 'Authentication required' });
         }
-        return res.json({
-          role: 'player',
-          teamId: result.team.teamId,
-          slot: result.player.slot,
-        });
+        return res.json({ role: 'team', teamId: team.teamId });
       })
       .catch(next);
   }

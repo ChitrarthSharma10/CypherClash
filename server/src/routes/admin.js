@@ -1,15 +1,13 @@
 import express from 'express';
 import { z } from 'zod';
-import { Admin } from '../models/Admin.js';
 import { EventLog } from '../models/EventLog.js';
-import { Player } from '../models/Player.js';
 import { Team } from '../models/Team.js';
 import { requireAdmin } from '../middleware/auth.js';
 import { validateBody } from '../middleware/validation.js';
 import { generatePassword, hashPassword } from '../utils/passwords.js';
 import { logEvent } from '../utils/logging.js';
-import { destroyPlayerSessions } from '../sessionStore.js';
-import { clearPlayerTeamLoginLockout, TEAM_ID_PATTERN } from './auth.js';
+import { destroyTeamSessions } from '../sessionStore.js';
+import { clearTeamLoginLockout, TEAM_ID_PATTERN } from './auth.js';
 import {
   endRound,
   listRoundStates,
@@ -18,8 +16,7 @@ import {
   startRound,
 } from '../services/roundState.js';
 import { addAdjustment, getAllTotals } from '../services/scoring.js';
-import { disconnectTeamSockets } from '../realtime/socketHub.js';
-import { isPlayerOnline } from '../services/presence.js';
+import { isTeamOnline } from '../services/presence.js';
 import { invalidateLeaderboard } from '../services/leaderboard.js';
 
 const router = express.Router();
@@ -49,7 +46,6 @@ const updateTeamSchema = z.object({
   active: z.boolean().optional(),
 }).strict().refine((value) => Object.keys(value).length > 0, 'At least one field is required');
 
-const slotSchema = z.object({ slot: z.enum(['P1', 'P2']) }).strict();
 const emptyBodySchema = z.object({}).strict();
 const startRoundSchema = z.object({
   durationSec: z.number().int().min(1).max(86400),
@@ -64,13 +60,6 @@ async function nextTeamId() {
   const latest = await Team.findOne().sort({ teamId: -1 }).select('teamId').lean();
   const nextNumber = latest ? Number(latest.teamId.slice(3)) + 1 : 1;
   return `CC-${String(nextNumber).padStart(3, '0')}`;
-}
-
-function playerView(player) {
-  return {
-    slot: player.slot,
-    online: isPlayerOnline(player.teamId, player.slot),
-  };
 }
 
 function serviceErrorStatus(error) {
@@ -171,30 +160,16 @@ router.get('/scores', async (req, res, next) => {
 
 router.post('/teams', validateBody(createTeamSchema), async (req, res, next) => {
   let team;
-  const createdPlayerIds = [];
   try {
     const teamId = await nextTeamId();
-    const passwords = {
-      P1: generatePassword(),
-      P2: generatePassword(),
-    };
-    const passwordHashes = {
-      P1: await hashPassword(passwords.P1),
-      P2: await hashPassword(passwords.P2),
-    };
-    team = await Team.create({ teamId, name: req.body.name, biasPoints: req.body.biasPoints });
-    const credentials = {};
-    for (const slot of ['P1', 'P2']) {
-      const player = await Player.create({
-        team: team._id,
-        teamId,
-        slot,
-        passwordHash: passwordHashes[slot],
-      });
-      createdPlayerIds.push(player._id);
-      credentials[slot] = passwords[slot];
-    }
-    invalidateLeaderboard();
+    const password = generatePassword(12);
+    const passwordHash = await hashPassword(password);
+    team = await Team.create({
+      teamId,
+      name: req.body.name,
+      biasPoints: req.body.biasPoints,
+      passwordHash,
+    });
     await logEvent({
       type: 'team created',
       actorType: 'admin',
@@ -202,15 +177,14 @@ router.post('/teams', validateBody(createTeamSchema), async (req, res, next) => 
       teamId,
       details: { name: team.name },
     });
+    invalidateLeaderboard();
+    res.set('Cache-Control', 'no-store');
     return res.status(201).json({
       team: { teamId: team.teamId, name: team.name, biasPoints: team.biasPoints, active: team.active },
-      credentials,
+      password,
     });
   } catch (error) {
     try {
-      await Player.deleteMany({
-        _id: { $in: createdPlayerIds },
-      });
       if (team) {
         await Team.deleteOne({ _id: team._id });
       }
@@ -224,10 +198,7 @@ router.post('/teams', validateBody(createTeamSchema), async (req, res, next) => 
 router.get('/teams', async (req, res, next) => {
   try {
     const teams = await Team.find().sort({ teamId: 1 }).lean();
-    return res.json(teams.map((team) => ({
-      ...team,
-      players: ['P1', 'P2'].map((slot) => playerView({ teamId: team.teamId, slot })),
-    })));
+    return res.json(teams.map((team) => ({ ...team, online: isTeamOnline(team.teamId) })));
   } catch (error) {
     return next(error);
   }
@@ -246,6 +217,15 @@ router.patch('/teams/:teamId', validateBody(updateTeamSchema), async (req, res, 
     ).lean();
     if (!team) {
       return res.status(404).json({ error: 'Team not found' });
+    }
+    const teamChanged = (
+      (req.body.name !== undefined && req.body.name !== previousTeam.name)
+      || (req.body.biasPoints !== undefined && req.body.biasPoints !== previousTeam.biasPoints)
+      || (req.body.active !== undefined && req.body.active !== previousTeam.active)
+    );
+    if (teamChanged) invalidateLeaderboard();
+    if (req.body.active === false && previousTeam.active) {
+      await destroyTeamSessions(team.teamId);
     }
     if (req.body.active !== undefined && req.body.active !== previousTeam.active) {
       await logEvent({
@@ -273,43 +253,34 @@ router.patch('/teams/:teamId', validateBody(updateTeamSchema), async (req, res, 
         details: { oldValue: previousTeam.biasPoints, newValue: team.biasPoints },
       });
     }
-    if (
-      (req.body.name !== undefined && req.body.name !== previousTeam.name)
-      || (req.body.biasPoints !== undefined && req.body.biasPoints !== previousTeam.biasPoints)
-      || (req.body.active !== undefined && req.body.active !== previousTeam.active)
-    ) {
-      invalidateLeaderboard();
-    }
-    if (req.body.active === false) {
-      const players = await Player.find({ teamId: team.teamId }).select('_id').lean();
-      await Promise.all(players.map((player) => destroyPlayerSessions(player._id.toString())));
-      disconnectTeamSockets(team.teamId);
-    }
     return res.json({ team });
   } catch (error) {
     return next(error);
   }
 });
 
-router.post('/teams/:teamId/reset-password', validateBody(slotSchema), async (req, res, next) => {
+router.post('/teams/:teamId/reset-password', validateBody(emptyBodySchema), async (req, res, next) => {
   try {
-    const player = await Player.findOne({ teamId: req.params.teamId, slot: req.body.slot });
-    if (!player) {
-      return res.status(404).json({ error: 'Team or player not found' });
+    const password = generatePassword(12);
+    const passwordHash = await hashPassword(password);
+    const team = await Team.findOneAndUpdate(
+      { teamId: req.params.teamId },
+      { $set: { passwordHash } },
+      { new: true, runValidators: true },
+    ).select('teamId').lean();
+    if (!team) {
+      return res.status(404).json({ error: 'Team not found' });
     }
-    const password = generatePassword();
-    player.passwordHash = await hashPassword(password);
-    await player.save();
-    await destroyPlayerSessions(player._id.toString());
-    disconnectTeamSockets(req.params.teamId);
+    await destroyTeamSessions(team.teamId);
+    await clearTeamLoginLockout(team.teamId);
     await logEvent({
       type: 'password reset',
       actorType: 'admin',
       actorId: req.session.adminId,
       teamId: req.params.teamId,
-      details: { slot: req.body.slot },
     });
-    return res.json({ teamId: req.params.teamId, slot: req.body.slot, password });
+    res.set('Cache-Control', 'no-store');
+    return res.json({ teamId: req.params.teamId, password });
   } catch (error) {
     return next(error);
   }
@@ -321,7 +292,8 @@ router.post('/teams/:teamId/clear-login-lockout', validateBody(emptyBodySchema),
     if (!team) {
       return res.status(404).json({ error: 'Team not found' });
     }
-    await clearPlayerTeamLoginLockout(req.params.teamId);
+    await clearTeamLoginLockout(req.params.teamId);
+    await destroyTeamSessions(req.params.teamId);
     await logEvent({
       type: 'login lockout cleared',
       actorType: 'admin',

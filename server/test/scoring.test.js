@@ -4,7 +4,6 @@ import assert from 'node:assert/strict';
 import { connectDatabase, disconnectDatabase } from '../src/db.js';
 import { createApp } from '../src/app.js';
 import { sessionStore } from '../src/sessionStore.js';
-import { Player } from '../src/models/Player.js';
 import { Team } from '../src/models/Team.js';
 import { ScoreEntry } from '../src/models/ScoreEntry.js';
 import { RoundState } from '../src/models/RoundState.js';
@@ -18,10 +17,15 @@ import {
   resumeRound,
   startRound,
 } from '../src/services/roundState.js';
-import { addAdjustment, submitGameResult } from '../src/services/scoring.js';
+import {
+  addAdjustment,
+  clearAllTotalsCache,
+  getTotals,
+  submitGameResult,
+} from '../src/services/scoring.js';
 import { hashPassword } from '../src/utils/passwords.js';
 
-const suffix = `${Date.now()}${process.pid}`;
+const suffix = `${Date.now() % 1_000_000_000}${process.pid % 10000}`;
 const teamA = `CC-91${suffix}`;
 const teamB = `CC-92${suffix}`;
 const password = 'ScoringTestPassword123';
@@ -31,25 +35,22 @@ let server;
 let baseUrl;
 
 async function createTeam(teamId) {
-  const team = await Team.create({ teamId, name: `Test ${teamId}` });
-  await Player.create({
-    team: team._id,
+  return Team.create({
     teamId,
-    slot: 'P1',
+    name: `Test ${teamId}`,
     passwordHash: await hashPassword(password),
   });
-  return team;
 }
 
 async function request(path, options = {}) {
   return fetch(`${baseUrl}${path}`, options);
 }
 
-async function playerCookie(teamId) {
+async function teamCookie(teamId) {
   const response = await request('/api/auth/login', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ teamId, slot: 'P1', password }),
+    body: JSON.stringify({ teamId, password }),
   });
   assert.equal(response.status, 200);
   return response.headers.get('set-cookie').split(';', 1)[0];
@@ -67,6 +68,7 @@ before(async () => {
 
 beforeEach(async () => {
   await ScoreEntry.deleteMany({ teamId: { $in: [teamA, teamB] } });
+  clearAllTotalsCache();
   await RoundState.deleteMany({ round: { $in: testRounds } });
   await EventLog.deleteMany({ actorId: /^scoring-test/ });
   await initializeRoundStates();
@@ -76,7 +78,6 @@ after(async () => {
   if (server) {
     await new Promise((resolve) => server.close(resolve));
   }
-  await Player.deleteMany({ teamId: { $in: [teamA, teamB] } });
   await Team.deleteMany({ teamId: { $in: [teamA, teamB] } });
   await ScoreEntry.deleteMany({ teamId: { $in: [teamA, teamB] } });
   await RoundState.deleteMany({ round: { $in: testRounds } });
@@ -188,11 +189,29 @@ test('admin adjustment reason game_result does not occupy game-result slot', asy
 
 test('creates the unique game-result index with the requested key and filter', async () => {
   const indexes = await ScoreEntry.collection.indexes();
-  const gameResultIndex = indexes.find((index) => index.name === 'teamId_1_round_1_game_1');
+  const gameResultIndex = indexes.find(
+    (index) => index.name === 'teamId_1_round_1_attemptNo_1_game_1',
+  );
   assert.ok(gameResultIndex);
   assert.equal(gameResultIndex.unique, true);
-  assert.deepEqual(gameResultIndex.key, { teamId: 1, round: 1, game: 1 });
+  assert.deepEqual(gameResultIndex.key, { teamId: 1, round: 1, attemptNo: 1, game: 1 });
   assert.deepEqual(gameResultIndex.partialFilterExpression, { kind: 'game_result' });
+});
+
+test('restarting an ended round preserves old results and accepts one new attempt', async () => {
+  const round = testRounds[0];
+  const first = await startRound(round, 60, 'scoring-test-admin');
+  const firstResult = await submitGameResult(teamA, 'maze', 10);
+  await endRound(round, 'scoring-test-admin');
+  const second = await startRound(round, 1800, 'scoring-test-admin');
+  const secondResult = await submitGameResult(teamA, 'maze', 20);
+
+  assert.equal(first.attemptNo, 1);
+  assert.equal(firstResult.attemptNo, 1);
+  assert.equal(second.attemptNo, 2);
+  assert.equal(secondResult.attemptNo, 2);
+  assert.equal(await ScoreEntry.countDocuments({ teamId: teamA, round, kind: 'game_result' }), 2);
+  assert.equal((await getTotals(teamA)).rounds[round], 30);
 });
 
 test('reloads running and paused rounds from the database', async () => {
@@ -236,7 +255,8 @@ test('team score endpoint only returns the logged-in team', async () => {
     actorType: 'system',
     actorId: 'system',
   });
-  const cookie = await playerCookie(teamA);
+  clearAllTotalsCache();
+  const cookie = await teamCookie(teamA);
   const response = await request('/api/team/score', { headers: { cookie } });
   assert.equal(response.status, 200);
   const body = await response.json();
@@ -251,18 +271,55 @@ test('team dashboard returns paused round timing from the server', async () => {
   const round = testRounds[8];
   await startRound(round, 60, 'scoring-test-admin');
   const paused = await pauseRound(round, 'scoring-test-admin');
-  const cookie = await playerCookie(teamA);
+  const cookie = await teamCookie(teamA);
   const response = await request('/api/team/me', { headers: { cookie } });
   assert.equal(response.status, 200);
   const body = await response.json();
   assert.equal(body.currentRound.round, round);
   assert.equal(body.currentRound.status, 'paused');
   assert.equal(new Date(body.currentRound.pausedAt).getTime(), paused.pausedAt.getTime());
+  assert.ok(body.lastSeenAt);
   assert.equal(
     body.currentRound.remainingMs,
     paused.deadline.getTime() - paused.pausedAt.getTime(),
   );
-  assert.equal(body.players.find((player) => player.slot === 'P1').online, true);
+  assert.equal(body.online, true);
+});
+
+test('team dashboard polling reuses score and presence memory without database writes', async () => {
+  const cookie = await teamCookie(teamA);
+  const firstScore = await request('/api/team/score', { headers: { cookie } });
+  assert.equal(firstScore.status, 200);
+  await firstScore.arrayBuffer();
+
+  const aggregate = ScoreEntry.aggregate;
+  const updateOne = Team.updateOne;
+  let aggregateCalls = 0;
+  let teamWrites = 0;
+  ScoreEntry.aggregate = function (...args) {
+    aggregateCalls += 1;
+    return aggregate.apply(this, args);
+  };
+  Team.updateOne = function (...args) {
+    teamWrites += 1;
+    return updateOne.apply(this, args);
+  };
+  try {
+    for (let index = 0; index < 5; index += 1) {
+      const [dashboard, score] = await Promise.all([
+        request('/api/team/me', { headers: { cookie } }),
+        request('/api/team/score', { headers: { cookie } }),
+      ]);
+      assert.equal(dashboard.status, 200);
+      assert.equal(score.status, 200);
+      await Promise.all([dashboard.arrayBuffer(), score.arrayBuffer()]);
+    }
+  } finally {
+    ScoreEntry.aggregate = aggregate;
+    Team.updateOne = updateOne;
+  }
+  assert.equal(aggregateCalls, 0);
+  assert.equal(teamWrites, 0);
 });
 
 test('rejects results after the round deadline', async () => {

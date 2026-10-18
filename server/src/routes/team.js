@@ -1,14 +1,20 @@
 import express from 'express';
 import { z } from 'zod';
-import { requirePlayer } from '../middleware/auth.js';
+import { requireTeam } from '../middleware/auth.js';
 import { validateBody } from '../middleware/validation.js';
 import { getTotals } from '../services/scoring.js';
 import { listRoundStates } from '../services/roundState.js';
-import { isPlayerOnline, recordPlayerPresence } from '../services/presence.js';
+import { isTeamOnline, recordTeamPresence } from '../services/presence.js';
 
 const router = express.Router();
-router.use(requirePlayer);
+router.use(requireTeam);
 const emptyBodySchema = z.object({}).strict();
+
+function updatePresence(team) {
+  const lastSeenAt = new Date();
+  recordTeamPresence(team.teamId, lastSeenAt.getTime());
+  team.lastSeenAt = lastSeenAt;
+}
 
 function currentRound() {
   const rounds = listRoundStates();
@@ -43,15 +49,13 @@ router.get('/me', async (req, res, next) => {
       });
       return res.status(401).json({ error: 'Authentication required' });
     }
-    recordPlayerPresence(team.teamId, req.player.slot);
+    updatePresence(team);
     return res.json({
       teamId: team.teamId,
       name: team.name,
       biasPoints: team.biasPoints,
-      players: ['P1', 'P2'].map((slot) => ({
-        slot,
-        online: isPlayerOnline(team.teamId, slot),
-      })),
+      online: isTeamOnline(team.teamId),
+      lastSeenAt: team.lastSeenAt,
       currentRound: currentRound(),
     });
   } catch (error) {
@@ -69,7 +73,7 @@ router.get('/score', async (req, res, next) => {
 
 router.post('/heartbeat', validateBody(emptyBodySchema), async (req, res, next) => {
   try {
-    recordPlayerPresence(req.team.teamId, req.player.slot);
+    updatePresence(req.team);
     return res.status(204).send();
   } catch (error) {
     return next(error);
