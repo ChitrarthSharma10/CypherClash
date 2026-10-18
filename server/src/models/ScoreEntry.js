@@ -4,6 +4,7 @@ const scoreEntrySchema = new mongoose.Schema(
   {
     teamId: { type: String, required: true },
     round: { type: Number, required: true, min: 1 },
+    attemptNo: { type: Number, required: true, min: 1, default: 1 },
     game: { type: String, required: true, trim: true },
     kind: { type: String, enum: ['game_result', 'adjustment'], required: true },
     amount: { type: Number, required: true, min: -1000, max: 1000, validate: Number.isInteger },
@@ -16,7 +17,7 @@ const scoreEntrySchema = new mongoose.Schema(
 
 scoreEntrySchema.index({ teamId: 1, round: 1 });
 scoreEntrySchema.index(
-  { teamId: 1, round: 1, game: 1 },
+  { teamId: 1, round: 1, attemptNo: 1, game: 1 },
   { unique: true, partialFilterExpression: { kind: 'game_result' } },
 );
 

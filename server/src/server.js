@@ -11,12 +11,15 @@ await connectDatabase();
 try {
   await ScoreEntry.syncIndexes();
   const indexes = await ScoreEntry.collection.indexes();
-  const gameResultIndex = indexes.find((index) => index.name === 'teamId_1_round_1_game_1');
+  const gameResultIndex = indexes.find(
+    (index) => index.name === 'teamId_1_round_1_attemptNo_1_game_1',
+  );
   if (
     !gameResultIndex
     || !gameResultIndex.unique
     || gameResultIndex.key.teamId !== 1
     || gameResultIndex.key.round !== 1
+    || gameResultIndex.key.attemptNo !== 1
     || gameResultIndex.key.game !== 1
     || gameResultIndex.partialFilterExpression?.kind !== 'game_result'
   ) {

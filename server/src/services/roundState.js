@@ -23,6 +23,7 @@ export class RoundStateError extends Error {
 function snapshot(state) {
   return {
     round: state.round,
+    attemptNo: state.attemptNo ?? 1,
     status: state.status,
     startedAt: state.startedAt,
     deadline: state.deadline,
@@ -133,7 +134,7 @@ async function withTransitionLock(operation) {
 export async function startRound(round, durationSec, adminId) {
   return withTransitionLock(async () => {
     const current = states.get(round);
-    if (current?.status === 'running' || current?.status === 'paused' || current?.status === 'ended') {
+    if (current?.status === 'running' || current?.status === 'paused') {
       throw new RoundStateError('ROUND_ALREADY_STARTED', 'Round has already started');
     }
     const otherActiveRound = [...states.values()].find(
@@ -150,6 +151,9 @@ export async function startRound(round, durationSec, adminId) {
     return updateState(
       round,
       {
+        attemptNo: current?.status === 'ended'
+          ? (current.attemptNo ?? 1) + 1
+          : current?.attemptNo ?? 1,
         status: 'running',
         startedAt,
         deadline: new Date(startedAt.getTime() + durationSec * 1000),

@@ -76,6 +76,7 @@ export async function submitGameResult(teamId, game, points) {
     const entry = await ScoreEntry.create({
       teamId,
       round: state.round,
+      attemptNo: state.attemptNo ?? 1,
       game,
       kind: 'game_result',
       amount,
