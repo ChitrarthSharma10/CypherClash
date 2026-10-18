@@ -12,7 +12,6 @@
     "@vitejs/plugin-react": "latest",
     "react": "latest",
     "react-dom": "latest",
-    "socket.io-client": "^4.8.4",
     "vite": "latest"
   }
 }

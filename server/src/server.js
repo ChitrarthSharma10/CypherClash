@@ -4,7 +4,6 @@ import { connectDatabase } from './db.js';
 import { config } from './config.js';
 import { initializeRoundStates, startRoundStateMonitor } from './services/roundState.js';
 import { ScoreEntry } from './models/ScoreEntry.js';
-import { attachSocketIo } from './realtime/socketHub.js';
 import { rebuildLeaderboard } from './services/leaderboard.js';
 
 await connectDatabase();
@@ -39,7 +38,6 @@ await initializeRoundStates();
 await rebuildLeaderboard();
 startRoundStateMonitor();
 const httpServer = createServer(createApp());
-attachSocketIo(httpServer);
 httpServer.listen(config.port, () => {
   console.log(`CypherClash API listening on port ${config.port}`);
 });

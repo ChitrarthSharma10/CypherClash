@@ -6,7 +6,6 @@ const ALLOWED_ROW_KEYS = ['rank', 'name', 'bias', 'r1', 'r2', 'r3', 'total'];
 let rows = [];
 let updatedAt = null;
 let indexByTeamId = new Map();
-let leaderboardIo;
 let rebuildTimer;
 let rebuildPromise;
 let generation = 0;
@@ -22,21 +21,6 @@ export function computeTotal(r1, r2, r3) {
 // Bias Points are a separate hint currency and do not affect total or rank.
 export function displayBias(team) {
   return team.biasPoints;
-}
-
-function publish() {
-  if (!leaderboardIo) return;
-  const socketIds = leaderboardIo.of('/').adapter.rooms.get('leaderboard');
-  if (!socketIds) return;
-  for (const socketId of socketIds) {
-    const socket = leaderboardIo.of('/').sockets.get(socketId);
-    if (!socket) continue;
-    socket.emit('lb:update', {
-      rows,
-      updatedAt,
-      youIndex: indexByTeamId.get(socket.data.teamId) ?? null,
-    });
-  }
 }
 
 export async function rebuildLeaderboard() {
@@ -92,7 +76,6 @@ export async function rebuildLeaderboard() {
     indexByTeamId = nextIndexByTeamId;
     updatedAt = new Date().toISOString();
     lastRebuildAt = Date.now();
-    publish();
   })();
   try {
     await rebuildPromise;
@@ -119,10 +102,6 @@ function scheduleRebuild() {
 export function invalidateLeaderboard() {
   generation += 1;
   scheduleRebuild();
-}
-
-export function setLeaderboardSocketServer(io) {
-  leaderboardIo = io;
 }
 
 export async function getLeaderboard(teamId = null) {
