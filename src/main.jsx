@@ -1,6 +1,12 @@
 import { StrictMode, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import './styles.css';
+import {
+  CodeInspectionIcon,
+  DossierSearchIcon,
+  GameControllerIcon,
+  UnlockedTerminalIcon,
+} from './components/CardHeaderIcons.tsx';
 
 const rounds = [
   { number: '01', title: 'Mini Games Round', subtitle: 'The Warmup & Screening', time: '30 min', mode: 'BROWSER MINI-GAMES', desc: 'Build speed and digital intuition with quick decisions, patterns, and packet sorting.', focus: 'Speed + instinct' },
@@ -53,34 +59,30 @@ function Landing({ setView }) {
   const [practice, setPractice] = useState(null);
   return <main>
     <section className="cc-hero" id="event-brief">
-      <p className="cc-hero__eyebrow">Student cybersecurity tournament</p>
+      <p className="cc-hero__presenter">OsCode Presents</p>
       <h1 className="cc-hero__title"><span className="cc-hero__w1">Cypher</span><span className="cc-hero__w2">Clash</span></h1>
       <p className="cc-hero__tag">Because writing secure code was too much work.</p>
       <div className="cc-hero__actions">
         <a className="cc-btn cc-btn--solid" href="#portal" onClick={(event) => { event.preventDefault(); setView('portal'); }}>Enter participant portal <span aria-hidden="true">↗</span></a>
         <a className="cc-btn cc-btn--ghost" href="#rounds">Explore the rounds <span aria-hidden="true">↓</span></a>
       </div>
+    </section>
+    <section className="cc-rounds" id="rounds">
       <dl className="cc-facts">
-        <div className="cc-fact cc-fact--stat"><dt>Rounds in play</dt><dd>04</dd></div>
         <div className="cc-fact"><dt>Format</dt><dd>4-round tournament</dd></div>
         <div className="cc-fact"><dt>Team size</dt><dd>2–3 members</dd></div>
         <div className="cc-fact"><dt>Entry level</dt><dd>Zero prerequisites</dd></div>
         <div className="cc-fact"><dt>When / Where</dt><dd>To be announced</dd></div>
       </dl>
-    </section>
-    <section className="cc-rounds" id="rounds">
-      <h2 className="cc-rounds__title">Four ways to <span>think sideways.</span></h2>
       <div className="cc-fan">
         {rounds.map((round, index) => <article className={`cc-card cc-card--${index + 1}`} tabIndex="0" key={round.number}>
           <div className="cc-card__top">
             <span className="cc-card__num">{round.number}</span>
             <span className="cc-card__icon">
-              <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-                {index === 0 && <><line x1="6" x2="10" y1="11" y2="11" /><line x1="8" x2="8" y1="9" y2="13" /><line x1="15" x2="15.01" y1="12" y2="12" /><line x1="18" x2="18.01" y1="10" y2="10" /><path d="M17.32 5H6.68a4 4 0 0 0-3.978 3.59c-.006.052-.01.101-.017.152C2.604 9.416 2 14.456 2 16a3 3 0 0 0 3 3c1 0 1.5-.5 2-1l1.414-1.414A2 2 0 0 1 9.828 16h4.344a2 2 0 0 1 1.414.586L17 18c.5.5 1 1 2 1a3 3 0 0 0 3-3c0-1.545-.604-6.584-.685-7.258-.007-.05-.011-.1-.017-.151A4 4 0 0 0 17.32 5z" /></>}
-                {index === 1 && <><polyline points="16 18 22 12 16 6" /><polyline points="8 6 2 12 8 18" /></>}
-                {index === 2 && <><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /><circle cx="11.5" cy="14.5" r="2.5" /><path d="M13.3 16.3 15 18" /></>}
-                {index === 3 && <><rect width="18" height="11" x="3" y="11" rx="2" ry="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4" /></>}
-              </svg>
+              {index === 0 && <GameControllerIcon size={24} title="Mini games" />}
+              {index === 1 && <CodeInspectionIcon size={24} title="Code inspection" />}
+              {index === 2 && <DossierSearchIcon size={24} title="Dossier search" />}
+              {index === 3 && <UnlockedTerminalIcon size={24} title="Unlocked terminal" />}
             </span>
           </div>
           <div className="cc-card__body">
@@ -95,7 +97,56 @@ function Landing({ setView }) {
         </article>)}
       </div>
     </section>
-    <section className="scoreboard content-grid" id="scoreboard"><p className="eyebrow">SCOREBOARD</p><p className="scoreboard-message">Live scoreboard opens when the event starts.</p><button className="text-button" onClick={() => setView('portal')}>Register your team <span>↗</span></button></section>
+    <section className="cc-board" id="scoreboard">
+      <p className="cc-board__eyebrow">Scoreboard <span className="cc-board__sample">Sample data</span></p>
+      <h2 className="cc-board__title">Live leaderboard preview. Final scores will appear when the event starts.</h2>
+
+      <div className="cc-podium" aria-label="Top three teams">
+        <div className="cc-pod cc-pod--2">
+          <div className="cc-pod__who">
+            <span className="cc-pod__avatar" aria-hidden="true">CA</span>
+            <span className="cc-pod__name">Ctrl Alt Elite</span>
+            <span className="cc-pod__pts">25 pts</span>
+          </div>
+          <div className="cc-pod__block"><span>2</span></div>
+        </div>
+
+        <div className="cc-pod cc-pod--1">
+          <svg className="cc-pod__trophy" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6" /><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18" /><path d="M4 22h16" /><path d="M10 14.66V17c0 .55-.47.98-1.97 1.21C7.85 18.75 7 20.24 7 22" /><path d="M14 14.66V17c0 .55.47.98 1.97 1.21C16.15 18.75 17 20.24 17 22" /><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z" /></svg>
+          <div className="cc-pod__who">
+            <span className="cc-pod__avatar" aria-hidden="true">PP</span>
+            <span className="cc-pod__name">Packet Picnic</span>
+            <span className="cc-pod__pts">75 pts</span>
+          </div>
+          <div className="cc-pod__block"><span>1</span></div>
+        </div>
+
+        <div className="cc-pod cc-pod--3">
+          <div className="cc-pod__who">
+            <span className="cc-pod__avatar" aria-hidden="true">BB</span>
+            <span className="cc-pod__name">Byte Bandits</span>
+            <span className="cc-pod__pts">— pts</span>
+          </div>
+          <div className="cc-pod__block"><span>3</span></div>
+        </div>
+      </div>
+
+      <div className="cc-rank" role="table" aria-label="Leaderboard from rank 4">
+        <div className="cc-rank__row cc-rank__row--head" role="row">
+          <span role="columnheader">#</span><span role="columnheader">Team</span>
+          <span role="columnheader">R1</span><span role="columnheader">R2</span>
+          <span role="columnheader">R3</span><span role="columnheader">R4</span>
+          <span role="columnheader">Total</span>
+        </div>
+        <div className="cc-rank__row" role="row">
+          <span role="cell">4</span><span role="cell" className="cc-rank__team">Null Pointers</span>
+          <span role="cell">—</span><span role="cell">—</span><span role="cell">—</span><span role="cell">—</span>
+          <span role="cell" className="cc-rank__total">—</span>
+        </div>
+      </div>
+
+      <a className="cc-btn cc-btn--ghost cc-board__cta" href="#portal" onClick={(event) => { event.preventDefault(); setView('portal'); }}>Register your team <span aria-hidden="true">↗</span></a>
+    </section>
     <footer><span>CYPHERCLASH / 2026</span><span>Made for curious beginners.</span></footer>
     {practice && <Practice onClose={() => setPractice(null)} />}
   </main>;
@@ -234,7 +285,7 @@ createRoot(document.getElementById('root')).render(<StrictMode><App /></StrictMo
     }
     function update() {
       if (Date.now() < lockUntil) return;
-      const line = window.innerHeight * 0.35;
+      const line = window.innerHeight * 0.2;
       let best = targets[0];
       targets.forEach(function (t) { if (t.el.getBoundingClientRect().top <= line) best = t; });
       if (window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 4) best = targets[targets.length - 1];
@@ -266,7 +317,7 @@ createRoot(document.getElementById('root')).render(<StrictMode><App /></StrictMo
     canvas.setAttribute('aria-hidden', 'true');
     document.body.prepend(canvas);
     const ctx = canvas.getContext('2d');
-    const DENSITY = 13000;
+    const DENSITY = 8667;
     const LINK_DIST = 125;
     const SPEED = 0.2;
     const COLORS = ['255,255,255', '255,255,255', '163,163,173'];
@@ -318,3 +369,16 @@ createRoot(document.getElementById('root')).render(<StrictMode><App /></StrictMo
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();
 })();
 /* === END TOP NAV + PAGE NETWORK === */
+
+/* === PODIUM LEADERBOARD ANIMATION === */
+(function () {
+  const podium = document.querySelector('.cc-podium');
+  if (!podium || !('IntersectionObserver' in window)) return;
+  podium.classList.add('cc-anim');
+  new IntersectionObserver(function (entries, observer) {
+    if (entries[0].isIntersecting) {
+      podium.classList.add('is-in');
+      observer.disconnect();
+    }
+  }, { threshold: 0.3 }).observe(podium);
+})();
