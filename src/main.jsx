@@ -1,4 +1,4 @@
-import { StrictMode, useState } from 'react';
+import { StrictMode, useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import './styles.css';
 import {
@@ -15,14 +15,40 @@ const rounds = [
   { number: '04', title: 'Prompt Injection / AI Jailbreak', subtitle: 'Grand Finale', time: '45 min', mode: 'VAULT GUARD AI', desc: 'Use creative natural-language prompts and strategy against an AI Digital Vault Guard.', focus: 'Creative strategy' },
 ];
 
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
+
+async function apiRequest(path, options = {}) {
+  const response = await fetch(`${API_URL}${path}`, {
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json', ...options.headers },
+    ...options,
+  });
+  const body = response.status === 204 ? null : await response.json().catch(() => null);
+  if (!response.ok) {
+    throw new Error(body?.error || 'Request failed');
+  }
+  return body;
+}
+
+function navigate(path) {
+  window.history.pushState({}, '', path);
+  window.dispatchEvent(new PopStateEvent('popstate'));
+}
+
 function App() {
-  const [view, setView] = useState('home');
+  const [path, setPath] = useState(window.location.pathname);
   const [team, setTeam] = useState({ name: 'Packet Picnic', members: 2 });
   const [completed, setCompleted] = useState([false, false, false, false]);
   const [manual, setManual] = useState([true, true, true, true]);
   const [eventLive, setEventLive] = useState(false);
   const [notice, setNotice] = useState('');
   const [score, setScore] = useState([0, 0, 0, 0]);
+
+  useEffect(() => {
+    const handlePopState = () => setPath(window.location.pathname);
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
 
   const unlock = (index) => manual[index] && (index === 0 || completed[index - 1]);
   const completeRound = (index, points = 25) => {
@@ -33,7 +59,7 @@ function App() {
 
   return (
     <div className="app-shell">
-      <header className="cc-top">
+      {path === '/' && <header className="cc-top">
         <nav className="cc-top__nav" aria-label="Event navigation">
           <span className="cc-top__pill" aria-hidden="true"></span>
           <a className="cc-top__link" href="#event-brief" data-accent="#ffc933">Event brief</a>
@@ -43,19 +69,22 @@ function App() {
         <a className="cc-top__logo" href="#event-brief">
           <img src="/club-logo.jpg" alt="OsCode club logo" />
         </a>
-        <a className="cc-top__cta" href="#scoreboard" onClick={(event) => { event.preventDefault(); setView('portal'); }}>Register your team <span aria-hidden="true">↗</span></a>
-      </header>
+        <a className="cc-top__cta" href="/login" onClick={(event) => { event.preventDefault(); navigate('/login'); }}>Register your team <span aria-hidden="true">↗</span></a>
+      </header>}
       <div className="page-shell">
         {notice && <div className="notice" role="status">{notice}<button onClick={() => setNotice('')} aria-label="Dismiss notification">×</button></div>}
-        {view === 'home' && <Landing setView={setView} />}
-        {view === 'portal' && <Portal team={team} setTeam={setTeam} completed={completed} score={score} unlock={unlock} completeRound={completeRound} />}
-        {view === 'admin' && <Admin completed={completed} manual={manual} setManual={setManual} score={score} eventLive={eventLive} setEventLive={setEventLive} />}
+        {path === '/' && <Landing />}
+        {path === '/login' && <Login onSuccess={() => navigate('/dashboard')} />}
+        {path === '/dashboard' && <Dashboard onLogout={() => navigate('/login')} />}
+        {path === '/admin/login' && <AdminLogin onSuccess={() => navigate('/admin')} />}
+        {path === '/admin' && <AdminDashboard onLogout={() => navigate('/admin/login')} />}
+        {!['/', '/login', '/dashboard', '/admin/login', '/admin'].includes(path) && <NotFound />}
       </div>
     </div>
   );
 }
 
-function Landing({ setView }) {
+function Landing() {
   const [practice, setPractice] = useState(null);
   return <main>
     <section className="cc-hero" id="event-brief">
@@ -63,7 +92,7 @@ function Landing({ setView }) {
       <h1 className="cc-hero__title"><span className="cc-hero__w1">Cypher</span><span className="cc-hero__w2">Clash</span></h1>
       <p className="cc-hero__tag">Because writing secure code was too much work.</p>
       <div className="cc-hero__actions">
-        <a className="cc-btn cc-btn--solid" href="#portal" onClick={(event) => { event.preventDefault(); setView('portal'); }}>Enter participant portal <span aria-hidden="true">↗</span></a>
+        <a className="cc-btn cc-btn--solid" href="/login">Enter participant portal <span aria-hidden="true">↗</span></a>
         <a className="cc-btn cc-btn--ghost" href="#rounds">Explore the rounds <span aria-hidden="true">↓</span></a>
       </div>
     </section>
@@ -145,11 +174,255 @@ function Landing({ setView }) {
         </div>
       </div>
 
-      <a className="cc-btn cc-btn--ghost cc-board__cta" href="#portal" onClick={(event) => { event.preventDefault(); setView('portal'); }}>Register your team <span aria-hidden="true">↗</span></a>
+      <a className="cc-btn cc-btn--ghost cc-board__cta" href="/login">Register your team <span aria-hidden="true">↗</span></a>
     </section>
     <footer><span>CYPHERCLASH / 2026</span><span>Made for curious beginners.</span></footer>
     {practice && <Practice onClose={() => setPractice(null)} />}
   </main>;
+}
+
+function AuthShell({ eyebrow, title, children }) {
+  return <main className="product-page">
+    <section className="product-card auth-card">
+      <p className="product-eyebrow">{eyebrow}</p>
+      <h1>{title}</h1>
+      {children}
+    </section>
+  </main>;
+}
+
+function Field({ label, children }) {
+  return <label className="product-field"><span>{label}</span>{children}</label>;
+}
+
+function FormMessage({ error, success }) {
+  if (!error && !success) return null;
+  return <p className={`product-message ${error ? 'is-error' : 'is-success'}`} role="status">{error || success}</p>;
+}
+
+function Login({ onSuccess }) {
+  const [form, setForm] = useState({ teamId: '', slot: 'P1', password: '' });
+  const [state, setState] = useState({ loading: false, error: '', success: '' });
+
+  const submit = async (event) => {
+    event.preventDefault();
+    setState({ loading: true, error: '', success: '' });
+    try {
+      await apiRequest('/api/auth/login', { method: 'POST', body: JSON.stringify(form) });
+      setState({ loading: false, error: '', success: 'Login successful. Opening your dashboard.' });
+      onSuccess();
+    } catch (error) {
+      setState({ loading: false, error: error.message, success: '' });
+    }
+  };
+
+  return <AuthShell eyebrow="PARTICIPANT PORTAL / SECURE ACCESS" title="Team login">
+    <p className="product-intro">Use the credentials issued to your team. Your session stays active when you refresh.</p>
+    <form className="product-form" onSubmit={submit}>
+      <Field label="TEAM ID"><input required value={form.teamId} onChange={(event) => setForm({ ...form, teamId: event.target.value.toUpperCase() })} placeholder="CC-001" autoComplete="username" /></Field>
+      <Field label="PLAYER"><select value={form.slot} onChange={(event) => setForm({ ...form, slot: event.target.value })}><option value="P1">Player 1</option><option value="P2">Player 2</option></select></Field>
+      <Field label="PASSWORD"><input required type="password" value={form.password} onChange={(event) => setForm({ ...form, password: event.target.value })} autoComplete="current-password" /></Field>
+      <FormMessage error={state.error} success={state.success} />
+      <button className="product-btn product-btn--primary" disabled={state.loading}>{state.loading ? 'Signing in…' : 'Enter dashboard'} <span aria-hidden="true">↗</span></button>
+    </form>
+    <a className="product-link" href="/">← Back to event brief</a>
+  </AuthShell>;
+}
+
+function AdminLogin({ onSuccess }) {
+  const [form, setForm] = useState({ username: '', password: '' });
+  const [state, setState] = useState({ loading: false, error: '', success: '' });
+
+  const submit = async (event) => {
+    event.preventDefault();
+    setState({ loading: true, error: '', success: '' });
+    try {
+      await apiRequest('/api/auth/admin/login', { method: 'POST', body: JSON.stringify(form) });
+      onSuccess();
+    } catch (error) {
+      setState({ loading: false, error: error.message, success: '' });
+    }
+  };
+
+  return <AuthShell eyebrow="CONTROL CENTER / ADMIN ACCESS" title="Admin login">
+    <p className="product-intro">Administrative access is restricted to event staff.</p>
+    <form className="product-form" onSubmit={submit}>
+      <Field label="USERNAME"><input required value={form.username} onChange={(event) => setForm({ ...form, username: event.target.value })} autoComplete="username" /></Field>
+      <Field label="PASSWORD"><input required type="password" value={form.password} onChange={(event) => setForm({ ...form, password: event.target.value })} autoComplete="current-password" /></Field>
+      <FormMessage error={state.error} success={state.success} />
+      <button className="product-btn product-btn--primary" disabled={state.loading}>{state.loading ? 'Signing in…' : 'Open control center'} <span aria-hidden="true">↗</span></button>
+    </form>
+    <a className="product-link" href="/">← Back to event brief</a>
+  </AuthShell>;
+}
+
+function Status({ online, label }) {
+  return <span className={`product-status ${online ? 'is-online' : ''}`}><i />{label || (online ? 'Online' : 'Offline')}</span>;
+}
+
+function Dashboard({ onLogout }) {
+  const [state, setState] = useState({ loading: true, error: '', team: null });
+
+  const loadTeam = async () => {
+    try {
+      const me = await apiRequest('/api/auth/me');
+      if (me.role !== 'player') {
+        onLogout();
+        return;
+      }
+      const team = await apiRequest('/api/team/me');
+      setState({ loading: false, error: '', team });
+    } catch (error) {
+      if (error.message === 'Authentication required') onLogout();
+      else setState((current) => ({ ...current, loading: false, error: error.message }));
+    }
+  };
+
+  useEffect(() => {
+    loadTeam();
+    const refresh = window.setInterval(loadTeam, 10_000);
+    const heartbeat = window.setInterval(() => {
+      apiRequest('/api/team/heartbeat', { method: 'POST', body: JSON.stringify({}) }).catch(() => {});
+    }, 20_000);
+    return () => {
+      window.clearInterval(refresh);
+      window.clearInterval(heartbeat);
+    };
+  }, []);
+
+  const logout = async () => {
+    try {
+      await apiRequest('/api/auth/logout', { method: 'POST', body: JSON.stringify({}) });
+    } finally {
+      onLogout();
+    }
+  };
+
+  if (state.loading) return <LoadingState label="Loading team dashboard…" />;
+  if (state.error) return <ErrorState message={state.error} onRetry={loadTeam} />;
+  const players = state.team.players || [];
+  return <main className="product-page dashboard-page">
+    <div className="product-heading">
+      <div><p className="product-eyebrow">PARTICIPANT PORTAL / TEAM DASHBOARD</p><h1>{state.team.name}</h1><p className="product-subtitle">Team ID <strong>{state.team.teamId}</strong></p></div>
+      <button className="product-btn product-btn--light" onClick={logout}>Log out</button>
+    </div>
+    <section className="product-stat-grid">
+      <div className="product-stat"><span>BIAS POINTS</span><strong>{state.team.biasPoints}</strong></div>
+      <div className="product-stat"><span>TEAM STATUS</span><strong>{players.filter((player) => player.online).length} / 2 online</strong></div>
+    </section>
+    <section className="product-section"><div className="product-section-heading"><p className="product-eyebrow">TEAM MEMBERS</p><h2>Signal crew</h2></div><div className="player-grid">{['P1', 'P2'].map((slot) => {
+      const player = players.find((item) => item.slot === slot);
+      return <article className="product-panel player-panel" key={slot}><span className="product-mono">{slot === 'P1' ? 'PLAYER 1' : 'PLAYER 2'}</span><h3>{slot}</h3><Status online={Boolean(player?.online)} /></article>;
+    })}</div></section>
+    <section className="product-section"><div className="product-section-heading"><p className="product-eyebrow">EVENT STATUS</p><h2>Workspace preview</h2></div><div className="placeholder-grid">{['Current round: none yet', 'Score: 0', 'Time remaining: —', 'Leaderboard: coming soon'].map((label) => <div className="product-panel placeholder-panel" key={label}><span>{label}</span></div>)}</div></section>
+  </main>;
+}
+
+function LoadingState({ label }) {
+  return <main className="product-page"><div className="product-panel state-panel"><p className="product-eyebrow">PLEASE WAIT</p><h1>{label}</h1></div></main>;
+}
+
+function ErrorState({ message, onRetry }) {
+  return <main className="product-page"><div className="product-panel state-panel"><p className="product-eyebrow">REQUEST FAILED</p><h1>Could not load this view.</h1><FormMessage error={message} /><button className="product-btn product-btn--primary" onClick={onRetry}>Try again</button></div></main>;
+}
+
+function CopyButton({ value }) {
+  const [copied, setCopied] = useState(false);
+  const copy = async () => {
+    await navigator.clipboard.writeText(value);
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), 1600);
+  };
+  return <button className="product-btn product-btn--small" onClick={copy}>{copied ? 'Copied' : 'Copy'}</button>;
+}
+
+function CredentialBox({ credentials }) {
+  if (!credentials) return null;
+  return <div className="credential-box"><strong>Credentials shown once</strong><p>Save these passwords now. They will not be displayed again.</p><div><span>Player 1 <code>{credentials.P1}</code></span><CopyButton value={credentials.P1} /></div><div><span>Player 2 <code>{credentials.P2}</code></span><CopyButton value={credentials.P2} /></div></div>;
+}
+
+function AdminDashboard({ onLogout }) {
+  const [teams, setTeams] = useState([]);
+  const [logs, setLogs] = useState([]);
+  const [form, setForm] = useState({ name: '', biasPoints: 0 });
+  const [credentials, setCredentials] = useState(null);
+  const [edits, setEdits] = useState({});
+  const [state, setState] = useState({ loading: true, error: '', success: '' });
+
+  const load = async () => {
+    try {
+      const me = await apiRequest('/api/auth/me');
+      if (me.role !== 'admin') {
+        onLogout();
+        return;
+      }
+      const [teamData, logData] = await Promise.all([apiRequest('/api/admin/teams'), apiRequest('/api/admin/logs')]);
+      setTeams(teamData);
+      setLogs(logData);
+      setState({ loading: false, error: '', success: '' });
+    } catch (error) {
+      if (error.message === 'Admin access required' || error.message === 'Authentication required') onLogout();
+      else setState({ loading: false, error: error.message, success: '' });
+    }
+  };
+
+  useEffect(() => { load(); }, []);
+
+  const createTeam = async (event) => {
+    event.preventDefault();
+    setState({ loading: false, error: '', success: '' });
+    try {
+      const result = await apiRequest('/api/admin/teams', { method: 'POST', body: JSON.stringify({ name: form.name, biasPoints: Number(form.biasPoints) }) });
+      setCredentials(result.credentials);
+      setForm({ name: '', biasPoints: 0 });
+      setState({ loading: false, error: '', success: `${result.team.teamId} created successfully.` });
+      await load();
+    } catch (error) {
+      setState({ loading: false, error: error.message, success: '' });
+    }
+  };
+
+  const updateTeam = async (teamId, patch) => {
+    try {
+      await apiRequest(`/api/admin/teams/${teamId}`, { method: 'PATCH', body: JSON.stringify(patch) });
+      setState({ loading: false, error: '', success: `${teamId} updated.` });
+      await load();
+    } catch (error) {
+      setState({ loading: false, error: error.message, success: '' });
+    }
+  };
+
+  const resetPassword = async (teamId, slot) => {
+    try {
+      const result = await apiRequest(`/api/admin/teams/${teamId}/reset-password`, { method: 'POST', body: JSON.stringify({ slot }) });
+      setCredentials({ [slot]: result.password });
+      setState({ loading: false, error: '', success: `${teamId} ${slot} password reset.` });
+    } catch (error) {
+      setState({ loading: false, error: error.message, success: '' });
+    }
+  };
+
+  const logout = async () => {
+    try {
+      await apiRequest('/api/auth/logout', { method: 'POST', body: JSON.stringify({}) });
+    } finally {
+      onLogout();
+    }
+  };
+
+  if (state.loading && !teams.length) return <LoadingState label="Loading admin control center…" />;
+  if (state.error && !teams.length) return <ErrorState message={state.error} onRetry={load} />;
+  return <main className="product-page admin-dashboard">
+    <div className="product-heading"><div><p className="product-eyebrow">CONTROL CENTER / ADMIN</p><h1>Team operations</h1><p className="product-subtitle">Manage access without exposing stored credentials.</p></div><button className="product-btn product-btn--light" onClick={logout}>Log out</button></div>
+    <FormMessage error={state.error} success={state.success} />
+    <section className="product-section"><div className="product-section-heading"><p className="product-eyebrow">NEW TEAM</p><h2>Create team</h2></div><form className="admin-create-form" onSubmit={createTeam}><Field label="TEAM NAME"><input required value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} /></Field><Field label="BIAS POINTS"><input type="number" value={form.biasPoints} onChange={(event) => setForm({ ...form, biasPoints: event.target.value })} /></Field><button className="product-btn product-btn--primary">Create team</button></form><CredentialBox credentials={credentials} /></section>
+    <section className="product-section"><div className="product-section-heading"><p className="product-eyebrow">ACCESS CONTROL</p><h2>Teams</h2></div><div className="table-wrap"><table className="product-table"><thead><tr><th>Team ID</th><th>Name</th><th>Bias points</th><th>Active</th><th>Players</th><th>Actions</th></tr></thead><tbody>{teams.map((team) => <tr key={team.teamId}><td className="product-mono">{team.teamId}</td><td>{team.name}</td><td><input className="table-input" type="number" value={edits[team.teamId] ?? team.biasPoints} onChange={(event) => setEdits({ ...edits, [team.teamId]: event.target.value })} /><button className="table-action" onClick={() => updateTeam(team.teamId, { biasPoints: Number(edits[team.teamId] ?? team.biasPoints) })}>Save</button></td><td><Status online={team.active} label={team.active ? 'Active' : 'Disabled'} /><button className="table-action" onClick={() => updateTeam(team.teamId, { active: !team.active })}>{team.active ? 'Disable' : 'Enable'}</button></td><td>{(team.players || []).map((player) => <div className="player-line" key={player.slot}><span>{player.slot} <Status online={player.online} /></span><small>{player.lastLoginAt ? new Date(player.lastLoginAt).toLocaleString() : 'Never logged in'}</small></div>)}</td><td><div className="action-stack">{['P1', 'P2'].map((slot) => <button className="table-action" key={slot} onClick={() => resetPassword(team.teamId, slot)}>Reset {slot}</button>)}</div></td></tr>)}</tbody></table></div></section>
+    <section className="product-section"><div className="product-section-heading"><p className="product-eyebrow">AUDIT TRAIL</p><h2>Latest event logs</h2></div><div className="table-wrap"><table className="product-table logs-table"><thead><tr><th>Time</th><th>Type</th><th>Actor</th><th>Team</th></tr></thead><tbody>{logs.map((log) => <tr key={log._id}><td>{new Date(log.createdAt).toLocaleString()}</td><td>{log.type}</td><td>{log.actorType} / {log.actorId}</td><td>{log.teamId || '—'}</td></tr>)}</tbody></table></div></section>
+  </main>;
+}
+
+function NotFound() {
+  return <main className="product-page"><div className="product-panel state-panel"><p className="product-eyebrow">404 / SIGNAL LOST</p><h1>That route does not exist.</h1><a className="product-btn product-btn--primary" href="/">Return home</a></div></main>;
 }
 
 function Practice({ onClose }) { const [answer, setAnswer] = useState(''); const [result, setResult] = useState(''); return <div className="modal-backdrop" onClick={onClose}><section className="modal" onClick={(event) => event.stopPropagation()}><button className="close" onClick={onClose} aria-label="Close practice sample">×</button><p className="eyebrow">PRACTICE SAMPLE / ROUND 01</p><h2>Phish or Legit?</h2><p>Is this message asking you to act in a trustworthy way?</p><div className="message-card"><span>FROM: campus-it@helpdesk.example</span><strong>Your account will be deleted in 10 minutes. Verify now.</strong><span>→ https://campus-help.example/verify</span></div><div className="choice-row"><button onClick={() => { setAnswer('PHISH'); setResult('Correct. Urgency + an unfamiliar link are useful clues.'); }}>Phish</button><button onClick={() => { setAnswer('LEGIT'); setResult('Not quite. Look for urgency and the unfamiliar destination.'); }}>Legit</button></div>{answer && <p className="feedback" role="status"><b>{answer}</b> / {result}</p>}</section></div> }
