@@ -2,6 +2,9 @@ import express from 'express';
 import { z } from 'zod';
 import { EventLog } from '../models/EventLog.js';
 import { Team } from '../models/Team.js';
+import { TeamProgression } from '../models/TeamProgression.js';
+import { GameSession } from '../models/GameSession.js';
+import { ScoreEntry } from '../models/ScoreEntry.js';
 import { requireAdmin } from '../middleware/auth.js';
 import { validateBody } from '../middleware/validation.js';
 import { generatePassword, hashPassword } from '../utils/passwords.js';
@@ -18,6 +21,13 @@ import {
 import { addAdjustment, getAllTotals } from '../services/scoring.js';
 import { isTeamOnline } from '../services/presence.js';
 import { invalidateLeaderboard } from '../services/leaderboard.js';
+import {
+  advanceTeamProgression,
+  getEffectiveProgression,
+  getOrCreateProgression,
+  revertProgressionOverride,
+  setRoundStatus,
+} from '../services/progression.js';
 
 const router = express.Router();
 router.use(requireAdmin);
@@ -38,6 +48,7 @@ router.param('n', (req, res, next, value) => {
 const createTeamSchema = z.object({
   name: z.string().trim().min(1).max(120),
   biasPoints: z.number().finite().min(-1000).max(100000).default(0),
+  initialProgression: z.number().int().min(1).max(4).default(1),
 }).strict();
 
 const updateTeamSchema = z.object({
@@ -56,6 +67,23 @@ const adjustmentSchema = z.object({
   reason: z.string().trim().min(1).max(200),
 }).strict();
 
+const advanceProgressionSchema = z.object({
+  targetRound: z.number().int().min(1).max(4),
+  waivePrior: z.boolean().default(true),
+  reason: z.string().trim().min(3).max(500),
+}).strict();
+
+const waiveProgressionSchema = z.object({
+  round: z.number().int().min(1).max(4),
+  status: z.enum(['waived', 'pending', 'completed_normally']),
+  reason: z.string().trim().min(3).max(500),
+}).strict();
+
+const revertProgressionSchema = z.object({
+  confirmDisruptive: z.boolean().default(false),
+  reason: z.string().trim().min(3).max(500),
+}).strict();
+
 async function nextTeamId() {
   const latest = await Team.findOne().sort({ teamId: -1 }).select('teamId').lean();
   const nextNumber = latest ? Number(latest.teamId.slice(3)) + 1 : 1;
@@ -70,8 +98,17 @@ function serviceErrorStatus(error) {
     'ROUND_NOT_RUNNING',
     'ROUND_NOT_PAUSED',
     'ROUND_NOT_ACTIVE',
+    'NO_COMPLETION_EVIDENCE',
   ].includes(error.code)) return 409;
-  if (['INVALID_ADJUSTMENT', 'INVALID_GAME', 'INVALID_POINTS'].includes(error.code)) {
+  if ([
+    'INVALID_ADJUSTMENT',
+    'INVALID_GAME',
+    'INVALID_POINTS',
+    'INVALID_TARGET_ROUND',
+    'INVALID_ROUND',
+    'INVALID_STATUS',
+    'REASON_REQUIRED',
+  ].includes(error.code)) {
     return 400;
   }
   return 500;
@@ -170,23 +207,32 @@ router.post('/teams', validateBody(createTeamSchema), async (req, res, next) => 
       biasPoints: req.body.biasPoints,
       passwordHash,
     });
+    const initialProgression = req.body.initialProgression || 1;
+    await getOrCreateProgression(teamId, initialProgression, req.session.adminId);
     await logEvent({
       type: 'team created',
       actorType: 'admin',
       actorId: req.session.adminId,
       teamId,
-      details: { name: team.name },
+      details: { name: team.name, initialProgression },
     });
     invalidateLeaderboard();
     res.set('Cache-Control', 'no-store');
     return res.status(201).json({
-      team: { teamId: team.teamId, name: team.name, biasPoints: team.biasPoints, active: team.active },
+      team: {
+        teamId: team.teamId,
+        name: team.name,
+        biasPoints: team.biasPoints,
+        active: team.active,
+        initialProgression,
+      },
       password,
     });
   } catch (error) {
     try {
       if (team) {
         await Team.deleteOne({ _id: team._id });
+        await TeamProgression.deleteOne({ teamId: team.teamId });
       }
     } catch (rollbackError) {
       console.error('Failed to roll back team creation', rollbackError);
@@ -198,7 +244,23 @@ router.post('/teams', validateBody(createTeamSchema), async (req, res, next) => 
 router.get('/teams', async (req, res, next) => {
   try {
     const teams = await Team.find().sort({ teamId: 1 }).lean();
-    return res.json(teams.map((team) => ({ ...team, online: isTeamOnline(team.teamId) })));
+    const progressions = await TeamProgression.find().lean();
+    const progressionMap = new Map(progressions.map((p) => [p.teamId, p]));
+
+    return res.json(
+      teams.map((team) => {
+        const prog = progressionMap.get(team.teamId);
+        return {
+          ...team,
+          online: isTeamOnline(team.teamId),
+          progression: {
+            maxEligibleRound: prog?.maxEligibleRound || 1,
+            initialRound: prog?.initialRound || 1,
+            waivedRounds: prog?.waivedRounds || [],
+          },
+        };
+      }),
+    );
   } catch (error) {
     return next(error);
   }
@@ -302,6 +364,96 @@ router.post('/teams/:teamId/clear-login-lockout', validateBody(emptyBodySchema),
     });
     return res.status(204).send();
   } catch (error) {
+    return next(error);
+  }
+});
+
+router.get('/teams/:teamId/progression', async (req, res, next) => {
+  try {
+    const team = await Team.findOne({ teamId: req.params.teamId }).lean();
+    if (!team) {
+      return res.status(404).json({ error: 'Team not found' });
+    }
+    const progression = await getEffectiveProgression(req.params.teamId);
+    const sessions = await GameSession.find({ teamId: req.params.teamId })
+      .select('round attemptNo game status startedAt deadline progress')
+      .sort({ round: 1, attemptNo: 1 })
+      .lean();
+    const scoreEntries = await ScoreEntry.find({ teamId: req.params.teamId })
+      .select('round attemptNo game kind amount reason createdAt')
+      .sort({ round: 1, attemptNo: 1 })
+      .lean();
+
+    return res.json({
+      team: { teamId: team.teamId, name: team.name },
+      progression,
+      sessions,
+      scoreEntries,
+      globalRounds: listRoundStates(),
+    });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.post('/teams/:teamId/progression/advance', validateBody(advanceProgressionSchema), async (req, res, next) => {
+  try {
+    const team = await Team.exists({ teamId: req.params.teamId });
+    if (!team) {
+      return res.status(404).json({ error: 'Team not found' });
+    }
+    const result = await advanceTeamProgression(req.params.teamId, {
+      targetRound: req.body.targetRound,
+      waivePriorRounds: req.body.waivePrior,
+      reason: req.body.reason,
+      adminId: req.session.adminId,
+    });
+    return res.json(result);
+  } catch (error) {
+    if (serviceErrorStatus(error) !== 500) {
+      return res.status(serviceErrorStatus(error)).json({ error: error.message, code: error.code });
+    }
+    return next(error);
+  }
+});
+
+router.post('/teams/:teamId/progression/waive', validateBody(waiveProgressionSchema), async (req, res, next) => {
+  try {
+    const team = await Team.exists({ teamId: req.params.teamId });
+    if (!team) {
+      return res.status(404).json({ error: 'Team not found' });
+    }
+    const result = await setRoundStatus(req.params.teamId, {
+      roundNumber: req.body.round,
+      status: req.body.status,
+      reason: req.body.reason,
+      adminId: req.session.adminId,
+    });
+    return res.json(result);
+  } catch (error) {
+    if (serviceErrorStatus(error) !== 500) {
+      return res.status(serviceErrorStatus(error)).json({ error: error.message, code: error.code });
+    }
+    return next(error);
+  }
+});
+
+router.post('/teams/:teamId/progression/revert', validateBody(revertProgressionSchema), async (req, res, next) => {
+  try {
+    const team = await Team.exists({ teamId: req.params.teamId });
+    if (!team) {
+      return res.status(404).json({ error: 'Team not found' });
+    }
+    const result = await revertProgressionOverride(req.params.teamId, {
+      confirmDisruptive: req.body.confirmDisruptive,
+      reason: req.body.reason,
+      adminId: req.session.adminId,
+    });
+    return res.json(result);
+  } catch (error) {
+    if (serviceErrorStatus(error) !== 500) {
+      return res.status(serviceErrorStatus(error)).json({ error: error.message, code: error.code });
+    }
     return next(error);
   }
 });

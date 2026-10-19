@@ -290,3 +290,82 @@ test('20 different teams can successfully log in from the same IP', async () => 
     await Team.deleteMany({ teamId: { $in: manyTeamIds } });
   }
 });
+
+test('admin and team sessions are independent and coexist in the same cookie jar', async () => {
+  await Team.updateOne({ teamId }, { $set: { active: true } });
+
+  // 1. Team logs in -> gets cc_team.sid
+  const teamLoginRes = await login({ teamId, password: teamPassword });
+  assert.equal(teamLoginRes.status, 200);
+  const teamSetCookie = teamLoginRes.headers.get('set-cookie');
+  assert.ok(teamSetCookie.includes('cc_team.sid'));
+  const teamCookie = teamSetCookie.split(';', 1)[0];
+
+  // 2. Admin logs in -> gets cc_admin.sid
+  const adminCookieStr = await adminCookie();
+  assert.ok(adminCookieStr.includes('cc_admin.sid'));
+
+  // 3. Simulated browser cookie jar: contains BOTH cookies
+  const combinedJar = `${teamCookie}; ${adminCookieStr}`;
+
+  // 4. Team me returns authenticated team using combined jar
+  const teamMeRes = await request('/api/team/me', { headers: { cookie: combinedJar } });
+  assert.equal(teamMeRes.status, 200);
+  const teamMe = await teamMeRes.json();
+  assert.equal(teamMe.teamId, teamId);
+
+  // 5. Admin teams returns 200 using combined jar
+  const adminTeamsRes = await request('/api/admin/teams', { headers: { cookie: combinedJar } });
+  assert.equal(adminTeamsRes.status, 200);
+
+  // 6. Admin identity checks (/api/admin/rounds, /api/auth/me) succeed
+  const adminRoundsRes = await request('/api/admin/rounds', { headers: { cookie: combinedJar } });
+  assert.equal(adminRoundsRes.status, 200);
+  const adminMeRes = await request('/api/auth/me', {
+    headers: { cookie: combinedJar, 'x-session-role': 'admin' },
+  });
+  assert.equal(adminMeRes.status, 200);
+  const adminMe = await adminMeRes.json();
+  assert.equal(adminMe.role, 'admin');
+
+  // 7. Isolation check: Team session alone CANNOT access admin routes
+  const teamOnlyAdminAccess = await request('/api/admin/teams', { headers: { cookie: teamCookie } });
+  assert.equal(teamOnlyAdminAccess.status, 403);
+
+  // 8. Isolation check: Admin session alone CANNOT access private team resources
+  const adminOnlyTeamAccess = await request('/api/team/me', { headers: { cookie: adminCookieStr } });
+  assert.equal(adminOnlyTeamAccess.status, 401);
+
+  // 9. Admin logout does NOT invalidate team session
+  const adminLogoutRes = await request('/api/auth/logout', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', cookie: combinedJar, 'x-session-role': 'admin' },
+    body: JSON.stringify({ role: 'admin' }),
+  });
+  assert.equal(adminLogoutRes.status, 204);
+  const clearCookieHeader = adminLogoutRes.headers.get('set-cookie');
+  assert.ok(clearCookieHeader.includes('cc_admin.sid'));
+
+  // Team session is still valid!
+  const teamStillActive = await request('/api/team/me', { headers: { cookie: teamCookie } });
+  assert.equal(teamStillActive.status, 200);
+
+  // 10. Re-login as admin, then team logout does NOT invalidate admin session
+  const newAdminCookie = await adminCookie();
+  const newCombinedJar = `${teamCookie}; ${newAdminCookie}`;
+
+  const teamLogoutRes = await request('/api/auth/logout', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', cookie: newCombinedJar, 'x-session-role': 'team' },
+    body: JSON.stringify({ role: 'team' }),
+  });
+  assert.equal(teamLogoutRes.status, 204);
+
+  // Team session is now invalidated
+  const teamLoggedOut = await request('/api/team/me', { headers: { cookie: teamCookie } });
+  assert.equal(teamLoggedOut.status, 401);
+
+  // Admin session is STILL valid!
+  const adminStillActive = await request('/api/admin/teams', { headers: { cookie: newAdminCookie } });
+  assert.equal(adminStillActive.status, 200);
+});

@@ -1,4 +1,4 @@
-import { StrictMode, useEffect, useRef, useState } from 'react';
+import { StrictMode, useCallback, useEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import './styles.css';
 import { formatUpdatedAgo, useVisibleClock, useVisiblePolling } from './useVisiblePolling.js';
@@ -66,10 +66,12 @@ function App() {
         {path === '/login' && <Login onSuccess={() => navigate('/dashboard')} />}
         {path === '/dashboard' && <Dashboard onLogout={() => navigate('/login')} />}
         {path === '/dashboard/circuit-sync' && <CircuitSyncGame onBack={() => navigate('/dashboard')} onLogout={() => navigate('/login')} />}
+        {path === '/dashboard/investigation' && <InvestigationGame onBack={() => navigate('/dashboard')} onLogout={() => navigate('/login')} />}
+        {path.startsWith('/investigation/resources/') && <InvestigationResourcePage path={path} onBack={() => navigate('/dashboard/investigation')} />}
         {path === '/leaderboard' && <LeaderboardScreen onBack={() => navigate('/dashboard')} onLogout={() => navigate('/login')} />}
         {path === '/admin/login' && <AdminLogin onSuccess={() => navigate('/admin')} />}
         {path === '/admin' && <AdminDashboard onLogout={() => navigate('/admin/login')} />}
-        {!['/', '/login', '/dashboard', '/dashboard/circuit-sync', '/leaderboard', '/admin/login', '/admin'].includes(path) && <NotFound />}
+        {!['/', '/login', '/dashboard', '/dashboard/circuit-sync', '/dashboard/investigation', '/leaderboard', '/admin/login', '/admin'].includes(path) && !path.startsWith('/investigation/resources/') && <NotFound />}
       </div>
     </div>
   );
@@ -290,7 +292,11 @@ function Dashboard({ onLogout }) {
 
   const logout = async () => {
     try {
-      await apiRequest('/api/auth/logout', { method: 'POST', body: JSON.stringify({}) });
+      await apiRequest('/api/auth/logout', {
+        method: 'POST',
+        headers: { 'X-Session-Role': 'team' },
+        body: JSON.stringify({ role: 'team' }),
+      });
     } finally {
       onLogout();
     }
@@ -301,12 +307,20 @@ function Dashboard({ onLogout }) {
   const round = data.team.currentRound;
   const roundDeadline = round?.deadline ? new Date(round.deadline).getTime() : null;
   const pausedAt = round?.pausedAt ? new Date(round.pausedAt).getTime() : null;
-  const remainingMs = roundDeadline === null
+  const remainingMs = !round || round.status === 'not_started' || roundDeadline === null
     ? null
-    : Math.max(0, roundDeadline - (round.status === 'paused' && pausedAt !== null ? pausedAt : clockNow));
+    : round.status === 'ended'
+      ? 0
+      : Math.max(0, roundDeadline - (round.status === 'paused' && pausedAt !== null ? pausedAt : clockNow));
   const scores = data.score?.rounds || {};
+  const progression = data.team.progression || { effectiveEligibleRound: 1, waivedRounds: [], rounds: {} };
+  const r1Waived = progression.waivedRounds?.includes(1) || progression.rounds?.[1]?.status === 'waived';
+  const r2Waived = progression.waivedRounds?.includes(2) || progression.rounds?.[2]?.status === 'waived';
+  const r2PrereqMet = (progression.effectiveEligibleRound || 1) >= 2;
   const roundOneRunning = round?.round === 1 && round.status === 'running';
+  const roundTwoRunning = round?.round === 2 && round.status === 'running';
   const circuitCompleted = Object.hasOwn(scores, '1');
+  const investigationCompleted = Object.hasOwn(scores, '2');
   return <main className="product-page dashboard-page cc-dashboard">
     <header className="cc-dashboard-header">
       <div>
@@ -315,6 +329,7 @@ function Dashboard({ onLogout }) {
         <div className="cc-dashboard-identity">
           <span>Team ID <strong>{data.team.teamId}</strong></span>
           <span>Bias points <strong>{data.team.biasPoints}</strong></span>
+          <span>Eligibility <strong>Round {progression.effectiveEligibleRound || 1}</strong></span>
           <Status online={data.team.online} />
         </div>
       </div>
@@ -350,8 +365,14 @@ function Dashboard({ onLogout }) {
           {[1, 2, 3].map((roundNumber) => {
             const roundKey = String(roundNumber);
             const hasScore = Object.hasOwn(scores, roundKey);
+            const isWaived = progression.waivedRounds?.includes(roundNumber) || progression.rounds?.[roundNumber]?.status === 'waived';
             const hasStarted = hasScore || (round?.round != null && (round.round > roundNumber || (round.round === roundNumber && round.status !== 'not_started')));
-            return <div key={roundKey}><span>R{roundNumber}</span><strong>{hasScore ? scores[roundKey] : hasStarted ? 0 : '–'}</strong></div>;
+            return (
+              <div key={roundKey}>
+                <span>R{roundNumber}</span>
+                <strong>{hasScore ? scores[roundKey] : isWaived ? 'Waived (0)' : hasStarted ? 0 : '–'}</strong>
+              </div>
+            );
           })}
         </div>
       </article>
@@ -369,11 +390,19 @@ function Dashboard({ onLogout }) {
       </div>
       <div className="cc-play-grid">
         <article className="cc-play-card cc-play-card--violet">
-          <div className="cc-play-card__top"><span>01 / LOGIC</span><span className={`cc-game-status cc-game-status--${circuitCompleted ? 'completed' : roundOneRunning ? 'available' : 'locked'}`}>{circuitCompleted ? 'Completed' : roundOneRunning ? 'Available' : 'Locked'}</span></div>
+          <div className="cc-play-card__top">
+            <span>01 / LOGIC</span>
+            <span className={`cc-game-status cc-game-status--${circuitCompleted ? 'completed' : r1Waived ? 'completed' : roundOneRunning ? 'available' : 'locked'}`}>
+              {circuitCompleted ? 'Completed' : r1Waived ? 'Waived (0 pts)' : roundOneRunning ? 'Available' : 'Locked'}
+            </span>
+          </div>
           <h3>Circuit Sync</h3>
           <p>Trace the gates and solve each switch pattern together.</p>
-          <button className="cc-play-card__button" disabled={!roundOneRunning || circuitCompleted} onClick={() => navigate('/dashboard/circuit-sync')}>
-            {circuitCompleted ? 'Completed' : 'Play Circuit Sync'} <span aria-hidden="true">↗</span>
+          {r1Waived && !circuitCompleted && (
+            <p className="cc-play-card__note">Round 1 requirement was administratively waived for your team.</p>
+          )}
+          <button className="cc-play-card__button" disabled={(!roundOneRunning && !r1Waived) || circuitCompleted} onClick={() => navigate('/dashboard/circuit-sync')}>
+            {circuitCompleted ? 'Completed' : r1Waived ? 'Play Practice' : 'Play Circuit Sync'} <span aria-hidden="true">↗</span>
           </button>
         </article>
         <article className="cc-play-card cc-play-card--coral">
@@ -387,6 +416,37 @@ function Dashboard({ onLogout }) {
           <h3>Cyber Runner</h3>
           <p>Work in sync to dodge obstacles and collect points.</p>
           <button className="cc-play-card__button" disabled>Coming soon</button>
+        </article>
+      </div>
+    </section>
+    <section className="cc-play-section">
+      <div className="cc-play-heading">
+        <div><p className="product-eyebrow">ROUND 02 / WEB UI HIJACKING</p><h2>Hidden Clue Investigation</h2></div>
+        <span>Inspect Element Sleuth</span>
+      </div>
+      <div className="cc-play-grid">
+        <article className="cc-play-card cc-play-card--coral">
+          <div className="cc-play-card__top">
+            <span>02 / INVESTIGATION</span>
+            <span className={`cc-game-status cc-game-status--${investigationCompleted ? 'completed' : r2Waived ? 'completed' : !r2PrereqMet ? 'locked' : roundTwoRunning ? 'available' : 'locked'}`}>
+              {investigationCompleted ? 'Completed' : r2Waived ? 'Waived (0 pts)' : !r2PrereqMet ? 'Prereq Required' : roundTwoRunning ? 'Available' : 'Locked'}
+            </span>
+          </div>
+          <h3>Operation Shadow Beacon</h3>
+          <p>Trace the rogue relay, inspect mock web assets, and neutralize the campus beacon.</p>
+          {!r2PrereqMet && (
+            <p className="cc-play-card__note">Prerequisite required: Round 01 must be completed or waived by administrator.</p>
+          )}
+          {r2Waived && !investigationCompleted && (
+            <p className="cc-play-card__note">Round 2 requirement was administratively waived for your team.</p>
+          )}
+          <button
+            className="cc-play-card__button"
+            disabled={!r2PrereqMet || (!roundTwoRunning && !investigationCompleted && !r2Waived)}
+            onClick={() => navigate('/dashboard/investigation')}
+          >
+            {investigationCompleted ? 'Review Investigation' : !r2PrereqMet ? 'Prerequisite Required' : 'Play Investigation'} <span aria-hidden="true">↗</span>
+          </button>
         </article>
       </div>
     </section>
@@ -410,7 +470,11 @@ function LeaderboardScreen({ onBack, onLogout }) {
 
   const logout = async () => {
     try {
-      await apiRequest('/api/auth/logout', { method: 'POST', body: JSON.stringify({}) });
+      await apiRequest('/api/auth/logout', {
+        method: 'POST',
+        headers: { 'X-Session-Role': 'team' },
+        body: JSON.stringify({ role: 'team' }),
+      });
     } finally {
       onLogout();
     }
@@ -631,13 +695,15 @@ function CircuitSyncGame({ onBack, onLogout }) {
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [game, circuitState, round?.status, elapsedMs, finishState]);
 
-  const currentRoundRemaining = round?.deadline
-    ? Math.max(0, new Date(round.deadline).getTime() - (
-      round.status === 'paused' && round.pausedAt
-        ? new Date(round.pausedAt).getTime()
-        : now + serverOffsetRef.current
-    ))
-    : null;
+  const currentRoundRemaining = !round || round.status === 'not_started' || !round.deadline
+    ? null
+    : round.status === 'ended'
+      ? 0
+      : Math.max(0, new Date(round.deadline).getTime() - (
+        round.status === 'paused' && round.pausedAt
+          ? new Date(round.pausedAt).getTime()
+          : now + serverOffsetRef.current
+      ));
   const canAct = round?.status === 'running' && !finishState.loading && finishState.points === null;
 
   if (startState.loading) return <LoadingState label="Preparing Circuit Sync…" />;
@@ -775,6 +841,405 @@ function CircuitDiagram({ state }) {
   </div>;
 }
 
+function InvestigationGame({ onBack, onLogout }) {
+  const { data: teamData, error: pollingError, updatedAt } = useVisiblePolling(() => apiRequest('/api/team/me'));
+  const now = useVisibleClock();
+  const [state, setState] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [answer, setAnswer] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [starting, setStarting] = useState(false);
+  const [confirmingHint, setConfirmingHint] = useState(false);
+  const [requestingHint, setRequestingHint] = useState(false);
+  const [feedback, setFeedback] = useState({ error: '', success: '' });
+  const serverOffsetRef = useRef(0);
+
+  const loadState = async () => {
+    try {
+      const res = await apiRequest('/api/rounds/2/investigation/state');
+      setState(res);
+      if (res.serverNow) {
+        serverOffsetRef.current = new Date(res.serverNow).getTime() - Date.now();
+      }
+      setLoading(false);
+    } catch (err) {
+      setError(err.message || 'Failed to load investigation state');
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (pollingError === 'Authentication required') onLogout();
+  }, [pollingError, onLogout]);
+
+  useEffect(() => {
+    void loadState();
+  }, []);
+
+  const handleStart = async () => {
+    setStarting(true);
+    setFeedback({ error: '', success: '' });
+    try {
+      await apiRequest('/api/rounds/2/investigation/start', {
+        method: 'POST',
+        body: JSON.stringify({}),
+      });
+      await loadState();
+    } catch (err) {
+      setFeedback({ error: err.message, success: '' });
+    } finally {
+      setStarting(false);
+    }
+  };
+
+  const handleRequestHint = async () => {
+    if (!state?.session || requestingHint) return;
+    setRequestingHint(true);
+    try {
+      const res = await apiRequest('/api/rounds/2/investigation/hint', {
+        method: 'POST',
+        body: JSON.stringify({ stage: state.session.stage }),
+      });
+      setConfirmingHint(false);
+      setFeedback({ error: '', success: res.message || 'Tactical hint unlocked.' });
+      await loadState();
+    } catch (err) {
+      setFeedback({ error: err.message || 'Failed to request hint.', success: '' });
+      setConfirmingHint(false);
+    } finally {
+      setRequestingHint(false);
+    }
+  };
+
+  const handleSubmit = async (event) => {
+    event.preventDefault();
+    if (!answer.trim() || submitting || !state?.session) return;
+    setSubmitting(true);
+    setFeedback({ error: '', success: '' });
+    const currentStage = state.session.stage;
+    try {
+      const res = await apiRequest('/api/rounds/2/investigation/submit', {
+        method: 'POST',
+        body: JSON.stringify({ stage: currentStage, answer: answer.trim() }),
+      });
+      setAnswer('');
+      setFeedback({
+        error: '',
+        success: res.completed
+          ? 'Final flag confirmed! Signal neutralized. Investigation complete!'
+          : res.message || 'Lead verified! Next investigation resource unlocked.',
+      });
+      await loadState();
+    } catch (err) {
+      setFeedback({ error: err.message || 'Incorrect answer. Check the resource and try again.', success: '' });
+      await loadState();
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const round = teamData?.currentRound;
+  const currentRoundRemaining = !round || round.status === 'not_started' || !round.deadline
+    ? null
+    : round.status === 'ended'
+      ? 0
+      : Math.max(0, new Date(round.deadline).getTime() - (
+        round.status === 'paused' && round.pausedAt
+          ? new Date(round.pausedAt).getTime()
+          : now + serverOffsetRef.current
+      ));
+
+  if (loading && !state) return <LoadingState label="Preparing investigation environment…" />;
+  if (error && !state) return <ErrorState message={error} onRetry={loadState} />;
+
+  const isRoundTwoRunning = round?.round === 2 && round?.status === 'running';
+  const isRoundTwoPaused = round?.round === 2 && round?.status === 'paused';
+  const isRoundTwoEnded = round?.round === 2 && round?.status === 'ended';
+  const isLocked = !round || round.round !== 2 || round.status === 'not_started';
+
+  return (
+    <main className="product-page cc-investigation-page">
+      <div className="product-heading cc-circuit-heading">
+        <div>
+          <p className="product-eyebrow">ROUND 02 / WEB UI HIJACKING</p>
+          <h1>Operation Shadow Beacon</h1>
+          <p className="product-subtitle">Trace the rogue campus relay, inspect hidden web elements, and neutralize the signal.</p>
+        </div>
+        <button className="product-btn product-btn--light" onClick={onBack}>Back to dashboard</button>
+      </div>
+
+      <div className="cc-poll-status" aria-live="polite">
+        <span>{formatUpdatedAgo(updatedAt, now)}</span>
+        <span>Round time {formatDuration(currentRoundRemaining)}</span>
+        {pollingError && <strong role="status">Offline — unable to refresh round status. {pollingError}</strong>}
+      </div>
+
+      {isRoundTwoPaused && <p className="product-message is-error" role="status">Round paused — the investigation is frozen until play resumes.</p>}
+      {isRoundTwoEnded && <p className="product-message is-error" role="status">Round 2 has ended. Submissions are no longer accepted.</p>}
+      {isLocked && (
+        <section className="product-panel state-panel">
+          <p className="product-eyebrow">ROUND LOCKED</p>
+          <h2>Round 2 is not currently active</h2>
+          <p>The investigation workspace opens as soon as the event administrators start Round 2.</p>
+          <button className="product-btn product-btn--primary" onClick={onBack}>Return to dashboard</button>
+        </section>
+      )}
+
+      {!isLocked && state?.status === 'not_started' && (
+        <section className="product-panel cc-investigation-brief">
+          <p className="product-eyebrow">INVESTIGATION BRIEFING</p>
+          <h2>Rogue Relay Detected on Campus Network</h2>
+          <p>
+            An unauthorized beacon has been transmitting encrypted telemetry from within the campus infrastructure.
+            Security Operations flagged an anomalous traffic burst, but the origin remains obfuscated.
+            Your team must inspect the internal security portal, advisory diagrams, diagnostic consoles, and vault signatures
+            using your browser DevTools to trace the origin and submit the neutralization flag.
+          </p>
+          <div style={{ marginTop: '20px' }}>
+            <button
+              className="product-btn product-btn--primary"
+              disabled={!isRoundTwoRunning || starting}
+              onClick={handleStart}
+            >
+              {starting ? 'Initializing Session…' : 'Begin Investigation'} <span aria-hidden="true">↗</span>
+            </button>
+          </div>
+        </section>
+      )}
+
+      {!isLocked && state?.status === 'expired' && (
+        <section className="product-panel state-panel">
+          <p className="product-eyebrow">SESSION EXPIRED</p>
+          <h2>Investigation Deadline Passed</h2>
+          <p>The allotted time for Round 2 has elapsed. This session has expired.</p>
+          <button className="product-btn product-btn--light" onClick={onBack}>Return to dashboard</button>
+        </section>
+      )}
+
+      {!isLocked && (state?.status === 'active' || state?.status === 'submitted') && (
+        <>
+          <section className="cc-investigation-brief">
+            <p className="product-eyebrow">INCIDENT CASE #CC-2026-0814</p>
+            <h2>Objective: Trace & Neutralize Rogue Beacon</h2>
+            <p>
+              Work sequentially through each lead. Open the designated simulated resource in a new tab, use your browser inspect tools
+              (right-click inspect or DevTools) to find the hidden comment, metadata, or override token, then submit each answer below.
+            </p>
+          </section>
+
+          <div className="cc-investigation-grid">
+            <section className="cc-clue-board" aria-label="Investigation leads">
+              {state.clues?.map((clue) => {
+                const isSolved = clue.status === 'solved';
+                const isActive = clue.status === 'active';
+                return (
+                  <article
+                    key={clue.stage}
+                    className={`cc-clue-card cc-clue-card--${clue.status}`}
+                  >
+                    <div className="cc-clue-card__header">
+                      <span className="product-mono">LEAD 0{clue.stage}</span>
+                      <span className={`cc-clue-badge cc-clue-badge--${clue.status}`}>
+                        {isSolved ? '✓ SOLVED' : isActive ? '● ACTIVE LEAD' : 'LOCKED'}
+                      </span>
+                    </div>
+                    <h3>{clue.title}</h3>
+                    <p>{clue.prompt}</p>
+                    {clue.resource && (
+                      <div className="cc-resource-links">
+                        <a
+                          className="product-btn product-btn--small product-btn--primary"
+                          href={clue.resource}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                        >
+                          Open Resource in New Tab ↗
+                        </a>
+                      </div>
+                    )}
+                  </article>
+                );
+              })}
+            </section>
+
+            <aside className="cc-investigation-submit-box">
+              {state.status === 'submitted' ? (
+                <div style={{ textAlign: 'center' }}>
+                  <p className="product-eyebrow">MISSION COMPLETE</p>
+                  <h3 style={{ color: '#d4f04a', fontSize: '22px' }}>Signal Neutralized</h3>
+                  <p>All leads verified! The rogue relay has been neutralized and your investigation report submitted.</p>
+                  <dl className="cc-leaderboard-podium__details" style={{ margin: '20px 0' }}>
+                    <div><dt>Leads</dt><dd>4 / 4</dd></div>
+                    <div><dt>Wrong Attempts</dt><dd>{state.session?.wrongAttempts || 0}</dd></div>
+                    <div><dt>Hints Used</dt><dd>{state.session?.hintsUsed || 0} / 1</dd></div>
+                    <div><dt>Final Score</dt><dd>{state.session?.score ?? 500} pts</dd></div>
+                  </dl>
+                  <button className="product-btn product-btn--primary" onClick={onBack}>Return to dashboard</button>
+                </div>
+              ) : (
+                <form onSubmit={handleSubmit}>
+                  <p className="product-eyebrow">LEAD 0{state.session?.stage} / VERIFICATION</p>
+                  <h3>Submit Discovered Answer</h3>
+                  <p>
+                    {state.session?.stage === 4
+                      ? 'Enter the final neutralization flag in CC{...} format.'
+                      : 'Enter the exact identifier or key discovered in the inspected resource.'}
+                  </p>
+
+                  <label className="cc-investigation-field">
+                    <span>{state.session?.stage === 4 ? 'FLAG' : 'ANSWER KEY'}</span>
+                    <input
+                      required
+                      value={answer}
+                      disabled={submitting || !isRoundTwoRunning}
+                      onChange={(e) => setAnswer(e.target.value)}
+                      placeholder={state.session?.stage === 4 ? 'CC{...}' : 'Enter answer…'}
+                    />
+                  </label>
+
+                  {feedback.error && <p className="product-message is-error" role="status">{feedback.error}</p>}
+                  {feedback.success && <p className="product-message is-success" role="status">{feedback.success}</p>}
+
+                  <button
+                    type="submit"
+                    className="product-btn product-btn--primary"
+                    disabled={submitting || !isRoundTwoRunning || !answer.trim()}
+                    style={{ width: '100%' }}
+                  >
+                    {submitting ? 'Verifying…' : 'Submit Answer'} <span>↗</span>
+                  </button>
+
+                  <div className="cc-hint-box">
+                    <strong>Tactical Hint (Round 2 Entitlement)</strong>
+                    {state.session?.hintsUsed === 0 ? (
+                      confirmingHint ? (
+                        <div className="cc-hint-confirm">
+                          <p>
+                            <strong>Confirm Hint for Lead 0{state.session?.stage}?</strong><br />
+                            Consuming this hint incurs an irreversible <strong>-25 point penalty</strong> and uses your team's single hint for Round 2.
+                          </p>
+                          <div className="cc-hint-actions">
+                            <button
+                              type="button"
+                              className="product-btn product-btn--small product-btn--primary"
+                              disabled={requestingHint || !isRoundTwoRunning}
+                              onClick={handleRequestHint}
+                            >
+                              {requestingHint ? 'Unlocking…' : 'Confirm & Deduct 25 Pts'}
+                            </button>
+                            <button
+                              type="button"
+                              className="product-btn product-btn--small product-btn--light"
+                              disabled={requestingHint}
+                              onClick={() => setConfirmingHint(false)}
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div>
+                          <span>1 hint available for this round (-25 pt penalty).</span>
+                          <div style={{ marginTop: '8px' }}>
+                            <button
+                              type="button"
+                              className="product-btn product-btn--small product-btn--light"
+                              disabled={!isRoundTwoRunning}
+                              onClick={() => setConfirmingHint(true)}
+                            >
+                              Request Tactical Hint (-25 pts)
+                            </button>
+                          </div>
+                        </div>
+                      )
+                    ) : (
+                      <div className="cc-hint-revealed">
+                        <strong>
+                          Tactical Hint {state.session?.revealedHint ? `(Lead 0${state.session.revealedHint.stage})` : ''} [-25 Pts Applied]
+                        </strong>
+                        {state.session?.revealedHint ? (
+                          <p>{state.session.revealedHint.text}</p>
+                        ) : (
+                          <p>Tactical hint already consumed for Round 2.</p>
+                        )}
+                        <small>1 of 1 hint used. No additional hints available this round.</small>
+                      </div>
+                    )}
+                  </div>
+                </form>
+              )}
+            </aside>
+          </div>
+        </>
+      )}
+    </main>
+  );
+}
+
+function InvestigationResourcePage({ path, onBack }) {
+  const slug = path.replace('/investigation/resources/', '').replace(/\/$/, '');
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    let active = true;
+    const fetchResource = async () => {
+      try {
+        setLoading(true);
+        setError('');
+        const res = await apiRequest(`/api/rounds/2/investigation/resources/${slug}`);
+        if (!active) return;
+        setData(res);
+      } catch (err) {
+        if (!active) return;
+        setError(err.message || 'Unable to access investigation resource.');
+      } finally {
+        if (active) setLoading(false);
+      }
+    };
+    void fetchResource();
+    return () => {
+      active = false;
+    };
+  }, [slug]);
+
+  if (loading) return <LoadingState label="Decrypting investigation asset…" />;
+
+  if (error || !data) {
+    return (
+      <div className="mock-resource-shell">
+        <header className="mock-resource-nav">
+          <span className="mock-resource-brand">CAMPUS SEC-OPS // ACCESS GATEWAY</span>
+          <button className="product-btn product-btn--small product-btn--light" onClick={onBack}>Return to Dashboard</button>
+        </header>
+        <div className="mock-resource-container" style={{ textAlign: 'center', marginTop: '60px' }}>
+          <p className="product-eyebrow">403 // CLASSIFIED ASSET</p>
+          <h1>Access Restricted</h1>
+          <p style={{ color: '#ff6d6d', maxWidth: '540px', margin: '16px auto', lineHeight: '1.6' }}>
+            {error || 'This resource is locked. You must verify prior leads in Operation Shadow Beacon before this asset can be decrypted.'}
+          </p>
+          <button className="product-btn product-btn--primary" onClick={onBack}>Return to Investigation</button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mock-resource-shell">
+      <header className="mock-resource-nav">
+        <span className="mock-resource-brand">{data.brand}</span>
+        <button className="product-btn product-btn--small product-btn--light" onClick={onBack}>Return to Dashboard</button>
+      </header>
+      <div
+        className="mock-resource-container"
+        dangerouslySetInnerHTML={{ __html: data.html }}
+      />
+    </div>
+  );
+}
+
 function LoadingState({ label }) {
   return <main className="product-page"><div className="product-panel state-panel"><p className="product-eyebrow">PLEASE WAIT</p><h1>{label}</h1></div></main>;
 }
@@ -798,12 +1263,504 @@ function CredentialBox({ credentials }) {
   return <div className="credential-box"><strong>Team credentials shown once</strong><p>Save the password now. It will not be displayed again.</p><div><span>Team ID <code>{credentials.teamId}</code></span><CopyButton value={credentials.teamId} /></div><div><span>Password <code>{credentials.password}</code></span><CopyButton value={credentials.password} /></div></div>;
 }
 
+function ManageProgressModal({ team, onClose, onRefresh }) {
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [tab, setTab] = useState('overview');
+  const [message, setMessage] = useState({ error: '', success: '' });
+
+  const [advanceRound, setAdvanceRound] = useState(2);
+  const [waivePrior, setWaivePrior] = useState(true);
+  const [advanceReason, setAdvanceReason] = useState('');
+  const [confirmAdvance, setConfirmAdvance] = useState(false);
+
+  const [waiveRoundNum, setWaiveRoundNum] = useState(1);
+  const [waiveStatus, setWaiveStatus] = useState('waived');
+  const [waiveReason, setWaiveReason] = useState('');
+  const [confirmWaive, setConfirmWaive] = useState(false);
+
+  const [revertReason, setRevertReason] = useState('');
+  const [confirmDisruptive, setConfirmDisruptive] = useState(false);
+  const [revertWarning, setRevertWarning] = useState(null);
+
+  const fetchProgression = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await apiRequest(`/api/admin/teams/${team.teamId}/progression`);
+      setData(res);
+    } catch (err) {
+      setMessage({ error: err.message, success: '' });
+    } finally {
+      setLoading(false);
+    }
+  }, [team.teamId]);
+
+  useEffect(() => {
+    void fetchProgression();
+  }, [fetchProgression]);
+
+  const handleAdvance = async (e) => {
+    e.preventDefault();
+    setMessage({ error: '', success: '' });
+    if (!advanceReason.trim() || advanceReason.trim().length < 3) {
+      setMessage({ error: 'A valid reason (at least 3 characters) is required to advance progression.', success: '' });
+      return;
+    }
+    if (!confirmAdvance) {
+      setMessage({ error: 'Please check the confirmation box before granting progression.', success: '' });
+      return;
+    }
+    setLoading(true);
+    try {
+      await apiRequest(`/api/admin/teams/${team.teamId}/progression/advance`, {
+        method: 'POST',
+        body: JSON.stringify({
+          targetRound: Number(advanceRound),
+          waivePrior,
+          reason: advanceReason.trim(),
+        }),
+      });
+      setMessage({ error: '', success: `Progression advanced to Round ${advanceRound} successfully.` });
+      setAdvanceReason('');
+      setConfirmAdvance(false);
+      await fetchProgression();
+      if (onRefresh) onRefresh();
+    } catch (err) {
+      setMessage({ error: err.message, success: '' });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleWaive = async (e) => {
+    e.preventDefault();
+    setMessage({ error: '', success: '' });
+    if (!waiveReason.trim() || waiveReason.trim().length < 3) {
+      setMessage({ error: 'A valid reason (at least 3 characters) is required to update round status.', success: '' });
+      return;
+    }
+    if (!confirmWaive) {
+      setMessage({ error: 'Please check the confirmation box before updating round requirement.', success: '' });
+      return;
+    }
+    setLoading(true);
+    try {
+      await apiRequest(`/api/admin/teams/${team.teamId}/progression/waive`, {
+        method: 'POST',
+        body: JSON.stringify({
+          round: Number(waiveRoundNum),
+          status: waiveStatus,
+          reason: waiveReason.trim(),
+        }),
+      });
+      setMessage({ error: '', success: `Round ${waiveRoundNum} requirement updated to '${waiveStatus}'.` });
+      setWaiveReason('');
+      setConfirmWaive(false);
+      await fetchProgression();
+      if (onRefresh) onRefresh();
+    } catch (err) {
+      setMessage({ error: err.message, success: '' });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleRevert = async (e) => {
+    e.preventDefault();
+    setMessage({ error: '', success: '' });
+    if (!revertReason.trim() || revertReason.trim().length < 3) {
+      setMessage({ error: 'A valid reason (at least 3 characters) is required to revoke progression overrides.', success: '' });
+      return;
+    }
+    if (!confirmDisruptive) {
+      setMessage({ error: 'Please check the confirmation box acknowledging revocation before proceeding.', success: '' });
+      return;
+    }
+    setLoading(true);
+    try {
+      const res = await apiRequest(`/api/admin/teams/${team.teamId}/progression/revert`, {
+        method: 'POST',
+        body: JSON.stringify({
+          confirmDisruptive,
+          reason: revertReason.trim(),
+        }),
+      });
+      if (res.warning && res.requiresConfirmation) {
+        setRevertWarning(res.message);
+        setMessage({ error: res.message, success: '' });
+      } else {
+        setRevertWarning(null);
+        setConfirmDisruptive(false);
+        setRevertReason('');
+        setMessage({ error: '', success: 'Progression overrides revoked successfully. Historical gameplay and scores remain intact.' });
+        await fetchProgression();
+        if (onRefresh) onRefresh();
+      }
+    } catch (err) {
+      setMessage({ error: err.message, success: '' });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const progression = data?.progression;
+  const sessions = data?.sessions || [];
+  const globalRounds = data?.globalRounds || [];
+
+  return (
+    <div className="cc-modal-backdrop" onClick={onClose} role="dialog" aria-modal="true" aria-labelledby="progression-modal-title">
+      <div className="cc-modal cc-progression-modal" onClick={(e) => e.stopPropagation()}>
+        <div className="cc-modal__header">
+          <div>
+            <p className="product-eyebrow">ADMINISTRATIVE OVERRIDE // TEAM PROGRESSION</p>
+            <h2 id="progression-modal-title">{team.name} <span className="product-mono">({team.teamId})</span></h2>
+          </div>
+          <button className="cc-modal__close" onClick={onClose} aria-label="Close dialog">×</button>
+        </div>
+
+        <div className="cc-prog-summary-bar">
+          <div className="cc-prog-summary-item">
+            <span className="cc-prog-summary-label">EFFECTIVE ELIGIBILITY</span>
+            <strong className="cc-prog-summary-val cc-prog-summary-val--highlight">
+              Round {progression?.effectiveEligibleRound || 1}
+            </strong>
+          </div>
+          <div className="cc-prog-summary-item">
+            <span className="cc-prog-summary-label">INITIAL PROGRESSION</span>
+            <strong className="cc-prog-summary-val">Round {progression?.initialRound || 1}</strong>
+          </div>
+          <div className="cc-prog-summary-item">
+            <span className="cc-prog-summary-label">WAIVED ROUNDS</span>
+            <strong className="cc-prog-summary-val">
+              {progression?.waivedRounds?.length
+                ? progression.waivedRounds.map((r) => `R${r}`).join(', ')
+                : 'None'}
+            </strong>
+          </div>
+          <div className="cc-prog-summary-item">
+            <span className="cc-prog-summary-label">TOTAL OVERRIDES</span>
+            <strong className="cc-prog-summary-val">{progression?.overrides?.length || 0}</strong>
+          </div>
+        </div>
+
+        <nav className="cc-prog-tabs" role="tablist">
+          <button className={`cc-prog-tab ${tab === 'overview' ? 'is-active' : ''}`} onClick={() => setTab('overview')} type="button">
+            Overview & Status
+          </button>
+          <button className={`cc-prog-tab ${tab === 'advance' ? 'is-active' : ''}`} onClick={() => setTab('advance')} type="button">
+            Advance Team
+          </button>
+          <button className={`cc-prog-tab ${tab === 'waive' ? 'is-active' : ''}`} onClick={() => setTab('waive')} type="button">
+            Waive / Status
+          </button>
+          <button className={`cc-prog-tab ${tab === 'revert' ? 'is-active' : ''}`} onClick={() => setTab('revert')} type="button">
+            Revoke Override
+          </button>
+          <button className={`cc-prog-tab ${tab === 'audit' ? 'is-active' : ''}`} onClick={() => setTab('audit')} type="button">
+            Audit History ({progression?.overrides?.length || 0})
+          </button>
+        </nav>
+
+        {message.error && <div className="cc-prog-alert cc-prog-alert--error">{message.error}</div>}
+        {message.success && <div className="cc-prog-alert cc-prog-alert--success">{message.success}</div>}
+
+        <div className="cc-prog-modal-body">
+          {loading && !data && <div className="cc-prog-loading">Loading progression data…</div>}
+
+          {data && tab === 'overview' && (
+            <div className="cc-prog-pane">
+              <h3 className="cc-prog-pane-title">Per-Round Progression Status</h3>
+              <p className="cc-prog-pane-desc">
+                Review prerequisite fulfillment, global round states, and whether rounds were played normally or granted administrative waiver.
+              </p>
+
+              <div className="cc-prog-rounds-grid">
+                {[1, 2, 3, 4].map((rNum) => {
+                  const rStatus = progression?.rounds?.[rNum];
+                  const gRound = globalRounds.find((gr) => gr.round === rNum);
+                  const isEligible = (progression?.effectiveEligibleRound || 1) >= rNum;
+                  return (
+                    <div key={rNum} className={`cc-prog-round-card cc-prog-round-card--${rStatus?.status || 'pending'}`}>
+                      <div className="cc-prog-round-card__header">
+                        <span className="product-mono">ROUND 0{rNum}</span>
+                        <span className={`cc-round-status cc-round-status--${gRound?.status || 'not_started'}`}>
+                          GLOBAL: {(gRound?.status || 'not started').replaceAll('_', ' ')}
+                        </span>
+                      </div>
+                      <div className="cc-prog-round-card__badge-row">
+                        <span className={`cc-prog-pill cc-prog-pill--${rStatus?.status || 'completed_normally' ? (rStatus.status === 'completed_normally' ? 'completed_normally' : rStatus.status) : 'pending'}`}>
+                          {rStatus?.status === 'completed_normally' && 'Completed Normally'}
+                          {rStatus?.status === 'waived' && 'Administratively Waived'}
+                          {(!rStatus || rStatus.status === 'pending') && 'Pending'}
+                        </span>
+                        <span className={`cc-prog-pill ${isEligible ? 'cc-prog-pill--eligible' : 'cc-prog-pill--ineligible'}`}>
+                          {isEligible ? 'Eligible' : 'Prereq Missing'}
+                        </span>
+                      </div>
+                      <dl className="cc-prog-round-card__dl">
+                        <div>
+                          <dt>Score Recorded</dt>
+                          <dd>{rStatus?.score !== null && rStatus?.score !== undefined ? `${rStatus.score} pts` : 'None'}</dd>
+                        </div>
+                        <div>
+                          <dt>Game Completed</dt>
+                          <dd>{rStatus?.game || '—'}</dd>
+                        </div>
+                        <div>
+                          <dt>Access Preconditions</dt>
+                          <dd>
+                            {isEligible
+                              ? (gRound?.status === 'running' ? 'Playable Now' : 'Requires Round Start')
+                              : `Must complete or waive R${rNum - 1}`}
+                          </dd>
+                        </div>
+                      </dl>
+                    </div>
+                  );
+                })}
+              </div>
+
+              <h3 className="cc-prog-pane-title" style={{ marginTop: '24px' }}>Recorded Gameplay Sessions</h3>
+              {sessions.length === 0 ? (
+                <p className="cc-prog-empty-note">No game sessions recorded for this team yet.</p>
+              ) : (
+                <div className="table-wrap">
+                  <table className="product-table cc-prog-subtable">
+                    <thead>
+                      <tr>
+                        <th>Round</th>
+                        <th>Game</th>
+                        <th>Status</th>
+                        <th>Started At</th>
+                        <th>Evidence</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {sessions.map((s) => (
+                        <tr key={s._id}>
+                          <td className="product-mono">Round {s.round}</td>
+                          <td>{s.game}</td>
+                          <td><span className={`cc-prog-pill cc-prog-pill--${s.status}`}>{s.status}</span></td>
+                          <td>{new Date(s.startedAt).toLocaleString()}</td>
+                          <td>{s.status === 'submitted' ? 'Legitimate Completion' : 'In Progress'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
+
+          {data && tab === 'advance' && (
+            <form className="cc-prog-pane cc-prog-form" onSubmit={handleAdvance}>
+              <h3 className="cc-prog-pane-title">Action A: Advance Team to Target Round</h3>
+              <p className="cc-prog-pane-desc">
+                Select a target round to administratively unlock progression past earlier prerequisites.
+                Choosing to waive prior rounds ensures preceding uncompleted rounds are recorded as waived without fabricating game scores.
+              </p>
+
+              <div className="cc-prog-form-group">
+                <label className="cc-prog-label">TARGET ROUND ELIGIBILITY</label>
+                <select className="product-input" value={advanceRound} onChange={(e) => setAdvanceRound(Number(e.target.value))}>
+                  <option value={2}>Round 2 — Hidden Clue Investigation</option>
+                  <option value={3}>Round 3 — Senior Developer Challenge</option>
+                  <option value={4}>Round 4 — Final Tournament Championship</option>
+                </select>
+              </div>
+
+              <div className="cc-prog-form-group">
+                <label className="cc-prog-checkbox-label">
+                  <input type="checkbox" checked={waivePrior} onChange={(e) => setWaivePrior(e.target.checked)} />
+                  <span>Waive uncompleted prior rounds (records administrative waiver without awarding fake points)</span>
+                </label>
+              </div>
+
+              <div className="cc-prog-form-group">
+                <label className="cc-prog-label">ADMINISTRATIVE REASON (REQUIRED)</label>
+                <textarea
+                  className="product-input cc-prog-textarea"
+                  placeholder="e.g. Technical disconnect during Round 1 Circuit Sync, authorized progression exception"
+                  required
+                  rows={3}
+                  value={advanceReason}
+                  onChange={(e) => setAdvanceReason(e.target.value)}
+                />
+              </div>
+
+              <div className="cc-prog-form-group">
+                <label className="cc-prog-checkbox-label">
+                  <input
+                    type="checkbox"
+                    checked={confirmAdvance}
+                    onChange={(e) => setConfirmAdvance(e.target.checked)}
+                  />
+                  <span>I confirm granting Round {advanceRound} progression eligibility exception to {team.teamId}.</span>
+                </label>
+              </div>
+
+              <div className="cc-prog-notice">
+                <strong>IMPORTANT:</strong> This progression override changes ONLY this team’s eligibility.
+                It does not globally start, pause, or end rounds, and does not alter any other team.
+              </div>
+
+              <button className="product-btn product-btn--primary" type="submit" disabled={loading}>
+                {loading ? 'Applying Override…' : `Grant Eligibility to Round ${advanceRound}`}
+              </button>
+            </form>
+          )}
+
+          {data && tab === 'waive' && (
+            <form className="cc-prog-pane cc-prog-form" onSubmit={handleWaive}>
+              <h3 className="cc-prog-pane-title">Action B: Configure Individual Round Requirement</h3>
+              <p className="cc-prog-pane-desc">
+                Explicitly mark a specific round prerequisite as waived, pending, or completed normally.
+              </p>
+
+              <div className="cc-prog-form-group">
+                <label className="cc-prog-label">SELECT ROUND</label>
+                <select className="product-input" value={waiveRoundNum} onChange={(e) => setWaiveRoundNum(Number(e.target.value))}>
+                  <option value={1}>Round 1 — Circuit Sync</option>
+                  <option value={2}>Round 2 — Hidden Clue Investigation</option>
+                  <option value={3}>Round 3 — Round 3 Challenge</option>
+                  <option value={4}>Round 4 — Championship</option>
+                </select>
+              </div>
+
+              <div className="cc-prog-form-group">
+                <label className="cc-prog-label">TARGET STATUS</label>
+                <select className="product-input" value={waiveStatus} onChange={(e) => setWaiveStatus(e.target.value)}>
+                  <option value="waived">Administratively Waived (exception granted, 0 points)</option>
+                  <option value="pending">Pending (prerequisite required, no waiver)</option>
+                  <option value="completed_normally">Completed Normally (verifies existing gameplay session/score)</option>
+                </select>
+              </div>
+
+              <div className="cc-prog-form-group">
+                <label className="cc-prog-label">MANDATORY REASON</label>
+                <textarea
+                  className="product-input cc-prog-textarea"
+                  placeholder="Specify official rationale for this round status change"
+                  required
+                  rows={3}
+                  value={waiveReason}
+                  onChange={(e) => setWaiveReason(e.target.value)}
+                />
+              </div>
+
+              <div className="cc-prog-form-group">
+                <label className="cc-prog-checkbox-label">
+                  <input
+                    type="checkbox"
+                    checked={confirmWaive}
+                    onChange={(e) => setConfirmWaive(e.target.checked)}
+                  />
+                  <span>I confirm setting Round {waiveRoundNum} requirement to '{waiveStatus}' for {team.teamId}.</span>
+                </label>
+              </div>
+
+              <button className="product-btn product-btn--primary" type="submit" disabled={loading}>
+                {loading ? 'Updating…' : 'Update Round Status'}
+              </button>
+            </form>
+          )}
+
+          {data && tab === 'revert' && (
+            <form className="cc-prog-pane cc-prog-form" onSubmit={handleRevert}>
+              <h3 className="cc-prog-pane-title">Action D: Revoke Progression Override</h3>
+              <p className="cc-prog-pane-desc">
+                Revoking an override removes administrative waivers and resets maximum eligibility to natural completion status.
+                Legitimately earned scores, game sessions, and submitted flags are <strong>NEVER deleted</strong>.
+              </p>
+
+              {revertWarning && (
+                <div className="cc-prog-alert cc-prog-alert--warning">
+                  <strong>DISRUPTIVE ACTION WARNING:</strong>
+                  <p>{revertWarning}</p>
+                </div>
+              )}
+
+              <div className="cc-prog-form-group">
+                <label className="cc-prog-checkbox-label">
+                  <input
+                    type="checkbox"
+                    checked={confirmDisruptive}
+                    onChange={(e) => setConfirmDisruptive(e.target.checked)}
+                  />
+                  <span>I acknowledge that future round access will be revoked for this team if earlier rounds are incomplete.</span>
+                </label>
+              </div>
+
+              <div className="cc-prog-form-group">
+                <label className="cc-prog-label">REASON FOR REVOCATION (REQUIRED)</label>
+                <textarea
+                  className="product-input cc-prog-textarea"
+                  placeholder="Document reason for reverting administrative progression override"
+                  required
+                  rows={3}
+                  value={revertReason}
+                  onChange={(e) => setRevertReason(e.target.value)}
+                />
+              </div>
+
+              <button className="product-btn product-btn--light cc-prog-btn-danger" type="submit" disabled={loading}>
+                {loading ? 'Revoking…' : 'Revoke Progression Overrides'}
+              </button>
+            </form>
+          )}
+
+          {data && tab === 'audit' && (
+            <div className="cc-prog-pane">
+              <h3 className="cc-prog-pane-title">Progression Audit Trail</h3>
+              <p className="cc-prog-pane-desc">
+                Every administrative progression action is logged with acting administrator, timestamp, reason, and round impact.
+              </p>
+
+              {(!progression?.overrides || progression.overrides.length === 0) ? (
+                <p className="cc-prog-empty-note">No administrative overrides have been applied to this team.</p>
+              ) : (
+                <div className="table-wrap">
+                  <table className="product-table cc-prog-subtable">
+                    <thead>
+                      <tr>
+                        <th>Time</th>
+                        <th>Action</th>
+                        <th>Target Round</th>
+                        <th>Waived Rounds</th>
+                        <th>Admin ID</th>
+                        <th>Reason</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {progression.overrides.map((ov, i) => (
+                        <tr key={ov.id || i}>
+                          <td>{new Date(ov.createdAt).toLocaleString()}</td>
+                          <td><span className="product-mono">{ov.action}</span></td>
+                          <td>Round {ov.targetRound}</td>
+                          <td>{ov.waivedRounds?.length ? ov.waivedRounds.map((r) => `R${r}`).join(', ') : '—'}</td>
+                          <td>{ov.adminId}</td>
+                          <td>{ov.reason}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function AdminDashboard({ onLogout }) {
   const [teams, setTeams] = useState([]);
   const [rounds, setRounds] = useState([]);
   const [scores, setScores] = useState([]);
   const [logs, setLogs] = useState([]);
-  const [form, setForm] = useState({ name: '', biasPoints: 0 });
+  const [form, setForm] = useState({ name: '', biasPoints: 0, initialProgression: 1 });
+  const [manageProgressTeam, setManageProgressTeam] = useState(null);
   const [credentials, setCredentials] = useState(null);
   const [edits, setEdits] = useState({});
   const clockNow = useVisibleClock();
@@ -869,7 +1826,7 @@ function AdminDashboard({ onLogout }) {
   const startRound = (roundNumber, previousDurationSec, isRestart) => {
     const rawDuration = window.prompt(
       'Round duration in seconds (1–86400):',
-      String(previousDurationSec || 1800),
+      String(previousDurationSec || (roundNumber === 2 ? 2700 : 1800)),
     );
     if (rawDuration === null) return;
     const durationSec = Number(rawDuration);
@@ -923,9 +1880,16 @@ function AdminDashboard({ onLogout }) {
     event.preventDefault();
     setState({ loading: false, error: '', success: '' });
     try {
-      const result = await apiRequest('/api/admin/teams', { method: 'POST', body: JSON.stringify({ name: form.name, biasPoints: Number(form.biasPoints) }) });
+      const result = await apiRequest('/api/admin/teams', {
+        method: 'POST',
+        body: JSON.stringify({
+          name: form.name,
+          biasPoints: Number(form.biasPoints),
+          initialProgression: Number(form.initialProgression || 1),
+        }),
+      });
       setCredentials({ teamId: result.team.teamId, password: result.password });
-      setForm({ name: '', biasPoints: 0 });
+      setForm({ name: '', biasPoints: 0, initialProgression: 1 });
       setState({ loading: false, error: '', success: `${result.team.teamId} created successfully.` });
       await load();
     } catch (error) {
@@ -956,7 +1920,11 @@ function AdminDashboard({ onLogout }) {
 
   const logout = async () => {
     try {
-      await apiRequest('/api/auth/logout', { method: 'POST', body: JSON.stringify({}) });
+      await apiRequest('/api/auth/logout', {
+        method: 'POST',
+        headers: { 'X-Session-Role': 'admin' },
+        body: JSON.stringify({ role: 'admin' }),
+      });
     } finally {
       onLogout();
     }
@@ -980,9 +1948,11 @@ function AdminDashboard({ onLogout }) {
         {displayedRounds.map((round) => {
           const deadline = round.deadline ? new Date(round.deadline).getTime() : null;
           const pausedAt = round.pausedAt ? new Date(round.pausedAt).getTime() : null;
-          const remainingMs = deadline === null
-            ? null
-            : Math.max(0, deadline - (round.status === 'paused' && pausedAt !== null ? pausedAt : clockNow));
+          const remainingMs = round.status === 'ended'
+            ? 0
+            : (round.status === 'not_started' || deadline === null)
+              ? null
+              : Math.max(0, deadline - (round.status === 'paused' && pausedAt !== null ? pausedAt : clockNow));
           return <article className="product-panel cc-admin-round" key={round.round}>
             <div className="cc-admin-round__heading"><span className="product-mono">ROUND {String(round.round).padStart(2, '0')}</span><span className={`cc-round-status cc-round-status--${round.status}`}>{round.status.replaceAll('_', ' ')}</span></div>
             <dl>
@@ -1005,9 +1975,98 @@ function AdminDashboard({ onLogout }) {
         })}
       </div>
     </section>
-    <section className="product-section"><div className="product-section-heading"><p className="product-eyebrow">NEW TEAM</p><h2>Create team</h2></div><form className="admin-create-form" onSubmit={createTeam}><Field label="TEAM NAME"><input required value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} /></Field><Field label="BIAS POINTS"><input type="number" value={form.biasPoints} onChange={(event) => setForm({ ...form, biasPoints: event.target.value })} /></Field><button className="product-btn product-btn--primary">Create team</button></form><CredentialBox credentials={credentials} /></section>
-    <section className="product-section"><div className="product-section-heading"><p className="product-eyebrow">ACCESS CONTROL / LIVE LEDGER TOTALS</p><h2>Teams</h2></div><div className="table-wrap"><table className="product-table cc-admin-team-table"><thead><tr><th>Team ID</th><th>Name</th><th>Bias Points</th><th>Active</th><th>Team online</th><th>Total score</th><th>Actions</th></tr></thead><tbody>{teams.map((team) => <tr key={team.teamId}><td className="product-mono">{team.teamId}</td><td><input className="table-input cc-team-name-input" value={edits[`${team.teamId}:name`] ?? team.name} onChange={(event) => setEdits({ ...edits, [`${team.teamId}:name`]: event.target.value })} /><button className="table-action" onClick={() => updateTeam(team.teamId, { name: edits[`${team.teamId}:name`] ?? team.name })}>Save name</button></td><td><input className="table-input" type="number" value={edits[team.teamId] ?? team.biasPoints} onChange={(event) => setEdits({ ...edits, [team.teamId]: event.target.value })} /><button className="table-action" onClick={() => updateTeam(team.teamId, { biasPoints: Number(edits[team.teamId] ?? team.biasPoints) })}>Save</button></td><td><Status online={team.active} label={team.active ? 'Enabled' : 'Disabled'} /><button className="table-action" onClick={() => { if (window.confirm(`${team.active ? 'Disable' : 'Enable'} ${team.teamId}?`)) void updateTeam(team.teamId, { active: !team.active }); }}>{team.active ? 'Disable' : 'Enable'}</button></td><td><Status online={team.online} /></td><td>{scoresByTeam.get(team.teamId) ?? 0}</td><td><div className="action-stack"><button className="table-action" onClick={() => adjustScore(team)}>Adjust score</button><button className="table-action" onClick={() => resetPassword(team.teamId)}>Reset team password</button><button className="table-action" onClick={() => clearLockout(team.teamId)}>Clear lockout</button></div></td></tr>)}</tbody></table></div></section>
+    <section className="product-section">
+      <div className="product-section-heading"><p className="product-eyebrow">NEW TEAM</p><h2>Create team</h2></div>
+      <form className="admin-create-form" onSubmit={createTeam}>
+        <Field label="TEAM NAME">
+          <input required value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} />
+        </Field>
+        <Field label="BIAS POINTS">
+          <input type="number" value={form.biasPoints} onChange={(event) => setForm({ ...form, biasPoints: event.target.value })} />
+        </Field>
+        <Field label="INITIAL PROGRESSION">
+          <select
+            className="product-input cc-prog-select"
+            value={form.initialProgression || 1}
+            onChange={(event) => setForm({ ...form, initialProgression: Number(event.target.value) })}
+          >
+            <option value={1}>Start at Round 1 (Default)</option>
+            <option value={2}>Start at Round 2 (Waive Round 1 prerequisite)</option>
+            <option value={3}>Start at Round 3 (Waive Round 1 and Round 2 prerequisites)</option>
+            <option value={4}>Start at Round 4 (Waive Round 1, 2, and 3 prerequisites)</option>
+          </select>
+        </Field>
+        <p className="cc-prog-create-hint">
+          Selecting a later start point is an administrative progression exception and does not award points for skipped rounds.
+        </p>
+        <button className="product-btn product-btn--primary">Create team</button>
+      </form>
+      <CredentialBox credentials={credentials} />
+    </section>
+    <section className="product-section">
+      <div className="product-section-heading"><p className="product-eyebrow">ACCESS CONTROL / LIVE LEDGER TOTALS</p><h2>Teams</h2></div>
+      <div className="table-wrap">
+        <table className="product-table cc-admin-team-table">
+          <thead>
+            <tr>
+              <th>Team ID</th>
+              <th>Name</th>
+              <th>Progression</th>
+              <th>Bias Points</th>
+              <th>Active</th>
+              <th>Team online</th>
+              <th>Total score</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {teams.map((team) => (
+              <tr key={team.teamId}>
+                <td className="product-mono">{team.teamId}</td>
+                <td>
+                  <input className="table-input cc-team-name-input" value={edits[`${team.teamId}:name`] ?? team.name} onChange={(event) => setEdits({ ...edits, [`${team.teamId}:name`]: event.target.value })} />
+                  <button className="table-action" onClick={() => updateTeam(team.teamId, { name: edits[`${team.teamId}:name`] ?? team.name })}>Save name</button>
+                </td>
+                <td>
+                  <span className="cc-prog-badge">
+                    R{team.maxEligibleRound || 1}
+                    {team.waivedRounds?.length ? ` (Waived: ${team.waivedRounds.map((r) => `R${r}`).join(', ')})` : ''}
+                  </span>
+                </td>
+                <td>
+                  <input className="table-input" type="number" value={edits[team.teamId] ?? team.biasPoints} onChange={(event) => setEdits({ ...edits, [team.teamId]: event.target.value })} />
+                  <button className="table-action" onClick={() => updateTeam(team.teamId, { biasPoints: Number(edits[team.teamId] ?? team.biasPoints) })}>Save</button>
+                </td>
+                <td>
+                  <Status online={team.active} label={team.active ? 'Enabled' : 'Disabled'} />
+                  <button className="table-action" onClick={() => { if (window.confirm(`${team.active ? 'Disable' : 'Enable'} ${team.teamId}?`)) void updateTeam(team.teamId, { active: !team.active }); }}>
+                    {team.active ? 'Disable' : 'Enable'}
+                  </button>
+                </td>
+                <td><Status online={team.online} /></td>
+                <td>{scoresByTeam.get(team.teamId) ?? 0}</td>
+                <td>
+                  <div className="action-stack">
+                    <button className="table-action table-action--highlight" onClick={() => setManageProgressTeam(team)}>Manage Progress</button>
+                    <button className="table-action" onClick={() => adjustScore(team)}>Adjust score</button>
+                    <button className="table-action" onClick={() => resetPassword(team.teamId)}>Reset team password</button>
+                    <button className="table-action" onClick={() => clearLockout(team.teamId)}>Clear lockout</button>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
     <section className="product-section"><div className="product-section-heading"><p className="product-eyebrow">AUDIT TRAIL / REFRESHES EVERY 15 SECONDS</p><h2>Recent logs</h2></div><div className="table-wrap"><table className="product-table logs-table"><thead><tr><th>Time</th><th>Type</th><th>Actor type</th><th>Team</th></tr></thead><tbody>{logs.map((log) => <tr key={log._id}><td>{new Date(log.createdAt).toLocaleString()}</td><td>{log.type}</td><td>{log.actorType}</td><td>{log.teamId || '—'}</td></tr>)}</tbody></table></div></section>
+    {manageProgressTeam && (
+      <ManageProgressModal
+        team={manageProgressTeam}
+        onClose={() => setManageProgressTeam(null)}
+        onRefresh={() => void load({ includeLogs: true })}
+      />
+    )}
   </main>;
 }
 

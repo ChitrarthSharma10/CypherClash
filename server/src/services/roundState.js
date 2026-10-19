@@ -107,10 +107,11 @@ async function updateState(round, changes, actorId, eventType) {
     throw error;
   }
   roundStateEvents.emit('change', snapshot(next));
+  const effectiveActorId = actorId || 'system';
   await logEvent({
     type: eventType,
-    actorType: actorId === 'system' ? 'system' : 'admin',
-    actorId,
+    actorType: effectiveActorId === 'system' ? 'system' : 'admin',
+    actorId: effectiveActorId,
     details: { old: oldState, new: snapshot(next) },
   });
   return snapshot(next);
@@ -131,7 +132,7 @@ async function withTransitionLock(operation) {
   }
 }
 
-export async function startRound(round, durationSec, adminId) {
+export async function startRound(round, durationSec, adminId = 'system') {
   return withTransitionLock(async () => {
     const current = states.get(round);
     if (current?.status === 'running' || current?.status === 'paused') {
@@ -166,7 +167,7 @@ export async function startRound(round, durationSec, adminId) {
   });
 }
 
-export async function pauseRound(round, adminId) {
+export async function pauseRound(round, adminId = 'system') {
   return withTransitionLock(async () => {
     const current = states.get(round);
     if (!current || current.status !== 'running') {
@@ -176,7 +177,7 @@ export async function pauseRound(round, adminId) {
   });
 }
 
-export async function resumeRound(round, adminId) {
+export async function resumeRound(round, adminId = 'system') {
   return withTransitionLock(async () => {
     const current = states.get(round);
     if (!current || current.status !== 'paused' || !current.pausedAt || !current.deadline) {
@@ -196,7 +197,7 @@ export async function resumeRound(round, adminId) {
   });
 }
 
-export async function endRound(round, adminId) {
+export async function endRound(round, adminId = 'system') {
   return withTransitionLock(async () => {
     const current = states.get(round);
     if (!current || (current.status !== 'running' && current.status !== 'paused')) {

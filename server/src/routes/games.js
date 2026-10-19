@@ -8,6 +8,7 @@ import { GAMES, GAME_NAMES } from '../games/names.js';
 import { gameValidators } from '../games/validators.js';
 import { listRoundStates } from '../services/roundState.js';
 import { ScoringError, submitGameResult } from '../services/scoring.js';
+import { isTeamEligibleForRound } from '../services/progression.js';
 import { logEvent } from '../utils/logging.js';
 
 const router = express.Router();
@@ -66,6 +67,7 @@ function effectiveRoundDeadline(roundState, now) {
 }
 
 function isWithinDeadlines(session, roundState, game, now) {
+  if (roundState.status === 'ended') return false;
   const maxElapsedMs = GAMES[game].maxDurationSec * 1000 + GAME_FINISH_GRACE_MS;
   return now.getTime() <= effectiveRoundDeadline(roundState, now) + GAME_FINISH_GRACE_MS
     && measureGameElapsed(session, roundState, now) <= maxElapsedMs;
@@ -98,6 +100,12 @@ router.post(
     }
     if (req.params.game === 'circuit' && round.round !== 1) {
       return responseError(res, 409, 'GAME_NOT_AVAILABLE_FOR_ROUND', 'Circuit Sync is available in Round 1');
+    }
+
+    if (round.round >= 2 && round.round <= 4) {
+      if (!(await isTeamEligibleForRound(req.team.teamId, round.round))) {
+        return responseError(res, 403, 'PROGRESSION_PREREQUISITE_NOT_MET', 'Team does not meet the progression prerequisites for this round');
+      }
     }
 
     const key = {
@@ -190,6 +198,14 @@ router.post(
         .sort({ startedAt: -1 });
 
       if (!session) {
+        if (round && await GameSession.exists({
+          teamId: req.team.teamId,
+          game: req.params.game,
+          round: round.round,
+          attemptNo: round.attemptNo ?? 1,
+        })) {
+          return responseError(res, 409, 'GAME_SESSION_NOT_ACTIVE', 'Game session is no longer active');
+        }
         return responseError(res, 404, 'GAME_SESSION_NOT_FOUND', 'Active game session not found');
       }
       if (

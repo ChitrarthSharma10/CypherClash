@@ -5,6 +5,7 @@ import { validateBody } from '../middleware/validation.js';
 import { getTotals } from '../services/scoring.js';
 import { listRoundStates } from '../services/roundState.js';
 import { isTeamOnline, recordTeamPresence } from '../services/presence.js';
+import { getEffectiveProgression } from '../services/progression.js';
 
 const router = express.Router();
 router.use(requireTeam);
@@ -20,6 +21,7 @@ function currentRound() {
   const rounds = listRoundStates();
   const now = Date.now();
   const round = rounds.find((item) => item.status === 'running' || item.status === 'paused')
+    || rounds.filter((item) => item.status !== 'not_started').at(-1)
     || rounds.at(-1);
   if (!round) {
     return { round: null, status: 'not_started', deadline: null, pausedAt: null, remainingMs: null };
@@ -35,9 +37,11 @@ function currentRound() {
     status,
     deadline: round.deadline || null,
     pausedAt: round.pausedAt || null,
-    remainingMs: round.deadline
-      ? Math.max(0, round.deadline.getTime() - referenceTime)
-      : null,
+    remainingMs: status === 'ended'
+      ? 0
+      : status === 'not_started' || !round.deadline
+        ? null
+        : Math.max(0, round.deadline.getTime() - referenceTime),
   };
 }
 
@@ -51,6 +55,7 @@ router.get('/me', async (req, res, next) => {
       return res.status(401).json({ error: 'Authentication required' });
     }
     updatePresence(team);
+    const progression = await getEffectiveProgression(team.teamId);
     return res.json({
       teamId: team.teamId,
       name: team.name,
@@ -58,7 +63,17 @@ router.get('/me', async (req, res, next) => {
       online: isTeamOnline(team.teamId),
       lastSeenAt: team.lastSeenAt,
       currentRound: currentRound(),
+      progression,
     });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.get('/progression', async (req, res, next) => {
+  try {
+    const progression = await getEffectiveProgression(req.team.teamId);
+    return res.json(progression);
   } catch (error) {
     return next(error);
   }

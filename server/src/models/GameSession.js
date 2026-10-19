@@ -17,6 +17,10 @@ const gameSessionSchema = new mongoose.Schema(
       default: 'active',
     },
     failureReason: { type: String, maxlength: 200 },
+    progress: {
+      type: mongoose.Schema.Types.Mixed,
+      default: () => ({ stage: 1, wrongAttempts: 0, hintsUsed: 0 }),
+    },
   },
   { timestamps: { createdAt: true, updatedAt: false } },
 );

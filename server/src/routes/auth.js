@@ -10,6 +10,15 @@ import { loadActiveTeam } from '../middleware/auth.js';
 import { destroyTeamSessions } from '../sessionStore.js';
 import { recordTeamPresence } from '../services/presence.js';
 
+import {
+  ADMIN_COOKIE_NAME,
+  TEAM_COOKIE_NAME,
+  adminSessionMiddleware,
+  authMeSessionMiddleware,
+  logoutSessionMiddleware,
+  teamSessionMiddleware,
+} from '../sessionMiddleware.js';
+
 const router = express.Router();
 export const TEAM_ID_PATTERN = /^CC-\d{3,}$/;
 
@@ -23,7 +32,10 @@ const adminLoginSchema = z.object({
   password: z.string().min(1).max(128),
 }).strict();
 
-const emptyBodySchema = z.object({}).strict();
+const logoutBodySchema = z.object({
+  role: z.enum(['admin', 'team']).optional(),
+}).strict();
+const emptyBodySchema = logoutBodySchema;
 const DUMMY_PASSWORD_HASH = await hashPassword('invalid-team-dummy-password');
 
 const teamLoginKeys = new Map();
@@ -104,6 +116,7 @@ function regenerateSession(req) {
 
 router.post(
   '/login',
+  teamSessionMiddleware,
   validateBody(teamLoginSchema),
   teamLoginLimiter,
   async (req, res, next) => {
@@ -149,6 +162,7 @@ router.post(
 
 router.post(
   '/admin/login',
+  adminSessionMiddleware,
   validateBody(adminLoginSchema),
   adminIpLoginLimiter,
   adminUsernameLoginLimiter,
@@ -176,24 +190,83 @@ router.post(
   },
 );
 
-router.post('/logout', validateBody(emptyBodySchema), async (req, res, next) => {
-  const actorType = req.session.role || 'anonymous';
-  const actorId = req.session.teamId || req.session.adminId || 'anonymous';
-  const teamId = req.session.teamId;
-  try {
-    if (req.session.role) {
-      await logEvent({ type: 'logout', actorType, actorId, teamId });
+router.post(
+  '/logout',
+  logoutSessionMiddleware,
+  validateBody(logoutBodySchema),
+  async (req, res, next) => {
+    const targetRole = req.body?.role || req.logoutTargetRole || req.session?.role;
+    const actorType = req.session?.role || targetRole || 'anonymous';
+    const actorId = req.session?.teamId || req.session?.adminId || 'anonymous';
+    const teamId = req.session?.teamId;
+    try {
+      if (req.session?.role) {
+        await logEvent({ type: 'logout', actorType, actorId, teamId });
+      }
+      if (req.session) {
+        await new Promise((resolve, reject) => req.session.destroy((error) => (error ? reject(error) : resolve())));
+      }
+      const clearOptions = { path: '/' };
+      if (targetRole === 'admin' || req.session?.role === 'admin') {
+        res.clearCookie(ADMIN_COOKIE_NAME, clearOptions);
+      } else if (targetRole === 'team' || req.session?.role === 'team') {
+        res.clearCookie(TEAM_COOKIE_NAME, clearOptions);
+      } else {
+        res.clearCookie(ADMIN_COOKIE_NAME, clearOptions);
+        res.clearCookie(TEAM_COOKIE_NAME, clearOptions);
+      }
+      res.clearCookie('connect.sid', clearOptions);
+      return res.status(204).send();
+    } catch (error) {
+      return next(error);
     }
-    await new Promise((resolve, reject) => req.session.destroy((error) => (error ? reject(error) : resolve())));
-    res.clearCookie('connect.sid');
-    return res.status(204).send();
-  } catch (error) {
-    return next(error);
-  }
-});
+  },
+);
 
-router.get('/me', async (req, res, next) => {
-  if (req.session.role === 'team') {
+router.post(
+  '/admin/logout',
+  adminSessionMiddleware,
+  validateBody(logoutBodySchema),
+  async (req, res, next) => {
+    try {
+      if (req.session?.role) {
+        await logEvent({ type: 'logout', actorType: 'admin', actorId: req.session.adminId || req.session.username });
+      }
+      if (req.session) {
+        await new Promise((resolve, reject) => req.session.destroy((error) => (error ? reject(error) : resolve())));
+      }
+      res.clearCookie(ADMIN_COOKIE_NAME, { path: '/' });
+      res.clearCookie('connect.sid', { path: '/' });
+      return res.status(204).send();
+    } catch (error) {
+      return next(error);
+    }
+  },
+);
+
+router.post(
+  '/team/logout',
+  teamSessionMiddleware,
+  validateBody(logoutBodySchema),
+  async (req, res, next) => {
+    try {
+      if (req.session?.role) {
+        await logEvent({ type: 'logout', actorType: 'team', actorId: req.session.teamId, teamId: req.session.teamId });
+      }
+      if (req.session) {
+        await new Promise((resolve, reject) => req.session.destroy((error) => (error ? reject(error) : resolve())));
+      }
+      res.clearCookie(TEAM_COOKIE_NAME, { path: '/' });
+      res.clearCookie('connect.sid', { path: '/' });
+      return res.status(204).send();
+    } catch (error) {
+      return next(error);
+    }
+  },
+);
+
+router.get('/me', authMeSessionMiddleware, async (req, res, next) => {
+  if (req.session?.role === 'team') {
     return loadActiveTeam(req)
       .then((team) => {
         if (!team) {
@@ -203,7 +276,7 @@ router.get('/me', async (req, res, next) => {
       })
       .catch(next);
   }
-  if (req.session.role === 'admin') {
+  if (req.session?.role === 'admin') {
     return res.json({ role: 'admin', username: req.session.username });
   }
   return res.status(401).json({ error: 'Authentication required' });

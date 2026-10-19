@@ -30,7 +30,7 @@ const teamA = `CC-91${suffix}`;
 const teamB = `CC-92${suffix}`;
 const password = 'ScoringTestPassword123';
 const firstTestRound = Date.now() * 10 + (process.pid % 10);
-const testRounds = Array.from({ length: 9 }, (_, index) => firstTestRound + index);
+const testRounds = Array.from({ length: 10 }, (_, index) => firstTestRound + index);
 let server;
 let baseUrl;
 
@@ -284,6 +284,19 @@ test('team dashboard returns paused round timing from the server', async () => {
     paused.deadline.getTime() - paused.pausedAt.getTime(),
   );
   assert.equal(body.online, true);
+});
+
+test('team dashboard reports 0 remainingMs when a round has ended', async () => {
+  const round = testRounds[9];
+  await startRound(round, 1800, 'scoring-test-admin');
+  await endRound(round, 'scoring-test-admin');
+  const cookie = await teamCookie(teamA);
+  const response = await request('/api/team/me', { headers: { cookie } });
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.currentRound.round, round);
+  assert.equal(body.currentRound.status, 'ended');
+  assert.equal(body.currentRound.remainingMs, 0);
 });
 
 test('team dashboard reports the active round instead of a later inactive round', async () => {
