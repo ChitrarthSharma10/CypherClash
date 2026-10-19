@@ -286,6 +286,21 @@ test('team dashboard returns paused round timing from the server', async () => {
   assert.equal(body.online, true);
 });
 
+test('team dashboard reports the active round instead of a later inactive round', async () => {
+  const activeRound = testRounds[0];
+  const laterRound = testRounds[1];
+  await RoundState.create({ round: laterRound, status: 'not_started' });
+  await initializeRoundStates();
+  await startRound(activeRound, 60, 'scoring-test-admin');
+
+  const cookie = await teamCookie(teamA);
+  const response = await request('/api/team/me', { headers: { cookie } });
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.currentRound.round, activeRound);
+  assert.equal(body.currentRound.status, 'running');
+});
+
 test('team dashboard polling reuses score and presence memory without database writes', async () => {
   const cookie = await teamCookie(teamA);
   const firstScore = await request('/api/team/score', { headers: { cookie } });

@@ -7,6 +7,7 @@ import authRoutes from './routes/auth.js';
 import teamRoutes from './routes/team.js';
 import adminRoutes from './routes/admin.js';
 import leaderboardRoutes from './routes/leaderboard.js';
+import gameRoutes from './routes/games.js';
 
 const noStore = (req, res, next) => {
   res.set('Cache-Control', 'no-store');
@@ -26,9 +27,13 @@ export function createApp() {
   app.use('/api/team', teamRoutes);
   app.use('/api/admin', noStore, adminRoutes);
   app.use('/api/leaderboard', noStore, leaderboardRoutes);
+  app.use('/api/games', noStore, gameRoutes);
   app.use((req, res) => res.status(404).json({ error: 'Not found' }));
   app.use((error, req, res, next) => {
     if (res.headersSent) return next(error);
+    if (error.type === 'entity.too.large') {
+      return res.status(413).json({ error: 'Request body is too large' });
+    }
     console.error(error);
     return res.status(500).json({ error: 'Internal server error' });
   });

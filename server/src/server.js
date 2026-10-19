@@ -4,9 +4,11 @@ import { connectDatabase } from './db.js';
 import { config } from './config.js';
 import { initializeRoundStates, startRoundStateMonitor } from './services/roundState.js';
 import { ScoreEntry } from './models/ScoreEntry.js';
+import { GameSession } from './models/GameSession.js';
 import { rebuildLeaderboard } from './services/leaderboard.js';
 
 await connectDatabase();
+await GameSession.createIndexes();
 try {
   await ScoreEntry.syncIndexes();
   const indexes = await ScoreEntry.collection.indexes();

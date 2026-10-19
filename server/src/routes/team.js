@@ -19,7 +19,8 @@ function updatePresence(team) {
 function currentRound() {
   const rounds = listRoundStates();
   const now = Date.now();
-  const round = rounds.at(-1);
+  const round = rounds.find((item) => item.status === 'running' || item.status === 'paused')
+    || rounds.at(-1);
   if (!round) {
     return { round: null, status: 'not_started', deadline: null, pausedAt: null, remainingMs: null };
   }

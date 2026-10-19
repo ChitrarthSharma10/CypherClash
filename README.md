@@ -1,6 +1,6 @@
 # CypherClash - Agent Handoff Guide
 
-**Last updated: 18 October 2026, 17:04 IST**
+**Last updated: 19 October 2026, 13:24 IST**
 
 Read this file before changing the project. It is the durable project brief
 for developers and AI coding agents.
@@ -29,78 +29,73 @@ Organisers should not need to manage small event operations by hand.
 
 ## 2. Deadline and priorities
 
-The target for a complete working version is the evening of **20 October
-2026**. The event date and available buffer are not confirmed, so prioritise
-working core flows over visual polish.
-
-1. Core website, login, and team system (implemented and being hardened)
-2. Round 1 games
-3. Round 2 and Round 3 mechanics, once specified
-4. Scoring, leaderboard, and admin controls
-5. Testing, polish, and animations
-
-Pull a minimal admin flow (create teams, credentials, start/stop round) and
-minimal server-side scoring forward because rounds cannot be tested without
-them. Suggested schedule: core/auth and first deployment on 18 October, Round
-1 and server-side scoring on 19 October, then leaderboard, admin controls,
-security, load testing, and fixes on 20 October. Animations are optional.
+The planned target is the evening of **20 October 2026**. Core authentication,
+admin controls, leaderboard, score ledger, and Circuit Sync are present.
+Prioritize verifying the integrated flows, completing only game mechanics
+whose rules are defined, production configuration/deployment, and operational
+testing. Rounds 2 and 3 still need owner-supplied rules; do not invent them.
 
 ## 3. Current status
 
 Implemented:
 
-- Approved public landing page dark design.
-- Express/Mongoose backend under `/server`.
-- Team/admin login, Mongo-backed sessions, team dashboard API, admin team
-  API, and event logging.
-- Frontend routes `/login`, `/dashboard`, `/admin/login`, and `/admin`.
-- The team dashboard shows team identity, team online status, server-provided
-  round state and deadline, a locally ticking countdown, and the team's own
-  ledger totals. Dashboard, timer, presence, and leaderboard refresh by HTTP
-  every 25 seconds while the browser tab is visible.
-- The admin control room uses the existing round, team, score, and log APIs for
-  round controls, team operations, score adjustments, and recent audit logs.
-  Logs refresh every 15 seconds and the UI does not render log details or
+- Approved public landing page dark design and front-end routes `/`,
+  `/login`, `/dashboard`, `/dashboard/circuit-sync`, `/leaderboard`,
+  `/admin/login`, and `/admin`.
+- Express/Mongoose backend with team/admin authentication, Mongo-backed
+  sessions, team and admin APIs, and event logging.
+- Team and admin login screens use the dark design system, show/hide password
+  controls, generic inline errors, and one Back to home button (no login
+  navbar). The team dashboard shows team identity/presence, current round
+  status and countdown, total and R1-R3 score breakdown, leaderboard link,
+  and three Round 1 game cards.
+- Dashboard team/score polling remains on the existing API calls and runs
+  every 25 seconds while visible. The countdown updates locally between polls,
+  freezes while paused, and the UI shows the last successful update and an
+  offline state. Circuit Sync is playable only while Round 1 is running and
+  before its score is recorded. Maze and Runner remain disabled placeholders.
+- The admin control room uses the existing round, team, score, and log APIs
+  for round controls, team operations, score adjustments, and audit logs.
+  Logs refresh every 15 seconds; the UI does not render log details or
   credentials.
-- No API endpoints were added for the dashboard/admin UI. `GET /api/team/me`
-  now includes current round status, deadline, paused timestamp, and server
-  remaining time; the client computes its display countdown from the deadline
-  and paused timestamp.
-- Team presence, round state, team totals, and leaderboard snapshots are held
-  in memory. Poll responses reuse these caches; only auth middleware verifies
-  the active team against MongoDB on protected team requests.
+- `GET /api/team/me` returns current round status, deadline, paused timestamp,
+  and server remaining time. The code also uses in-memory caches where
+  appropriate. Inspect the actual route/middleware code before changing
+  database access or cache behavior.
 - Session hardening, validation, rate limiting, audit logging, and credential
   protection described below.
-- Minimal scoring foundation:
-  append-only `ScoreEntry` ledger, persisted `RoundState`, in-memory round
-  cache with startup reload, automatic deadline expiry, global
-  start/pause/resume/end controls, team score totals, and admin adjustments.
-- An ended round can be restarted as a new attempt. Earlier ledger entries are
-  retained and continue to count toward the round total; game results are
-  unique per team, round, attempt, and game.
-- The scoring foundation has been smoke-tested for duplicate result rejection,
-  deadline rejection, pause/resume deadline extension, and team-session denial from
-  admin routes.
-- Automated scoring tests now cover paused submissions, simultaneous duplicate
-  submissions, simultaneous resume calls, admin adjustments whose reason is
-  `game_result`, paused-round reload, and team-score isolation. Run them with
-  `cd server && npm test` using valid local environment values.
-- Socket.IO and WebSocket support have been removed. `circuitSync.js` remains
-  unregistered legacy game code and must not be wired back into the app.
-- The complete backend test suite runs sequentially with `cd server && npm
-  test`; update or replace legacy two-seat tests as the single-screen game
-  implementation is built.
+- Append-only `ScoreEntry` ledger, persisted `RoundState`, round controls and
+  automatic deadline expiry, team totals, and admin score adjustments. Ended
+  rounds can restart as a new attempt; results are unique per team, round,
+  attempt, and game, while earlier ledger entries remain in totals.
+- Per-team seeded game sessions with idempotent start, bounded inputs,
+  pause-aware elapsed time, and a server-side finish/validation flow before
+  scoring. Use HTTP only; do not add Socket.IO or WebSockets.
+- Circuit Sync is a fixed five-stage shared-screen puzzle with 3, 4, 4, 5,
+  and 6 switches. It uses AND, OR, XOR, NAND, NOR, NOT, and XNOR gates,
+  timestamped inputs, and deterministic server replay before scoring. Its
+  top-down schematic uses distinct wires and node highlighting. The netlist
+  and operation text beneath the diagram are intentionally omitted.
 
 In progress / not started:
 
-- Other games and game-result HTTP routes.
-- Leaderboard API/UI, qualification or elimination logic, Rounds 2 and 3,
-  deployment, and production load testing.
-- The current round state and score routes are foundation-level only; do not
-  treat them as a complete game or event engine.
+- Maze and Runner gameplay/validators; their validator modules currently
+  return “not implemented” and their dashboard cards are disabled.
+- Qualification/elimination, owner-specified rules for Rounds 2 and 3,
+  production deployment, CSRF protection if cross-site cookies are required,
+  and production load testing.
+- The round and score foundations are not a complete event engine. Validate
+  all security and scoring assumptions against the implementation before
+  release.
 
-Do not assume a hardening requirement is complete without checking the actual
-code. Verify each item when working in the relevant area.
+### Handoff / sharing state
+
+The current working branch is `ui-restyle`. The working tree contains
+uncommitted modified and untracked frontend, backend, shared-game, and test
+files. A clone of a remote branch alone will not include those local changes.
+Before handing the project to someone cloning it, review `git status` and
+commit/push the intended changes or transfer the complete working tree. Do not
+discard or overwrite existing local work.
 
 ## 4. Technology and repository
 
@@ -135,6 +130,8 @@ ignored `server/.env` file.
 | GET | `/api/team/me` | Authenticated team |
 | GET | `/api/team/score` | Authenticated team; own totals and round breakdown |
 | POST | `/api/team/heartbeat` | Authenticated team |
+| POST | `/api/games/:game/start` | Authenticated team; starts or resumes its active game session |
+| POST | `/api/games/:game/finish` | Authenticated team; submits a bounded input log for server validation |
 | POST | `/api/admin/teams` | Admin; creates a team and its login credentials |
 | GET | `/api/admin/teams` | Admin |
 | PATCH | `/api/admin/teams/:teamId` | Admin |
@@ -158,7 +155,8 @@ Current models include `Team`, `Admin`, `EventLog`, `ScoreEntry`, and
 `RoundState`; the `Player` model has been removed. `circuitSync.js` remains
 unregistered legacy game code.
 
-Frontend routes are `/`, `/login`, `/dashboard`, `/admin/login`, and `/admin`.
+Frontend routes are `/`, `/login`, `/dashboard`, `/dashboard/circuit-sync`,
+`/leaderboard`, `/admin/login`, and `/admin`.
 
 ## 6. Product requirements
 
@@ -192,25 +190,36 @@ Round 1 is planned as three mini-games under one overall time limit. Both
 players must participate, and scoring should reflect performance rather than
 simply first-to-finish.
 
-1. **Dual-Control Maze:** both players share one keyboard and cooperate through
-   walls, checkpoints, collectibles, switches, barriers, and an exit.
-2. **Cyber Runner:** an approximately 90-120 second shared runner. One player
-   uses `W` and the other uses `ArrowRight`. Score can include coins,
-   distance, checkpoints, collisions, and game-over state.
-3. **Circuit Sync / Code Repair:** its one-screen design is an OPEN DECISION:
-   use a paper clue, replace it with another game, or show everything on the
-   shared screen. Wrong connections may penalise or reset; correct
-   configurations unlock stages.
+1. **Circuit Sync / Code Repair (implemented):** a fixed five-stage Boolean
+   circuit puzzle using 3, 4, 4, 5, and 6 switches. The puzzles cover OR,
+   AND, XOR, NAND, NOR, NOT, and XNOR gates, including a two-lamp target.
+   The shared screen shows the full gate wiring and target lamps. One player
+   can trace the logic while the other enters switch changes with keys `1`-`6`
+   and submits with `Enter`; players may swap roles between stages. A wrong
+   submission locks the submit control for three seconds; after three
+   mistakes the switch positions reset. Correct stages unlock the next puzzle,
+   and the server derives points by replaying the timestamped toggle/submit
+   log.
+2. **Dual-Control Maze:** planned; both players share one keyboard and
+   cooperate through walls, checkpoints, collectibles, switches, barriers,
+   and an exit.
+3. **Cyber Runner:** planned as an approximately 90-120 second shared runner.
+   One player uses `W` and the other uses `ArrowRight`. Score can include
+   coins, distance, checkpoints, collisions, and game-over state.
 
 There is one shared screen and keyboard per team. There is no live connection
-between two browsers. For real-time-action games, the server issues a
+between two browsers. Circuit Sync's former open decision is resolved: show
+the full puzzle on the shared screen; do not use a paper clue or a replacement
+game. For real-time-action games, the server issues a
 per-team random seed and authoritative start time. The browser runs the game
 and records timestamped inputs. On finish, it submits the input log, never a
 score. The server deterministically replays the log, validates duration, input
 rate, and impossible moves, then calls `submitGameResult` once. The server is
 the authority for the replay result. Puzzle-style games may instead submit
-each step to the server for validation. Persist only the final validated
-result unless a game requires otherwise.
+each step to the server for validation. Circuit Sync currently records
+timestamped steps locally and submits that bounded log for deterministic
+server replay. Persist only the final validated result unless a game requires
+otherwise.
 
 If time is short, prefer an asymmetric-information puzzle engine over the
 runner. Do not guess the rules for later rounds.
@@ -264,13 +273,13 @@ Still verify before production:
 
 ## 9. Scoring rule and current foundation
 
-The minimal scoring foundation is now implemented, but game rules and game
-routes are not. Do not build game scoring until the round specifications are
-available. The current implementation provides:
+The minimal scoring foundation and game-session routes are implemented.
+Circuit Sync has a deterministic validator; Maze and Runner validators remain
+stubs. The current implementation provides:
 
 - `ScoreEntry` append-only records.
 - A unique partial index allowing only one `game_result` per team/round/attempt/game.
-- `submitGameResult(teamId, game, points)` as a service-only entry point for
+- `submitGameResult(teamId, game, points, session)` as a service-only entry point for
   validated server results. It requires a running, unexpired round, clamps
   points to `0..1000`, and returns a clear duplicate-submission error. Never
   accept the score from the browser: replay and validate a timestamped input
@@ -281,6 +290,8 @@ available. The current implementation provides:
   timer-based automatic expiry.
 - Admin score adjustments limited to `-1000..1000` with reasons capped at 200
   characters.
+- Per-team seeded game sessions with idempotent start, bounded timestamped
+  inputs, pause-aware elapsed time, and an atomic finish claim before scoring.
 
 When extending scoring, every point change must remain an append-only,
 auditable record
@@ -299,29 +310,24 @@ may remain a simple initial team field.
 
 ### Scoring checkpoint for the next agent
 
-- Branch: `feature-core-platform`.
+- Current branch: `ui-restyle` (see the handoff/sharing note in section 3;
+  changes in the working tree are not automatically included in a clone).
 - No scoring or round files should be deleted or rewritten into mutable totals.
 - Do not expose `submitGameResult` directly to arbitrary clients. Game
   endpoints must derive team identity from the authenticated session and
   validate input logs or puzzle steps on the server.
-- Do not add Socket.IO or WebSockets. The socket transport and hub have been
-  removed; `circuitSync.js` remains unregistered. The approved design uses
-  cached HTTP polling and one shared screen.
+- Do not add Socket.IO or WebSockets. The approved design uses HTTP polling
+  and one shared screen.
 - Before continuing, inspect:
   [`ScoreEntry`](./server/src/models/ScoreEntry.js),
   [`RoundState`](./server/src/models/RoundState.js),
   [`roundState.js`](./server/src/services/roundState.js), and
   [`scoring.js`](./server/src/services/scoring.js).
-- The implementation was smoke-tested with a temporary MongoDB-backed round:
-  the first result succeeded, a duplicate failed with `Game result already
-  submitted`, a post-deadline result failed with `Round is not running`, pause
-  and resume moved the deadline by the pause duration, and a team session calling
-  `/api/admin/rounds` received `403 Admin access required`.
-- The focused automated suite is
-  [`server/test/scoring.test.js`](./server/test/scoring.test.js); it covers
-  rejection while paused or after deadline, duplicate submissions, one active
-  round, round-attempt restart, pause/resume, ledger indexing, and team score
-  isolation.
+- Relevant automated coverage is in
+  [`server/test/scoring.test.js`](./server/test/scoring.test.js),
+  [`server/test/games.test.js`](./server/test/games.test.js), and
+  [`server/test/circuit.test.js`](./server/test/circuit.test.js). Run the
+  complete server suite against a dedicated test database; see section 14.
 
 ## 10. Performance
 
@@ -353,7 +359,7 @@ New screens should use namespaced `cc-` classes and the existing dark system:
 - Clash Display for headlines, Inter for body text, and JetBrains Mono for
   uppercase technical labels.
 - White pill buttons and minimal chrome.
-- Only the four round cards should carry strong colour gradients; other
+- Only round/game cards should carry strong colour gradients; other
   surfaces remain white, black, or grey.
 - Keep visuals simple and do not add animations unless requested.
 - Do not use a global `!important` font rule.
@@ -364,17 +370,15 @@ New screens should use namespaced `cc-` classes and the existing dark system:
 
 Ask the owner one question at a time instead of guessing:
 
-1. Circuit Sync on one shared screen: paper clue, replacement game, or show
-   everything?
-2. How do Bias Points combine with round points, and how are starting amounts
+1. How do Bias Points combine with round points, and how are starting amounts
    decided?
-3. Team count, hosting provider, and deployment domains?
-4. Rules and mechanics for Rounds 2 and 3?
-5. Scoring formulas, penalties, bonuses, progression, elimination, and
+2. Team count, hosting provider, and deployment domains?
+3. Rules and mechanics for Rounds 2 and 3?
+4. Scoring formulas, penalties, bonuses, progression, elimination, and
    leaderboard freeze policy?
-6. Credential distribution, clue/answer formats, venue, timing, and event
+5. Credential distribution, clue/answer formats, venue, timing, and event
    date?
-7. What do pause and team reset mean, and what data do they preserve?
+6. What do pause and team reset mean, and what data do they preserve?
 
 ## 13. Working rules for agents
 
@@ -426,4 +430,25 @@ npm run dev
 
 The frontend defaults to `http://localhost:5173` and the API to
 `http://localhost:4000`. MongoDB must be running or configured through
-`MONGO_URI`.
+`MONGO_URI`. Configure `SESSION_SECRET`, `ADMIN_USERNAME`, and
+`ADMIN_PASSWORD` in the local ignored `server/.env`; never copy real values
+into this README or commit the env file. The frontend can override the API
+origin with `VITE_API_URL`.
+
+Checks:
+
+```bash
+# From the repository root
+npm run build
+node --test src/circuitSchematicLayout.test.js
+
+# From server/
+npm test
+```
+
+Server tests require `MONGO_URI_TEST` with a database name ending in `_test`,
+or `MONGO_URI` (the test bootstrap derives an `_test` database name). Use a
+disposable local/test database; the test suite writes and clears test records.
+The root package does not define an `npm test` script. The frontend production
+build was last verified on 19 October 2026; run the checks again after any
+subsequent changes.

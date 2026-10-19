@@ -1,9 +1,10 @@
 import { ScoreEntry } from '../models/ScoreEntry.js';
 import { Team } from '../models/Team.js';
 import { invalidateLeaderboard } from './leaderboard.js';
-import { getRunningRound } from './roundState.js';
+import { getRoundState, getRunningRound } from './roundState.js';
+import { GAME_NAMES } from '../games/names.js';
 
-export const GAME_NAMES = Object.freeze(['maze', 'runner', 'circuit']);
+export { GAME_NAMES } from '../games/names.js';
 
 export class ScoringError extends Error {
   constructor(code, message) {
@@ -56,13 +57,40 @@ export async function getAllTotals() {
   return value;
 }
 
-export async function submitGameResult(teamId, game, points) {
+export async function submitGameResult(teamId, game, points, session) {
   if (!GAME_NAMES.includes(game)) {
     throw new ScoringError('INVALID_GAME', 'Game is not supported');
   }
-  const state = getRunningRound();
-  if (!state || !state.deadline || state.deadline.getTime() <= Date.now()) {
-    throw new ScoringError('ROUND_NOT_RUNNING', 'Round is not running');
+  let round;
+  let attemptNo;
+  if (session) {
+    const currentRound = getRoundState(session.round);
+    if (session.status !== 'submitted' || session.teamId !== teamId || session.game !== game) {
+      throw new ScoringError('INVALID_GAME_SESSION', 'Game session cannot be scored');
+    }
+    if (
+      !currentRound
+      || !['running', 'paused'].includes(currentRound.status)
+      || currentRound.attemptNo !== session.attemptNo
+    ) {
+      throw new ScoringError('ROUND_NOT_RUNNING', 'Game session round is no longer active');
+    }
+    const now = Date.now();
+    const pausedMs = currentRound.status === 'paused' && currentRound.pausedAt
+      ? Math.max(0, now - currentRound.pausedAt.getTime())
+      : 0;
+    if (currentRound.deadline.getTime() + pausedMs + 2000 < now) {
+      throw new ScoringError('ROUND_NOT_RUNNING', 'Round deadline has passed');
+    }
+    round = session.round;
+    attemptNo = session.attemptNo;
+  } else {
+    const state = getRunningRound();
+    if (!state || !state.deadline || state.deadline.getTime() <= Date.now()) {
+      throw new ScoringError('ROUND_NOT_RUNNING', 'Round is not running');
+    }
+    round = state.round;
+    attemptNo = state.attemptNo ?? 1;
   }
   if (!Number.isFinite(points)) {
     throw new ScoringError('INVALID_POINTS', 'Points must be a finite number');
@@ -71,8 +99,8 @@ export async function submitGameResult(teamId, game, points) {
   try {
     const entry = await ScoreEntry.create({
       teamId,
-      round: state.round,
-      attemptNo: state.attemptNo ?? 1,
+      round,
+      attemptNo,
       game,
       kind: 'game_result',
       amount,
