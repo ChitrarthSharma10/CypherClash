@@ -1,0 +1,383 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>CypherClash — Round 3</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <header>
+      <div class="brand">
+        <b>CC</b><span>CYPHERCLASH<small>ROUND 03 / INVESTIGATION</small></span>
+      </div>
+      <div class="clock">CASE CLOCK <strong id="timer">24:00</strong></div>
+    </header>
+    <section class="hero">
+      <div>
+        <p class="eyebrow">CLASSIFIED CASE FILE / CC-03-017</p>
+        <h1>THE <em>GHOST</em> PROTOCOL</h1>
+        <p>
+          A secure research archive was breached at 02:13. Two specialists. One
+          truth.
+        </p>
+      </div>
+      <div class="threat">
+        THREAT LEVEL <strong>● CRITICAL</strong
+        ><small id="status">AWAITING ROLE</small>
+      </div>
+    </section>
+    <section id="picker" class="picker">
+      <div>
+        <p class="eyebrow">IDENTITY CHECK</p>
+        <h2>Choose your station</h2>
+        <p>
+          The Lead Detective joins with the team's active login. The Forensic
+          Analyst joins on a second device using the detective's one-use
+          invitation.
+        </p>
+      </div>
+      <div class="roles">
+        <button data-role="detective">
+          <small>01 / FIELD</small><span>⌕</span><b>Lead Detective</b>
+          <p>Scene evidence, witness statements and suspect dossiers.</p>
+          <strong>ENTER FIELD STATION ↗</strong></button
+        ><button data-role="analyst">
+          <small>02 / FORENSICS</small><span>⌘</span><b>Forensic Analyst</b>
+          <p>Decrypt intercepted files and inspect network traces.</p>
+          <strong>ENTER FORENSICS ↗</strong>
+        </button>
+      </div>
+    </section>
+    <section id="workspace" class="workspace hidden">
+      <aside>
+        <small>ACTIVE STATION</small>
+        <h3 id="roleName">Lead Detective</h3>
+        <nav>
+          <button class="active" data-panel="overview">◈ Case overview</button
+          ><button data-panel="evidence">
+            ▧ Evidence ledger <b id="count">0</b></button
+          ><button data-panel="suspects">◎ Suspect dossiers</button
+          ><button data-panel="forensics">⌘ Forensic terminal</button
+          ><button data-panel="accusation">⚑ Final accusation</button>
+        </nav>
+        <p class="disclaimer">
+          LOCAL DEMO ONLY<br />Changes stay in this browser.
+        </p>
+        <button id="switch" class="link">Switch station ↗</button>
+      </aside>
+      <main>
+        <div class="mainhead">
+          <div>
+            <small class="eyebrow" id="kicker">MISSION CONTROL / 01</small>
+            <h2 id="title">Investigation overview</h2>
+          </div>
+          <span class="pill">● LOCAL DEMO STATE</span>
+        </div>
+        <div id="panel-overview" class="panel">
+          <div class="stats">
+            <article>
+              <small>CONFIRMED CLUES</small><b id="clues">00</b
+              ><span>Added to case ledger</span>
+            </article>
+            <article>
+              <small>OPEN LEADS</small><b>03</b
+              ><span>Requires investigation</span>
+            </article>
+            <article>
+              <small>CASE CONFIDENCE</small><b id="confidence">12%</b
+              ><span>Build the evidence chain</span>
+            </article>
+          </div>
+          <div class="columns">
+            <article class="card">
+              <small class="eyebrow">01 / MISSION BRIEF</small>
+              <h3>Recover the access sequence</h3>
+              <p>
+                At 02:13, an unknown operator accessed the Helix Research
+                archive using a valid internal credential. The access trail was
+                partially erased.
+              </p>
+              <p>
+                Establish who had the means and opportunity, then submit an
+                accusation supported by evidence.
+              </p>
+            </article>
+            <article class="card">
+              <small class="eyebrow">02 / CASE ACTIVITY</small>
+              <div id="activity" class="activity">
+                No evidence submitted yet.
+              </div>
+            </article>
+          </div>
+          <article class="card">
+            <small class="eyebrow">03 / PRIORITY LEADS</small
+            ><button class="lead" data-go="evidence">
+              ▧
+              <span
+                ><b>Server room access log</b
+                ><small>Physical access / 02:00–02:30</small></span
+              >OPEN ↗</button
+            ><button class="lead" data-go="forensics">
+              ⌘
+              <span
+                ><b>Encrypted packet capture</b
+                ><small>Network forensics / capture-17.enc</small></span
+              >OPEN ↗</button
+            ><button class="lead" data-go="suspects">
+              ◎
+              <span
+                ><b>Internal access roster</b
+                ><small>Opportunity / four persons of interest</small></span
+              >OPEN ↗
+            </button>
+          </article>
+        </div>
+        <div id="panel-evidence" class="panel hidden">
+          <p class="intro">
+            Review field evidence and add verified findings to the investigation
+            ledger.
+          </p>
+          <div class="cards three">
+            <article class="card">
+              <small class="eyebrow">EV-001 / LOG</small>
+              <pre>
+02:11:48 DOOR_AUTH: ACCEPTED
+BADGE: H-204
+ZONE: HELIX-ARCHIVE
+02:13:02 SESSION OPEN</pre
+              >
+              <h3>Server room access log</h3>
+              <p>
+                Badge H-204 opened the archive corridor two minutes before the
+                breach.
+              </p>
+              <button class="primary add" data-evidence="ev1">
+                ADD TO LEDGER ＋
+              </button>
+            </article>
+            <article class="card">
+              <small class="eyebrow">EV-002 / STATEMENT</small>
+              <blockquote>
+                “I heard the archive door release, then a workstation fan spin
+                up. I saw nobody leave through the east corridor.”
+              </blockquote>
+              <h3>Night technician statement</h3>
+              <p>
+                The witness places activity near the archive but did not
+                identify a person.
+              </p>
+              <button class="primary add" data-evidence="ev2">
+                ADD TO LEDGER ＋
+              </button>
+            </article>
+            <article class="card">
+              <small class="eyebrow">EV-003 / CAMERA</small>
+              <div class="camera">
+                CAM 04<br /><strong>◉</strong><br />02:12:51 / MOTION DETECTED
+              </div>
+              <h3>East corridor still</h3>
+              <p>
+                A figure appears near the junction; the face is not
+                identifiable.
+              </p>
+              <button class="primary add" data-evidence="ev3">
+                ADD TO LEDGER ＋
+              </button>
+            </article>
+          </div>
+          <article class="card">
+            <small class="eyebrow">CONFIRMED EVIDENCE</small>
+            <div id="ledger" class="activity">
+              The evidence ledger is empty.
+            </div>
+          </article>
+        </div>
+        <div id="panel-suspects" class="panel hidden">
+          <p class="intro">
+            Compare access, motive and opportunity. A dossier is not proof by
+            itself.
+          </p>
+          <div class="cards two">
+            <article class="card suspect">
+              <small>POI-01 / ARCHIVE ADMINISTRATOR</small>
+              <h3>Mara Chen</h3>
+              <p>
+                Has privileged archive access. Claims she left the lab at 01:45.
+              </p>
+              <p class="facts">ACCESS <b>HIGH</b> · MOTIVE <b>UNKNOWN</b></p>
+              <button class="outline dossier" data-name="Mara Chen">
+                REVIEW DOSSIER ↗
+              </button>
+            </article>
+            <article class="card suspect">
+              <small>POI-02 / NETWORK ENGINEER</small>
+              <h3>Idris Khan</h3>
+              <p>
+                Maintains internal routing. Logged into the network console near
+                02:00.
+              </p>
+              <p class="facts">ACCESS <b>MEDIUM</b> · MOTIVE <b>UNKNOWN</b></p>
+              <button class="outline dossier" data-name="Idris Khan">
+                REVIEW DOSSIER ↗
+              </button>
+            </article>
+            <article class="card suspect">
+              <small>POI-03 / RESEARCH LEAD</small>
+              <h3>Sofia Laurent</h3>
+              <p>
+                Owns the research archive. Reported a missing project key last
+                week.
+              </p>
+              <p class="facts">ACCESS <b>HIGH</b> · MOTIVE <b>UNKNOWN</b></p>
+              <button class="outline dossier" data-name="Sofia Laurent">
+                REVIEW DOSSIER ↗
+              </button>
+            </article>
+            <article class="card suspect">
+              <small>POI-04 / NIGHT TECHNICIAN</small>
+              <h3>Evan Walsh</h3>
+              <p>
+                Was on-site during the breach window and reported the corridor
+                sound.
+              </p>
+              <p class="facts">ACCESS <b>LOW</b> · MOTIVE <b>UNKNOWN</b></p>
+              <button class="outline dossier" data-name="Evan Walsh">
+                REVIEW DOSSIER ↗
+              </button>
+            </article>
+          </div>
+        </div>
+        <div id="panel-forensics" class="panel hidden">
+          <p class="intro">
+            Inspect the intercepted packet and reconstruct its access token.
+          </p>
+          <div class="columns forensic">
+            <article class="card terminal">
+              <small class="eyebrow"
+                >PACKET_INSPECTOR v3.7 / CAPTURE-17.ENC</small
+              >
+              <pre>
+// sanitized training capture
+SRC  10.14.8.22 : 443
+DST  10.14.2.10 : 8443
+TIME 02:13:02.441 UTC+05:30
+AUTH token = [ENCRYPTED]
+NOTE key uses a 3-step Caesar shift
+
+HINT: intercepted text is KHOLA</pre
+              >
+              <label for="token">DECRYPTED TOKEN</label>
+              <div class="inputrow">
+                <input
+                  id="token"
+                  placeholder="ENTER TOKEN"
+                  maxlength="32"
+                /><button id="decrypt" class="primary">VERIFY ↗</button>
+              </div>
+              <p id="decryptFeedback" class="feedback"></p>
+            </article>
+            <article class="card">
+              <small class="eyebrow">TASK 01 / CRYPTOGRAPHY</small>
+              <h3>Decrypt access token</h3>
+              <p>
+                The packet was captured at the exact time the archive session
+                opened. Recover the token to link the network trace to the badge
+                log.
+              </p>
+              <div class="hint">
+                <b>HINT</b>
+                <p>
+                  Move each letter three places backward in the alphabet.
+                  Preserve letter order.
+                </p>
+              </div>
+              <p>
+                Correct token reveals a forensic finding for the evidence
+                ledger.
+              </p>
+            </article>
+          </div>
+          <article class="card">
+            <small class="eyebrow">NETWORK EVENT SEQUENCE</small>
+            <div class="timeline">
+              <span
+                >02:11:48<b>Badge accepted</b
+                ><small>Physical access</small></span
+              ><span
+                >02:12:51<b>Motion event</b
+                ><small>East corridor camera</small></span
+              ><span
+                >02:13:02<b>Token accepted</b
+                ><small>Archive session opened</small></span
+              ><span
+                >02:13:19<b>Bulk read begins</b
+                ><small>Archive data requested</small></span
+              >
+            </div>
+          </article>
+        </div>
+        <div id="panel-accusation" class="panel hidden">
+          <p class="intro">
+            Record an accusation only when your team can connect the suspect to
+            the breach with evidence.
+          </p>
+          <div class="columns">
+            <article class="card">
+              <small class="eyebrow">FINAL DECISION / LOCAL DRAFT</small>
+              <h3>Who breached the archive?</h3>
+              <label for="suspect">PRIMARY SUSPECT</label
+              ><select id="suspect">
+                <option value="">Select a suspect…</option>
+                <option>Mara Chen</option>
+                <option>Idris Khan</option>
+                <option>Sofia Laurent</option>
+                <option>Evan Walsh</option></select
+              ><label for="support">SUPPORTING EVIDENCE</label
+              ><select id="support">
+                <option value="">Select evidence…</option>
+                <option value="ev1">EV-001 — Server room access log</option>
+                <option value="ev2">EV-002 — Night technician statement</option>
+                <option value="ev3">EV-003 — East corridor still</option>
+                <option value="ev4">
+                  EV-004 — Decrypted network token
+                </option></select
+              ><label for="reason">REASONING / CORROBORATION</label
+              ><textarea
+                id="reason"
+                rows="4"
+                placeholder="Explain how the evidence supports your accusation…"
+              ></textarea
+              ><button id="submit" class="primary">
+                RECORD TEAM ACCUSATION ↗
+              </button>
+              <p id="accuseFeedback" class="feedback"></p>
+            </article>
+            <article class="card">
+              <small class="eyebrow">TWO-PERSON CONCURRENCE</small>
+              <div class="concur">
+                <b>⌕ Lead Detective</b><span>PENDING</span
+                ><small>Field evidence and suspect assessment</small>
+              </div>
+              <div class="concur">
+                <b>⌘ Forensic Analyst</b><span>PENDING</span
+                ><small>Decryption and network corroboration</small>
+              </div>
+              <p class="warning">
+                Live concurrence is not connected. In the integrated version,
+                both devices must approve the same suspect through the backend.
+              </p>
+            </article>
+          </div>
+        </div>
+        <footer>
+          CC // INVESTIGATION DIVISION
+          <span>STANDALONE PROTOTYPE · DEPLOYMENT NOT VERIFIED</span>
+        </footer>
+      </main>
+    </section>
+    <div id="toast" class="toast"></div>
+    <script src="app.js"></script>
+    <script src="integrated.js"></script>
+  </body>
+</html>

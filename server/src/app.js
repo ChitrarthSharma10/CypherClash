@@ -8,6 +8,7 @@ import teamRoutes from './routes/team.js';
 import adminRoutes from './routes/admin.js';
 import leaderboardRoutes from './routes/leaderboard.js';
 import gameRoutes from './routes/games.js';
+import investigationRoutes from './routes/investigation.js';
 
 const noStore = (req, res, next) => {
   res.set('Cache-Control', 'no-store');
@@ -18,7 +19,7 @@ export function createApp() {
   const app = express();
   app.set('trust proxy', config.trustProxy);
   app.use(helmet());
-  app.use(cors({ origin: config.frontendOrigin, credentials: true }));
+  app.use(cors({ origin: config.frontendOrigins, credentials: true }));
   app.use(express.json({ limit: '20kb' }));
   app.use(sessionMiddleware);
 
@@ -28,6 +29,7 @@ export function createApp() {
   app.use('/api/admin', noStore, adminRoutes);
   app.use('/api/leaderboard', noStore, leaderboardRoutes);
   app.use('/api/games', noStore, gameRoutes);
+  app.use('/api/investigation', noStore, investigationRoutes);
   app.use((req, res) => res.status(404).json({ error: 'Not found' }));
   app.use((error, req, res, next) => {
     if (res.headersSent) return next(error);
