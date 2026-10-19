@@ -1,3 +1,5 @@
+import dns from 'node:dns';
+try { dns.setServers(['8.8.8.8', '8.8.4.4', '1.1.1.1']); } catch {}
 import { createServer } from 'node:http';
 import { createApp } from './app.js';
 import { connectDatabase } from './db.js';
@@ -6,6 +8,7 @@ import { initializeRoundStates, startRoundStateMonitor } from './services/roundS
 import { ScoreEntry } from './models/ScoreEntry.js';
 import { GameSession } from './models/GameSession.js';
 import { rebuildLeaderboard } from './services/leaderboard.js';
+import { setupSocketIO } from './socket.js';
 
 await connectDatabase();
 await GameSession.createIndexes();
@@ -40,6 +43,7 @@ await initializeRoundStates();
 await rebuildLeaderboard();
 startRoundStateMonitor();
 const httpServer = createServer(createApp());
+setupSocketIO(httpServer);
 httpServer.listen(config.port, () => {
   console.log(`CypherClash API listening on port ${config.port}`);
 });

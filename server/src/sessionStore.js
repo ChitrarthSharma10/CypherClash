@@ -1,3 +1,5 @@
+import dns from 'node:dns';
+try { dns.setServers(['8.8.8.8', '8.8.4.4', '1.1.1.1']); } catch {}
 import MongoStore from 'connect-mongo';
 import { config } from './config.js';
 

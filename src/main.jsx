@@ -10,6 +10,9 @@ import {
   GameControllerIcon,
   UnlockedTerminalIcon,
 } from './components/CardHeaderIcons.tsx';
+import MazeApp from './games/maze/MazeApp.jsx';
+import RunnerApp from './games/runner/RunnerApp.jsx';
+import InvestigationApp from './games/investigation/InvestigationApp.jsx';
 
 const rounds = [
   { number: '01', title: 'Mini Games Round', subtitle: 'The Warmup & Screening', time: '30 min', mode: 'BROWSER MINI-GAMES', desc: 'Build speed and digital intuition with quick decisions, patterns, and packet sorting.', focus: 'Speed + instinct' },
@@ -65,11 +68,15 @@ function App() {
         {path === '/' && <Landing />}
         {path === '/login' && <Login onSuccess={() => navigate('/dashboard')} />}
         {path === '/dashboard' && <Dashboard onLogout={() => navigate('/login')} />}
+        {path === '/dashboard/maze' && <DualControlMazeScreen onBack={() => navigate('/dashboard')} onLogout={() => navigate('/login')} />}
+        {path === '/dashboard/runner' && <CyberRunnerScreen onBack={() => navigate('/dashboard')} onLogout={() => navigate('/login')} />}
         {path === '/dashboard/circuit-sync' && <CircuitSyncGame onBack={() => navigate('/dashboard')} onLogout={() => navigate('/login')} />}
+        {path === '/dashboard/investigation' && <InvestigationScreen onBack={() => navigate('/dashboard')} onLogout={() => navigate('/login')} />}
+        {path === '/dashboard/round3' && <InvestigationScreen onBack={() => navigate('/dashboard')} onLogout={() => navigate('/login')} />}
         {path === '/leaderboard' && <LeaderboardScreen onBack={() => navigate('/dashboard')} onLogout={() => navigate('/login')} />}
         {path === '/admin/login' && <AdminLogin onSuccess={() => navigate('/admin')} />}
         {path === '/admin' && <AdminDashboard onLogout={() => navigate('/admin/login')} />}
-        {!['/', '/login', '/dashboard', '/dashboard/circuit-sync', '/leaderboard', '/admin/login', '/admin'].includes(path) && <NotFound />}
+        {!['/', '/login', '/dashboard', '/dashboard/maze', '/dashboard/runner', '/dashboard/circuit-sync', '/dashboard/investigation', '/dashboard/round3', '/leaderboard', '/admin/login', '/admin'].includes(path) && <NotFound />}
       </div>
     </div>
   );
@@ -202,7 +209,7 @@ function AuthFeedback({ error, success }) {
 }
 
 function Login({ onSuccess }) {
-  const [form, setForm] = useState({ teamId: '', password: '' });
+  const [form, setForm] = useState({ teamId: '', password: '', playerSlot: 'P1' });
   const [state, setState] = useState({ loading: false, error: '', success: '' });
   const [showPassword, setShowPassword] = useState(false);
 
@@ -219,7 +226,7 @@ function Login({ onSuccess }) {
   };
 
   return <AuthShell eyebrow="PARTICIPANT PORTAL / SECURE ACCESS" title="Team login">
-    <p className="product-intro">Use the credentials issued to your team. Your session stays active when you refresh.</p>
+    <p className="product-intro">Use the credentials issued to your team. Two players can log in simultaneously from separate devices.</p>
     <form className="product-form cc-login-form" onSubmit={submit} aria-busy={state.loading}>
       <Field label="TEAM ID"><input required maxLength={20} value={form.teamId} onChange={(event) => setForm({ ...form, teamId: event.target.value.toUpperCase() })} placeholder="CC-001" autoComplete="username" /></Field>
       <div className="cc-password-field">
@@ -227,6 +234,27 @@ function Login({ onSuccess }) {
         <div className="cc-password-input">
           <input id="team-password" required maxLength={128} type={showPassword ? 'text' : 'password'} value={form.password} onChange={(event) => setForm({ ...form, password: event.target.value })} autoComplete="current-password" />
           <button type="button" className="cc-password-toggle" aria-label={showPassword ? 'Hide password' : 'Show password'} aria-pressed={showPassword} onClick={() => setShowPassword(!showPassword)}>{showPassword ? 'Hide' : 'Show'}</button>
+        </div>
+      </div>
+      <div style={{ margin: '14px 0 18px' }}>
+        <label className="cc-auth-label" style={{ display: 'block', marginBottom: '8px' }}>DEVICE SLOT (2 PLAYERS PER TEAM)</label>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+          <button
+            type="button"
+            className={`product-btn ${form.playerSlot === 'P1' ? 'product-btn--primary' : 'product-btn--light'}`}
+            style={{ padding: '8px 12px', fontSize: '12px', fontWeight: 700 }}
+            onClick={() => setForm({ ...form, playerSlot: 'P1' })}
+          >
+            Player 1 {form.playerSlot === 'P1' ? '✓' : ''}
+          </button>
+          <button
+            type="button"
+            className={`product-btn ${form.playerSlot === 'P2' ? 'product-btn--primary' : 'product-btn--light'}`}
+            style={{ padding: '8px 12px', fontSize: '12px', fontWeight: 700 }}
+            onClick={() => setForm({ ...form, playerSlot: 'P2' })}
+          >
+            Player 2 {form.playerSlot === 'P2' ? '✓' : ''}
+          </button>
         </div>
       </div>
       <AuthFeedback error={state.error} success={state.success} />
@@ -314,6 +342,7 @@ function Dashboard({ onLogout }) {
         <h1>{data.team.name}</h1>
         <div className="cc-dashboard-identity">
           <span>Team ID <strong>{data.team.teamId}</strong></span>
+          <span>Slot <strong>{data.team.playerSlot || 'P1'}</strong></span>
           <span>Bias points <strong>{data.team.biasPoints}</strong></span>
           <Status online={data.team.online} />
         </div>
@@ -334,13 +363,15 @@ function Dashboard({ onLogout }) {
         <strong className="cc-round-overview__timer">{formatDuration(remainingMs)}</strong>
         <p>{round?.status === 'running' && round.round === 1
           ? 'Round 1 is live. Choose an available game below.'
-          : round?.status === 'running'
-            ? 'Play together on this shared screen and keyboard.'
-            : round?.status === 'paused'
-              ? 'Play is paused. Your remaining time is frozen.'
-              : round?.status === 'ended'
-                ? 'This round has ended.'
-                : 'The next round has not started yet.'}</p>
+          : round?.status === 'running' && round.round === 3
+            ? 'Round 3 is live. Collaborative incident investigation is ready.'
+            : round?.status === 'running'
+              ? 'Play together across your team devices.'
+              : round?.status === 'paused'
+                ? 'Play is paused. Your remaining time is frozen.'
+                : round?.status === 'ended'
+                  ? 'This round has ended.'
+                  : 'The next round has not started yet.'}</p>
       </article>
       <article className="cc-overview-card cc-score-card">
         <p className="product-eyebrow">YOUR SCORE</p>
@@ -364,8 +395,8 @@ function Dashboard({ onLogout }) {
     </section>
     <section className="cc-play-section">
       <div className="cc-play-heading">
-        <div><p className="product-eyebrow">ROUND 01 / MINI GAMES</p><h2>Play together</h2></div>
-        <span>One shared screen</span>
+        <div><p className="product-eyebrow">ROUND 01 / MINI GAMES</p><h2>Round 1 Games</h2></div>
+        <span>Two players · Cross-device coop</span>
       </div>
       <div className="cc-play-grid">
         <article className="cc-play-card cc-play-card--violet">
@@ -377,22 +408,46 @@ function Dashboard({ onLogout }) {
           </button>
         </article>
         <article className="cc-play-card cc-play-card--coral">
-          <div className="cc-play-card__top"><span>02 / CO-OP</span><span className="cc-game-status cc-game-status--locked">Locked</span></div>
+          <div className="cc-play-card__top"><span>02 / CO-OP</span><span className={`cc-game-status cc-game-status--${roundOneRunning ? 'available' : 'locked'}`}>{roundOneRunning ? 'Available' : 'Locked'}</span></div>
           <h3>Dual-Control Maze</h3>
-          <p>Coordinate two controls to navigate one shared maze.</p>
-          <button className="cc-play-card__button" disabled>Coming soon</button>
+          <p>Player 1 steers Vertical (Up/Down) while Player 2 steers Horizontal (Left/Right).</p>
+          <button className="cc-play-card__button" disabled={!roundOneRunning} onClick={() => navigate('/dashboard/maze')}>
+            Play Dual-Control Maze <span aria-hidden="true">↗</span>
+          </button>
         </article>
         <article className="cc-play-card cc-play-card--sky">
-          <div className="cc-play-card__top"><span>03 / REFLEX</span><span className="cc-game-status cc-game-status--locked">Locked</span></div>
+          <div className="cc-play-card__top"><span>03 / REFLEX</span><span className={`cc-game-status cc-game-status--${roundOneRunning ? 'available' : 'locked'}`}>{roundOneRunning ? 'Available' : 'Locked'}</span></div>
           <h3>Cyber Runner</h3>
-          <p>Work in sync to dodge obstacles and collect points.</p>
-          <button className="cc-play-card__button" disabled>Coming soon</button>
+          <p>Player 1 jumps/slides while Player 2 switches lanes to dodge obstacles.</p>
+          <button className="cc-play-card__button" disabled={!roundOneRunning} onClick={() => navigate('/dashboard/runner')}>
+            Play Cyber Runner <span aria-hidden="true">↗</span>
+          </button>
         </article>
       </div>
     </section>
+
+    {round?.round === 3 && (
+      <section className="cc-play-section" style={{ marginTop: '30px' }}>
+        <div className="cc-play-heading">
+          <div><p className="product-eyebrow">ROUND 03 / DIGITAL DETECTIVE</p><h2>Collaborative Case</h2></div>
+          <span>Communications Analyst & SIEM Specialist</span>
+        </div>
+        <div className="cc-play-grid">
+          <article className="cc-play-card cc-play-card--violet" style={{ gridColumn: '1 / -1' }}>
+            <div className="cc-play-card__top"><span>01 / OSINT & SIEM</span><span className={`cc-game-status cc-game-status--${round.status === 'running' ? 'available' : 'locked'}`}>{round.status === 'running' ? 'Available' : 'Locked'}</span></div>
+            <h3>Cyber Incident Investigation</h3>
+            <p>Analyze email dumps, authentication audit logs, netflow traces, and synthesize evidence on the shared case board.</p>
+            <button className="cc-play-card__button" disabled={round.status !== 'running'} onClick={() => navigate('/dashboard/investigation')}>
+              Enter Investigation Workspace <span aria-hidden="true">↗</span>
+            </button>
+          </article>
+        </div>
+      </section>
+    )}
+
     <section className="cc-presence-card">
       <div><p className="product-eyebrow">TEAM PRESENCE</p><h2>Signal crew</h2></div>
-      <div><span className="product-mono">ONE TEAM SESSION</span><p>Both players participate together using this screen and keyboard.</p></div>
+      <div><span className="product-mono">TWO PLAYERS ACTIVE</span><p>Both devices connect to the team room in real-time via Socket.IO.</p></div>
       <Status online={data.team.online} />
     </section>
   </main>;
@@ -496,6 +551,84 @@ function getActiveGameElapsedMs(game, round, serverOffsetMs, now) {
     ? Math.max(0, now + serverOffsetMs - new Date(round.pausedAt).getTime())
     : 0;
   return Math.max(0, now + serverOffsetMs - startedAtMs - completedPausesMs - currentPauseMs);
+}
+
+function DualControlMazeScreen({ onBack, onLogout }) {
+  const { data: teamData, error: pollingError } = useVisiblePolling(() => apiRequest('/api/team/me'));
+  useEffect(() => {
+    if (pollingError === 'Authentication required') onLogout();
+  }, [pollingError, onLogout]);
+
+  if (!teamData && !pollingError) return <LoadingState label="Loading Dual-Control Maze…" />;
+  if (!teamData) return <ErrorState message={pollingError} onRetry={() => window.location.reload()} />;
+
+  const handleSlotChange = async (nextSlot) => {
+    try {
+      await apiRequest('/api/team/slot', { method: 'POST', body: JSON.stringify({ playerSlot: nextSlot }) });
+    } catch (e) {
+      console.warn('Slot update failed', e);
+    }
+  };
+
+  return <MazeApp
+    teamId={teamData.teamId}
+    playerSlot={teamData.playerSlot || 'P1'}
+    onBack={onBack}
+    onLogout={onLogout}
+    onSlotChange={handleSlotChange}
+  />;
+}
+
+function CyberRunnerScreen({ onBack, onLogout }) {
+  const { data: teamData, error: pollingError } = useVisiblePolling(() => apiRequest('/api/team/me'));
+  useEffect(() => {
+    if (pollingError === 'Authentication required') onLogout();
+  }, [pollingError, onLogout]);
+
+  if (!teamData && !pollingError) return <LoadingState label="Loading Cyber Runner…" />;
+  if (!teamData) return <ErrorState message={pollingError} onRetry={() => window.location.reload()} />;
+
+  const handleSlotChange = async (nextSlot) => {
+    try {
+      await apiRequest('/api/team/slot', { method: 'POST', body: JSON.stringify({ playerSlot: nextSlot }) });
+    } catch (e) {
+      console.warn('Slot update failed', e);
+    }
+  };
+
+  return <RunnerApp
+    teamId={teamData.teamId}
+    playerSlot={teamData.playerSlot || 'P1'}
+    onBack={onBack}
+    onLogout={onLogout}
+    onSlotChange={handleSlotChange}
+  />;
+}
+
+function InvestigationScreen({ onBack, onLogout }) {
+  const { data: teamData, error: pollingError } = useVisiblePolling(() => apiRequest('/api/team/me'));
+  useEffect(() => {
+    if (pollingError === 'Authentication required') onLogout();
+  }, [pollingError, onLogout]);
+
+  if (!teamData && !pollingError) return <LoadingState label="Loading Cyber Investigation…" />;
+  if (!teamData) return <ErrorState message={pollingError} onRetry={() => window.location.reload()} />;
+
+  const handleSlotChange = async (nextSlot) => {
+    try {
+      await apiRequest('/api/team/slot', { method: 'POST', body: JSON.stringify({ playerSlot: nextSlot }) });
+    } catch (e) {
+      console.warn('Slot update failed', e);
+    }
+  };
+
+  return <InvestigationApp
+    teamId={teamData.teamId}
+    playerSlot={teamData.playerSlot || 'P1'}
+    onBack={onBack}
+    onLogout={onLogout}
+    onSlotChange={handleSlotChange}
+  />;
 }
 
 function CircuitSyncGame({ onBack, onLogout }) {
