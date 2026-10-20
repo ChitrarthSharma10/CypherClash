@@ -1,0 +1,74 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 600" width="500" height="600">
+  <defs>
+    <filter id="log-shadow" x="-5%" y="-5%" width="110%" height="110%">
+      <feDropShadow dx="2" dy="4" stdDeviation="4" flood-color="#000" flood-opacity="0.35"/>
+    </filter>
+  </defs>
+  
+  <rect x="10" y="10" width="480" height="580" rx="2" fill="#f8fafc" stroke="#cbd5e1" stroke-width="1.5" filter="url(#log-shadow)"/>
+  
+  <!-- Header -->
+  <rect x="25" y="25" width="450" height="38" fill="#1e293b" rx="2"/>
+  <text x="38" y="44" font-family="'Courier New', monospace" font-size="10.5" font-weight="bold" fill="#38bdf8" letter-spacing="1">CAMPUS ACCESS CONTROL SYSTEM // READER CC-RD-04</text>
+  <text x="38" y="55" font-family="'Courier New', monospace" font-size="8.5" fill="#94a3b8">DOOR CONTROLLER: SUB-BASEMENT B-04  |  FIRMWARE: v4.19-SEC</text>
+  
+  <!-- Sub-header -->
+  <text x="25" y="85" font-family="monospace" font-size="9" fill="#475569">LOG RUN: 2026-08-14 02:00:00 - 04:00:00 UTC</text>
+  <text x="300" y="85" font-family="monospace" font-size="9" fill="#475569">STATUS: EXPORT AUDITED</text>
+  <line x1="25" y1="92" x2="475" y2="92" stroke="#0f172a" stroke-width="1"/>
+  
+  <!-- Table Header -->
+  <rect x="25" y="100" width="450" height="22" fill="#e2e8f0"/>
+  <text x="32" y="115" font-family="monospace" font-size="8" font-weight="bold" fill="#1e293b">TIMESTAMP</text>
+  <text x="120" y="115" font-family="monospace" font-size="8" font-weight="bold" fill="#1e293b">BADGE ID</text>
+  <text x="210" y="115" font-family="monospace" font-size="8" font-weight="bold" fill="#1e293b">ASSIGNED HOLDER</text>
+  <text x="340" y="115" font-family="monospace" font-size="8" font-weight="bold" fill="#1e293b">ACCESS RESULT</text>
+  
+  <!-- Table Rows -->
+  <text x="32" y="140" font-family="monospace" font-size="8" fill="#334155">02:30:00.12</text>
+  <text x="120" y="140" font-family="monospace" font-size="8" fill="#334155">SYS-HEARTBEAT</text>
+  <text x="210" y="140" font-family="monospace" font-size="8" fill="#334155">System Self-Test</text>
+  <text x="340" y="140" font-family="monospace" font-size="8" fill="#16a34a">VERIFIED [OK]</text>
+  
+  <text x="32" y="165" font-family="monospace" font-size="8" fill="#334155">02:45:10.84</text>
+  <text x="120" y="165" font-family="monospace" font-size="8" fill="#334155">SEC-408</text>
+  <text x="210" y="165" font-family="monospace" font-size="8" fill="#334155">Officer M. Vance</text>
+  <text x="340" y="165" font-family="monospace" font-size="8" fill="#16a34a">GRANTED [PATROL]</text>
+  
+  <rect x="25" y="180" width="450" height="28" fill="#fef2f2"/>
+  <text x="32" y="198" font-family="monospace" font-size="8" font-weight="bold" fill="#b91c1c">03:09:40.02</text>
+  <text x="120" y="198" font-family="monospace" font-size="8" font-weight="bold" fill="#b91c1c">FAC-9412</text>
+  <text x="210" y="198" font-family="monospace" font-size="8" font-weight="bold" fill="#b91c1c">HVAC Maint (Contract)</text>
+  <text x="340" y="198" font-family="monospace" font-size="8" font-weight="bold" fill="#b91c1c">GRANTED [OFF-HOURS]</text>
+  
+  <rect x="25" y="215" width="450" height="28" fill="#fffbeb"/>
+  <text x="32" y="233" font-family="monospace" font-size="8" font-weight="bold" fill="#b45309">03:14:18.45</text>
+  <text x="120" y="233" font-family="monospace" font-size="8" fill="#b45309">DOOR-SENSOR</text>
+  <text x="210" y="233" font-family="monospace" font-size="8" fill="#b45309">Magnetic Reed Switch</text>
+  <text x="340" y="233" font-family="monospace" font-size="8" font-weight="bold" fill="#b45309">ALERT: DOOR PROPPED</text>
+  
+  <text x="32" y="268" font-family="monospace" font-size="8" fill="#334155">03:16:50.11</text>
+  <text x="120" y="268" font-family="monospace" font-size="8" fill="#334155">DOOR-SENSOR</text>
+  <text x="210" y="268" font-family="monospace" font-size="8" fill="#334155">Magnetic Reed Switch</text>
+  <text x="340" y="268" font-family="monospace" font-size="8" fill="#334155">NORMAL: CLOSED</text>
+  
+  <text x="32" y="295" font-family="monospace" font-size="8" fill="#334155">03:22:15.90</text>
+  <text x="120" y="295" font-family="monospace" font-size="8" fill="#334155">SEC-408</text>
+  <text x="210" y="295" font-family="monospace" font-size="8" fill="#334155">Officer M. Vance</text>
+  <text x="340" y="295" font-family="monospace" font-size="8" fill="#16a34a">GRANTED [RESPONSE]</text>
+  
+  <line x1="25" y1="330" x2="475" y2="330" stroke="#cbd5e1" stroke-width="1"/>
+  
+  <!-- Notes Box -->
+  <text x="25" y="355" font-family="'Courier New', monospace" font-size="10" font-weight="bold" fill="#0f172a">SECURITY DISPATCH AUDIT NOTE:</text>
+  <rect x="25" y="365" width="450" height="130" fill="#f8fafc" stroke="#e2e8f0" stroke-width="1" rx="2"/>
+  <text x="35" y="388" font-family="monospace" font-size="8.5" fill="#475569">Contractor credential <tspan font-weight="bold" fill="#b91c1c">FAC-9412</tspan> was flagged by HR as suspended 12 days</text>
+  <text x="35" y="405" font-family="monospace" font-size="8.5" fill="#475569">prior to this incident. Card telemetry shows cloned HID credentials</text>
+  <text x="35" y="422" font-family="monospace" font-size="8.5" fill="#475569">matching reader code <tspan font-weight="bold" fill="#0f172a">RF-394781A</tspan>.</text>
+  <text x="35" y="446" font-family="monospace" font-size="8.5" fill="#475569">Physical inspection confirmed Door B-04 was propped open with an electrical</text>
+  <text x="35" y="463" font-family="monospace" font-size="8.5" fill="#475569">wedge during the 03:14 gateway bridge window.</text>
+  
+  <line x1="25" y1="530" x2="475" y2="530" stroke="#cbd5e1" stroke-width="1"/>
+  <text x="25" y="555" font-family="monospace" font-size="8" fill="#64748b">TERMINAL CONTROLLER REF: #CTL-B04-SEC</text>
+  <text x="330" y="555" font-family="monospace" font-size="8" fill="#64748b">PAGE 1 OF 1 // SIGNED: P. VANCE</text>
+</svg>

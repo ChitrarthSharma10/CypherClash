@@ -1,0 +1,69 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 650" width="500" height="650">
+  <defs>
+    <filter id="report-shadow" x="-5%" y="-5%" width="110%" height="110%">
+      <feDropShadow dx="2" dy="4" stdDeviation="4" flood-color="#000" flood-opacity="0.4"/>
+    </filter>
+  </defs>
+  
+  <!-- Document Base -->
+  <rect x="10" y="10" width="480" height="630" rx="3" fill="#fcfdfd" stroke="#cbd5e1" stroke-width="1.5" filter="url(#report-shadow)"/>
+  
+  <!-- Department Header -->
+  <rect x="25" y="25" width="450" height="46" fill="#0b1b2b" rx="2"/>
+  <text x="40" y="45" font-family="'Courier New', monospace" font-size="10.5" font-weight="bold" fill="#72efdd" letter-spacing="1">STATE CRIME LABORATORY // DIGITAL FORENSICS UNIT</text>
+  <text x="40" y="58" font-family="'Courier New', monospace" font-size="8.5" fill="#94a3b8">TECHNICAL REPORT DFU-REP-2026-042  |  STREAM AUTHENTICATION AUDIT</text>
+  
+  <!-- Case Metadata -->
+  <rect x="25" y="80" width="450" height="52" fill="#f8fafc" stroke="#e2e8f0" stroke-width="1"/>
+  <text x="35" y="96" font-family="monospace" font-size="8.5" fill="#334155"><tspan font-weight="bold">TARGET ASSET:</tspan> CCTV DVR Drive #02 (CAM-04 Server Room B-04)</text>
+  <text x="35" y="110" font-family="monospace" font-size="8.5" fill="#334155"><tspan font-weight="bold">CASE FILE:</tspan> #CC-2026-0814  |  <tspan font-weight="bold">EXAMINER:</tspan> Specialist Elena Rostova (DFU #44)</text>
+  <text x="35" y="124" font-family="monospace" font-size="8.5" fill="#334155"><tspan font-weight="bold">METHODOLOGY:</tspan> H.264 PTS/DTS Jitter Analysis &amp; Frame Header Extraction</text>
+  
+  <!-- Section 1 -->
+  <text x="25" y="152" font-family="'Courier New', monospace" font-size="10.5" font-weight="bold" fill="#0f172a">1. MULTIPLEXER FRAME DISCONTINUITY SUMMARY</text>
+  <line x1="25" y1="158" x2="475" y2="158" stroke="#0f172a" stroke-width="1"/>
+  
+  <rect x="25" y="166" width="450" height="95" fill="#f8fafc" stroke="#e2e8f0" stroke-width="1" rx="2"/>
+  <text x="35" y="185" font-family="monospace" font-size="8.5" fill="#334155">Forensic inspection of recorded surveillance stream from Camera 04 (Server Rack B-04)</text>
+  <text x="35" y="202" font-family="monospace" font-size="8.5" fill="#334155">identified an intentional frame-insertion anomaly at timestamp <tspan font-weight="bold" fill="#0f172a">03:14:20.104 UTC</tspan>.</text>
+  <text x="35" y="224" font-family="monospace" font-size="8.5" fill="#334155">Presentation timestamps (PTS) exhibited non-monotonic sequence jumps, indicating</text>
+  <text x="35" y="241" font-family="monospace" font-size="8.5" fill="#334155">that 25 live video frames were excised and substituted with a stationary background freeze.</text>
+  
+  <!-- Section 2: Technical Breakdown Box -->
+  <text x="25" y="275" font-family="'Courier New', monospace" font-size="10.5" font-weight="bold" fill="#0f172a">2. DISPLACED FRAME SIGNATURE RECOVERY</text>
+  <line x1="25" y1="281" x2="475" y2="281" stroke="#0f172a" stroke-width="1"/>
+  
+  <rect x="25" y="290" width="450" height="150" fill="#f1f5f9" stroke="#cbd5e1" stroke-width="1" rx="3"/>
+  
+  <text x="40" y="312" font-family="monospace" font-size="8.5" fill="#475569">EXCISED SEGMENT RANGE:</text>
+  <text x="220" y="312" font-family="monospace" font-size="8.5" font-weight="bold" fill="#0f172a">03:14:20.104 - 03:14:44.892 UTC</text>
+  
+  <text x="40" y="332" font-family="monospace" font-size="8.5" fill="#475569">INJECTION HARDWARE OFFSET:</text>
+  <text x="220" y="332" font-family="monospace" font-size="8.5" font-weight="bold" fill="#0f172a">0x24F008 [BUS TAP BRIDGE]</text>
+  
+  <text x="40" y="352" font-family="monospace" font-size="8.5" fill="#475569">SPLICED FRAME COUNT:</text>
+  <text x="220" y="352" font-family="monospace" font-size="8.5" font-weight="bold" fill="#0f172a">25 RAW CONTAINER SLICES</text>
+  
+  <!-- Embedded Canonical Key Row -->
+  <rect x="35" y="365" width="430" height="32" fill="#eff6ff" stroke="#93c5fd" stroke-width="1.2" rx="2"/>
+  <text x="45" y="385" font-family="monospace" font-size="9" font-weight="bold" fill="#1e3a8a">DISPLACED FRAME MARKER:</text>
+  <text x="220" y="385" font-family="monospace" font-size="10.5" font-weight="bold" fill="#0284c7" letter-spacing="0.5">FRAME-SHIFT-246</text>
+  
+  <text x="40" y="420" font-family="monospace" font-size="8.5" fill="#475569">STREAM PARITY HASH:</text>
+  <text x="220" y="420" font-family="monospace" font-size="8" fill="#64748b">SHA256: e8b417c802f09918cba4772</text>
+  
+  <!-- Section 3: Forensic Conclusion -->
+  <text x="25" y="465" font-family="'Courier New', monospace" font-size="10.5" font-weight="bold" fill="#0f172a">3. INVESTIGATIVE CONCLUSION</text>
+  <line x1="25" y1="471" x2="475" y2="471" stroke="#0f172a" stroke-width="1"/>
+  
+  <rect x="25" y="480" width="450" height="105" fill="#f8fafc" stroke="#e2e8f0" stroke-width="1" rx="2"/>
+  <text x="35" y="500" font-family="monospace" font-size="8.5" fill="#334155">1. The physical hardware tap recovered from Rack B-04 (Evidence #EV-8820-B) intercepted camera feed.</text>
+  <text x="35" y="522" font-family="monospace" font-size="8.5" fill="#334155">2. The raw frame marker <tspan font-weight="bold" fill="#0284c7">FRAME-SHIFT-246</tspan> represents the cryptographic insertion index</text>
+  <text x="50" y="538" font-family="monospace" font-size="8.5" fill="#334155">preserved in the multiplexer container headers at the moment of timeline displacement.</text>
+  <text x="35" y="562" font-family="monospace" font-size="8.5" fill="#334155">3. Recovered frame marker is authenticated and submitted for central case verification.</text>
+  
+  <!-- Sign-off -->
+  <line x1="25" y1="595" x2="475" y2="595" stroke="#cbd5e1" stroke-width="1"/>
+  <text x="25" y="612" font-family="monospace" font-size="8" fill="#64748b">AUTHENTICATED BY: E. Rostova, Lead Video Forensics Examiner</text>
+  <text x="360" y="612" font-family="monospace" font-size="8" fill="#64748b">STATUS: VERIFIED</text>
+</svg>

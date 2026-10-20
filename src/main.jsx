@@ -1,4 +1,4 @@
-import { StrictMode, useCallback, useEffect, useRef, useState } from 'react';
+import { StrictMode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import './styles.css';
 import { formatUpdatedAgo, useVisibleClock, useVisiblePolling } from './useVisiblePolling.js';
@@ -1258,18 +1258,18 @@ function InvestigationGame({ onBack, onLogout }) {
                   <h3>Submit Discovered Answer</h3>
                   <p>
                     {state.session?.stage === 4
-                      ? 'Enter the final neutralization flag in CC{...} format.'
+                      ? 'Enter the final discovered keyword from the illuminated vault stream.'
                       : 'Enter the exact identifier or key discovered in the inspected resource.'}
                   </p>
 
                   <label className="cc-investigation-field">
-                    <span>{state.session?.stage === 4 ? 'FLAG' : 'ANSWER KEY'}</span>
+                    <span>{state.session?.stage === 4 ? 'SECRET KEYWORD' : 'ANSWER KEY'}</span>
                     <input
                       required
                       value={answer}
                       disabled={submitting || !isRoundTwoRunning}
                       onChange={(e) => setAnswer(e.target.value)}
-                      placeholder={state.session?.stage === 4 ? 'CC{...}' : 'Enter answer…'}
+                      placeholder={state.session?.stage === 4 ? 'Enter discovered keyword…' : 'Enter answer…'}
                     />
                   </label>
 
@@ -1352,6 +1352,1178 @@ function InvestigationGame({ onBack, onLogout }) {
   );
 }
 
+const FORENSIC_EVIDENCE_ITEMS = [
+  {
+    id: 'exhibit-01',
+    exhibit: 'EXHIBIT 01',
+    category: 'Timeline Dossier',
+    group: 'documents',
+    title: 'Campus Incident Timeline',
+    caption: 'Incident Ref #CC-2026-0814 Operational Timeline (UTC)',
+    image: '/assets/forensic/doc-incident-timeline.svg',
+    type: 'document',
+    width: 245,
+    minHeight: 290,
+    xPercent: 2.5,
+    yPercent: 3,
+    rotation: -1.5,
+    zIndex: 2,
+    badgeColor: '#0ea5e9',
+    description: 'Official IT Security Incident Dossier outlining the chronological sequence of events, network alert triggers, and identified timeline discrepancies between Door B-04 and CCTV CAM-04.',
+    details: [
+      { label: 'Incident Ref', value: '#CC-2026-0814' },
+      { label: 'Date / Time', value: '2026-08-14 02:58 - 03:17 UTC' },
+      { label: 'Location', value: 'Building C (Computing), Room B-04' },
+      { label: 'Timeline Anomaly', value: '03:14:38 UTC CAM-04 recording shows empty aisle despite 03:14:02 network intrusion alert and 03:09:40 door unlock.' },
+    ],
+  },
+  {
+    id: 'exhibit-02',
+    exhibit: 'EXHIBIT 02',
+    category: 'CCTV Surveillance',
+    group: 'photos',
+    title: 'CAM-04 Server Room Capture',
+    caption: 'Fisheye Still // Server Rack B-04 // 03:14:38 UTC',
+    image: '/assets/forensic/cctv-server-rack.jpg',
+    type: 'photo',
+    width: 225,
+    minHeight: 185,
+    xPercent: 26,
+    yPercent: 3.5,
+    rotation: 2.2,
+    zIndex: 4,
+    tape: 'top-left',
+    badgeColor: '#ef4444',
+    description: 'Surveillance frame captured from CCTV Camera 04 overlooking Server Rack B-04 at 03:14:38 UTC. The aisle appears motionless despite high-volume ingress traffic.',
+    details: [
+      { label: 'Camera ID', value: 'CAM-04 (IP-10.14.88.24)' },
+      { label: 'Recorded Timestamp', value: '2026-08-14 03:14:38.000 UTC' },
+      { label: 'Field of View', value: 'Server Room B-04, Rack Aisle A & B' },
+      { label: 'Examiner Note', value: 'Visual stream appears static; zero frame jitter detected in live feed, indicating synthetic freeze.' },
+    ],
+  },
+  {
+    id: 'exhibit-03',
+    exhibit: 'EXHIBIT 03',
+    category: 'CCTV Surveillance',
+    group: 'photos',
+    title: 'CAM-02 Corridor Capture',
+    caption: 'Monochrome Still // North Corridor Outside Door B-04',
+    image: '/assets/forensic/cctv-corridor.jpg',
+    type: 'photo',
+    width: 220,
+    minHeight: 180,
+    xPercent: 49.5,
+    yPercent: 3,
+    rotation: -2.8,
+    zIndex: 3,
+    tape: 'top-right',
+    badgeColor: '#ef4444',
+    description: 'Black-and-white infrared surveillance capture from hallway camera CAM-02 showing motion blur outside Door B-04 at 03:14:15 UTC.',
+    details: [
+      { label: 'Camera ID', value: 'CAM-02 (IP-10.14.88.22)' },
+      { label: 'Recorded Timestamp', value: '2026-08-14 03:14:15.820 UTC' },
+      { label: 'Sensor Trigger', value: 'Passive Infrared Motion Detector #12' },
+      { label: 'Observation', value: 'Shadowed silhouette entering doorway threshold at 03:14:16 UTC.' },
+    ],
+  },
+  {
+    id: 'exhibit-04',
+    exhibit: 'EXHIBIT 04',
+    category: 'Access Control',
+    group: 'documents',
+    title: 'Door B-04 Access Reader Log',
+    caption: 'Reader CC-RD-04 Audit Export // Sub-Basement B-04',
+    image: '/assets/forensic/doc-access-logs.svg',
+    type: 'document',
+    width: 240,
+    minHeight: 280,
+    xPercent: 73,
+    yPercent: 3.5,
+    rotation: 1.4,
+    zIndex: 5,
+    badgeColor: '#38bdf8',
+    description: 'Door reader transaction log for Sub-Basement Room B-04 showing badge swipe events and magnetic door reed switch states.',
+    details: [
+      { label: 'Door Controller', value: 'CC-RD-04 (Firmware v4.19-SEC)' },
+      { label: 'Suspicious Swipe', value: '03:09:40 UTC - Badge #FAC-9412 (Contract HVAC)' },
+      { label: 'Reed Switch Alert', value: '03:14:18 UTC - ALERT: DOOR PROPPED' },
+      { label: 'Door Secured', value: '03:16:50 UTC - NORMAL: CLOSED' },
+    ],
+  },
+  {
+    id: 'exhibit-05',
+    exhibit: 'EXHIBIT 05',
+    category: 'Network Telemetry',
+    group: 'documents',
+    title: 'Gateway Flow Telemetry',
+    caption: 'Pflow Flow Capture // GATEWAY-ALPHA (10.14.0.1)',
+    image: '/assets/forensic/doc-network-flow.svg',
+    type: 'document',
+    width: 245,
+    minHeight: 260,
+    xPercent: 74,
+    yPercent: 36,
+    rotation: -1.2,
+    zIndex: 2,
+    badgeColor: '#10b981',
+    description: 'Packet flow telemetry report from border gateway router showing anomalous high-bandwidth bridge flow FL-88192 on TCP/8443.',
+    details: [
+      { label: 'Host Router', value: 'GATEWAY-ALPHA (10.14.0.1)' },
+      { label: 'Flagged Flow', value: 'FL-88192* [10.14.99.12:8443 -> 10.14.0.1:8443]' },
+      { label: 'Payload Vol', value: '42,881 packets / 64.2 MB' },
+      { label: 'Decoy Signature', value: 'FLOW-TOKEN-991 (Session Decoy Marker)' },
+    ],
+  },
+  {
+    id: 'exhibit-06',
+    exhibit: 'EXHIBIT 06',
+    category: 'Digital Forensics Unit',
+    group: 'documents',
+    title: 'DFU Video Authentication Report',
+    caption: 'Technical Report DFU-REP-2026-042 // State Crime Laboratory',
+    image: '/assets/forensic/doc-forensic-report.svg',
+    type: 'document',
+    width: 265,
+    minHeight: 330,
+    xPercent: 46,
+    yPercent: 26,
+    rotation: -0.6,
+    zIndex: 7,
+    tape: 'top',
+    badgeColor: '#f59e0b',
+    description: 'Digital Forensics Unit (DFU) Technical Report DFU-REP-2026-042 by Specialist Elena Rostova. Documents the forensic recovery of the displaced video frame sequence and cryptographic container marker.',
+    details: [
+      { label: 'Report Ref', value: 'DFU-REP-2026-042' },
+      { label: 'Investigator', value: 'Specialist Elena Rostova (DFU #44)' },
+      { label: 'Target Asset', value: 'CCTV DVR Drive #02 (CAM-04 Server Room B-04)' },
+      { label: 'Excised Range', value: '03:14:20.104 - 03:14:44.892 UTC (25 frames substituted)' },
+      { label: 'Injection Offset', value: '0x24F008 [BUS TAP BRIDGE]' },
+      { label: 'Displaced Frame Marker', value: 'Recorded in report vector header and forensic findings' },
+      { label: 'Status', value: 'AUTHENTICATED // SUBMITTED TO INCIDENT DOSSIER' },
+    ],
+  },
+  {
+    id: 'exhibit-07',
+    exhibit: 'EXHIBIT 07',
+    category: 'Physical Evidence',
+    group: 'physical',
+    title: 'Hardware Ethernet Tap Splicer',
+    caption: 'Evidence #EV-8820-B // In-Line Network Tap',
+    image: '/assets/forensic/hardware-network-tap.jpg',
+    type: 'photo',
+    width: 215,
+    minHeight: 185,
+    xPercent: 2,
+    yPercent: 37,
+    rotation: 3.1,
+    zIndex: 3,
+    tape: 'top-left',
+    badgeColor: '#eab308',
+    description: 'Seized physical hardware Ethernet tap device found spliced into switch port G1/0/4 inside Server Rack B-04. Provided clandestine packet capture and video injection bus bridge.',
+    details: [
+      { label: 'Evidence Item', value: 'EV-8820-B (Sealed Plastic Forensic Bag)' },
+      { label: 'Recovery Site', value: 'Server Rack B-04, Switch #04, Port G1/0/4' },
+      { label: 'Device Specs', value: 'Dual RJ45 Passthrough with Micro-FPGA Tap Controller' },
+      { label: 'Forensic Hash', value: 'SHA-1: 9c2b4e81a073f1d4' },
+    ],
+  },
+  {
+    id: 'exhibit-08',
+    exhibit: 'EXHIBIT 08',
+    category: 'Physical Evidence',
+    group: 'physical',
+    title: 'Tampered Switch Chassis',
+    caption: 'Evidence #EV-8820-E // Breached Switch Enclosure',
+    image: '/assets/forensic/hardware-tamper-switch.jpg',
+    type: 'photo',
+    width: 220,
+    minHeight: 195,
+    xPercent: 24,
+    yPercent: 35,
+    rotation: -2.1,
+    zIndex: 4,
+    badgeColor: '#eab308',
+    description: 'Cisco Catalyst switch chassis with security tamper tape sliced and jumper wire leads installed onto the motherboard diagnostic serial header.',
+    details: [
+      { label: 'Hardware Model', value: 'Catalyst 3850 48-Port PoE+' },
+      { label: 'Tamper Marker', value: 'Evidence Marker #4 placed at jumper tap point' },
+      { label: 'Inspection Note', value: 'Serial console bridge allowed root shell execution without radius credential logging.' },
+    ],
+  },
+  {
+    id: 'exhibit-09',
+    exhibit: 'EXHIBIT 09',
+    category: 'Physical Evidence',
+    group: 'physical',
+    title: 'Seized Cloned RFID Keycard',
+    caption: 'Evidence #EV-8820-C // Cloned Facility Card',
+    image: '/assets/forensic/smartcard-badge-bag.jpg',
+    type: 'photo',
+    width: 210,
+    minHeight: 190,
+    xPercent: 51,
+    yPercent: 65,
+    rotation: 2.6,
+    zIndex: 4,
+    tape: 'top-right',
+    badgeColor: '#eab308',
+    description: 'Sealed evidence bag containing blank white 13.56 MHz RFID smartcard cloned with credentials of Facilities contractor badge #FAC-9412.',
+    details: [
+      { label: 'Evidence Item', value: 'EV-8820-C' },
+      { label: 'RFID UID', value: '04:A2:81:F2:90:3B:80' },
+      { label: 'Cloned Persona', value: 'HVAC Maint / Badge #FAC-9412' },
+      { label: 'Recovery Site', value: 'Basement Fire Stairwell Landing B2' },
+    ],
+  },
+  {
+    id: 'exhibit-10',
+    exhibit: 'EXHIBIT 10',
+    category: 'Witness Statement',
+    group: 'documents',
+    title: 'Officer Vance Witness Statement',
+    caption: 'DPS Form DPS-WT-01 // Recorded Testimony Excerpt',
+    image: '/assets/forensic/doc-officer-statement.svg',
+    type: 'document',
+    width: 240,
+    minHeight: 270,
+    xPercent: 74,
+    yPercent: 66,
+    rotation: -1.8,
+    zIndex: 3,
+    badgeColor: '#a855f7',
+    description: 'Official recorded witness testimony of Security Officer Marcus Vance (Badge #408) detailing the visual video glitch on CAM-04 at 03:14 UTC.',
+    details: [
+      { label: 'Declarant', value: 'Security Officer Marcus Vance (Badge #408)' },
+      { label: 'Interviewer', value: 'Det. R. Cross (Badge #812)' },
+      { label: 'Testimony Core', value: 'Saw Camera 04 hitch and freeze momentarily at 03:14 UTC; room appeared still despite door propped alarm.' },
+      { label: 'Follow-up Action', value: 'Corroborates PTS jitter and points directly to DFU Video Report DFU-REP-2026-042.' },
+    ],
+  },
+  {
+    id: 'exhibit-11',
+    exhibit: 'EXHIBIT 11',
+    category: 'Investigator Notes',
+    group: 'documents',
+    title: 'Det. Cross Case Notebook',
+    caption: 'Yellow Legal Pad // Case #CC-2026-0814 Notes',
+    image: '/assets/forensic/doc-investigator-notes.svg',
+    type: 'document',
+    width: 245,
+    minHeight: 290,
+    xPercent: 3,
+    yPercent: 65,
+    rotation: 1.8,
+    zIndex: 5,
+    badgeColor: '#eab308',
+    description: 'Handwritten working notes of Detective R. Cross highlighting timeline contradictions between CAM-04 video and badge door logs, explicitly directing attention to Report DFU-REP-2026-042.',
+    details: [
+      { label: 'Investigator', value: 'Det. R. Cross (Evidence Division)' },
+      { label: 'Key Note 1', value: 'Contradiction: Badge #FAC-9412 entered at 03:09, network peaked at 03:14, but CCTV shows empty room!' },
+      { label: 'Key Note 2', value: 'Video was spliced/frozen. Sent raw DVR to Specialist Rostova.' },
+      { label: 'Crucial Directive', value: 'See Report DFU-REP-2026-042 for the displaced container frame marker!' },
+    ],
+  },
+  {
+    id: 'exhibit-12',
+    exhibit: 'EXHIBIT 12',
+    category: 'Evidence Inventory',
+    group: 'documents',
+    title: 'Chain of Custody Register',
+    caption: 'Master Repository Log // Vault-B Seizure Ledger',
+    image: '/assets/forensic/doc-evidence-inventory.svg',
+    type: 'document',
+    width: 240,
+    minHeight: 270,
+    xPercent: 27,
+    yPercent: 64,
+    rotation: -1.6,
+    zIndex: 4,
+    badgeColor: '#64748b',
+    description: 'Official police chain of custody register cataloging all physical and digital evidence seized during the Building C investigation.',
+    details: [
+      { label: 'Registry Ref', value: 'VAULT-B / #CC-2026-0814' },
+      { label: 'EV-8820-A', value: 'CCTV DVR Hard Drive #02 -> Transferred to DFU LAB' },
+      { label: 'EV-8820-B', value: 'Hardware Ethernet Tap & Splicer -> Vault Lock' },
+      { label: 'EV-8820-C', value: 'Cloned RFID Access Keycard -> Vault Lock' },
+    ],
+  },
+  {
+    id: 'exhibit-13',
+    exhibit: 'EXHIBIT 13',
+    category: 'Site Blueprint',
+    group: 'documents',
+    title: 'Sub-Basement Floorplan & Coverage',
+    caption: 'Building C Level 2 Blueprint // Sensor & Camera Topology',
+    image: '/assets/forensic/doc-floorplan-topology.svg',
+    type: 'document',
+    width: 255,
+    minHeight: 255,
+    xPercent: 25,
+    yPercent: 6,
+    rotation: 1.1,
+    zIndex: 1,
+    badgeColor: '#0284c7',
+    description: 'Sub-basement architectural blueprint showing physical camera angles, coverage cones for CAM-02 and CAM-04, server rack layouts, and door sensor locations.',
+    details: [
+      { label: 'Floor Level', value: 'Building C Sub-Basement (Level -2)' },
+      { label: 'Room Target', value: 'Room B-04 (Core Academic Relay Hub)' },
+      { label: 'Blind Spots', value: 'CAM-04 aisle cone partially obstructed by Rack B-03 cabling riser.' },
+    ],
+  },
+];
+
+function ForensicEvidenceDesk({ data }) {
+  const [activeItem, setActiveItem] = useState(null);
+  const [filterGroup, setFilterGroup] = useState('all');
+  const [viewMode, setViewMode] = useState('desk'); // 'desk' | 'grid'
+  const [imageZoomed, setImageZoomed] = useState(false);
+
+  // Extract server-provided plate token if present in authorized data payload
+  const serverPlateToken = useMemo(() => {
+    const match = data?.html?.match(/<div class="cc-concealed-plate"[^>]*>([\s\S]*?)<\/div>/i);
+    return match ? match[1].trim() : '';
+  }, [data]);
+
+  const filteredItems = useMemo(() => {
+    if (filterGroup === 'all') return FORENSIC_EVIDENCE_ITEMS;
+    return FORENSIC_EVIDENCE_ITEMS.filter((it) => it.group === filterGroup);
+  }, [filterGroup]);
+
+  // Keyboard navigation when modal is open
+  useEffect(() => {
+    if (!activeItem) return;
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        setActiveItem(null);
+        setImageZoomed(false);
+      } else if (e.key === 'ArrowLeft') {
+        e.preventDefault();
+        const currentIndex = FORENSIC_EVIDENCE_ITEMS.findIndex((it) => it.id === activeItem.id);
+        const prevIndex = (currentIndex - 1 + FORENSIC_EVIDENCE_ITEMS.length) % FORENSIC_EVIDENCE_ITEMS.length;
+        setActiveItem(FORENSIC_EVIDENCE_ITEMS[prevIndex]);
+        setImageZoomed(false);
+      } else if (e.key === 'ArrowRight') {
+        e.preventDefault();
+        const currentIndex = FORENSIC_EVIDENCE_ITEMS.findIndex((it) => it.id === activeItem.id);
+        const nextIndex = (currentIndex + 1) % FORENSIC_EVIDENCE_ITEMS.length;
+        setActiveItem(FORENSIC_EVIDENCE_ITEMS[nextIndex]);
+        setImageZoomed(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [activeItem]);
+
+  const navigateItem = (direction) => {
+    if (!activeItem) return;
+    const currentIndex = FORENSIC_EVIDENCE_ITEMS.findIndex((it) => it.id === activeItem.id);
+    const newIndex = direction === 'next'
+      ? (currentIndex + 1) % FORENSIC_EVIDENCE_ITEMS.length
+      : (currentIndex - 1 + FORENSIC_EVIDENCE_ITEMS.length) % FORENSIC_EVIDENCE_ITEMS.length;
+    setActiveItem(FORENSIC_EVIDENCE_ITEMS[newIndex]);
+    setImageZoomed(false);
+  };
+
+  return (
+    <div className="mock-resource-container">
+      <p className="product-eyebrow">CAMPUS IT SECURITY ADVISORY // SEC-ADVISORY-88</p>
+      <h1>Forensic Evidence Investigation Board</h1>
+
+      <div className="cc-riddle-quote">
+        <p>
+          "The incident was recorded, yet the timeline tells a different story. One witness saw the event, but its record does not quite align. Compare what the cameras captured with what the system recorded. Find the report that explains the displaced frame, and recover the identifier buried in its details."
+        </p>
+      </div>
+
+      <p style={{ color: '#a3a3ad', lineHeight: 1.6 }}>
+        Photographs, surveillance captures, telemetry traces, and classified documents from the campus relay incident have been compiled onto the forensic analysis desk.
+        Examine and cross-reference the evidence documents. Compare the surveillance camera feeds with access logs and forensic notes to uncover the displaced frame report.
+      </p>
+
+      <div className="cc-evidence-board-wrapper">
+        {/* Evidence Desk Toolbar */}
+        <div className="cc-evidence-desk-toolbar">
+          <div className="cc-desk-status">
+            <span className="cc-desk-status-pill">FORENSIC DESK ACTIVE</span>
+            <span>13 Exhibits Cataloged</span>
+          </div>
+
+          {/* Filter Pills */}
+          <div className="cc-desk-filters" role="group" aria-label="Filter exhibits by category">
+            <button
+              type="button"
+              className={`cc-filter-pill ${filterGroup === 'all' ? 'cc-filter-pill--active' : ''}`}
+              onClick={() => setFilterGroup('all')}
+            >
+              All Exhibits (13)
+            </button>
+            <button
+              type="button"
+              className={`cc-filter-pill ${filterGroup === 'documents' ? 'cc-filter-pill--active' : ''}`}
+              onClick={() => setFilterGroup('documents')}
+            >
+              Reports & Logs (6)
+            </button>
+            <button
+              type="button"
+              className={`cc-filter-pill ${filterGroup === 'photos' ? 'cc-filter-pill--active' : ''}`}
+              onClick={() => setFilterGroup('photos')}
+            >
+              Surveillance Stills (2)
+            </button>
+            <button
+              type="button"
+              className={`cc-filter-pill ${filterGroup === 'physical' ? 'cc-filter-pill--active' : ''}`}
+              onClick={() => setFilterGroup('physical')}
+            >
+              Physical Seizures (3)
+            </button>
+          </div>
+
+          {/* View Mode Toggle */}
+          <div className="cc-desk-view-toggle">
+            <button
+              type="button"
+              className={`cc-view-btn ${viewMode === 'desk' ? 'cc-view-btn--active' : ''}`}
+              onClick={() => setViewMode('desk')}
+              title="View evidence desk canvas"
+            >
+              Desk Canvas
+            </button>
+            <button
+              type="button"
+              className={`cc-view-btn ${viewMode === 'grid' ? 'cc-view-btn--active' : ''}`}
+              onClick={() => setViewMode('grid')}
+              title="View evidence gallery list"
+            >
+              Gallery Grid
+            </button>
+          </div>
+        </div>
+
+        <div className="cc-desk-tip-banner">
+          <span>[DIGITAL FORENSIC DESK]: Click or press Enter on any exhibit to open high-resolution report inspection. Use ← / → to cycle between evidence files.</span>
+        </div>
+
+        {/* View 1: Naturally Scattered Desk Canvas */}
+        {viewMode === 'desk' ? (
+          <div className="cc-evidence-desk-viewport">
+            <div className="cc-evidence-desk-static" id="evidence-board">
+              {filteredItems.map((item) => (
+                <div
+                  key={item.id}
+                  className={`cc-forensic-card cc-forensic-card--${item.type}`}
+                  style={{
+                    left: `${item.xPercent}%`,
+                    top: `${item.yPercent}%`,
+                    width: `${item.width}px`,
+                    minHeight: `${item.minHeight}px`,
+                    zIndex: item.zIndex,
+                    transform: `rotate(${item.rotation}deg)`,
+                  }}
+                  tabIndex={0}
+                  role="button"
+                  aria-haspopup="dialog"
+                  aria-label={`Inspect ${item.exhibit}: ${item.title}`}
+                  onClick={() => setActiveItem(item)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      setActiveItem(item);
+                    }
+                  }}
+                >
+                  {item.tape && <div className={`cc-photo-tape cc-photo-tape--${item.tape}`} />}
+
+                  <div className="cc-card-header">
+                    <span className="cc-card-badge" style={{ backgroundColor: `${item.badgeColor}22`, color: item.badgeColor, borderColor: `${item.badgeColor}55` }}>
+                      {item.exhibit}
+                    </span>
+                    <span className="cc-card-category">{item.category}</span>
+                  </div>
+
+                  <div className="cc-card-media">
+                    <img src={item.image} alt={item.title} loading="lazy" />
+                    <div className="cc-card-hover-overlay">
+                      <span>Click to Inspect Report ↗</span>
+                    </div>
+                  </div>
+
+                  <div className="cc-card-footer">
+                    <strong className="cc-card-title">{item.title}</strong>
+                    <span className="cc-card-caption">{item.caption}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : (
+          /* View 2: Responsive Dossier Gallery Grid */
+          <div className="cc-evidence-grid">
+            {filteredItems.map((item) => (
+              <div
+                key={item.id}
+                className="cc-evidence-grid-item"
+                tabIndex={0}
+                role="button"
+                aria-haspopup="dialog"
+                aria-label={`Inspect ${item.exhibit}: ${item.title}`}
+                onClick={() => setActiveItem(item)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    setActiveItem(item);
+                  }
+                }}
+              >
+                <div className="cc-grid-item-media">
+                  <img src={item.image} alt={item.title} loading="lazy" />
+                  <span className="cc-card-badge" style={{ backgroundColor: `${item.badgeColor}22`, color: item.badgeColor, borderColor: `${item.badgeColor}55` }}>
+                    {item.exhibit}
+                  </span>
+                </div>
+                <div className="cc-grid-item-body">
+                  <span className="cc-grid-item-category">{item.category}</span>
+                  <h3 className="cc-grid-item-title">{item.title}</h3>
+                  <p className="cc-grid-item-desc">{item.description}</p>
+                  <button type="button" className="product-btn product-btn--small product-btn--light">
+                    Examine Evidence ↗
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Forensic Inspection Modal Overlay */}
+      {activeItem && (
+        <div
+          className="cc-forensic-modal-backdrop"
+          onClick={() => {
+            setActiveItem(null);
+            setImageZoomed(false);
+          }}
+          role="presentation"
+        >
+          <div
+            className="cc-forensic-modal-dialog"
+            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="cc-modal-title"
+          >
+            {/* Modal Header */}
+            <div className="cc-forensic-modal-header">
+              <div className="cc-modal-title-group">
+                <span
+                  className="cc-card-badge"
+                  style={{
+                    backgroundColor: `${activeItem.badgeColor}25`,
+                    color: activeItem.badgeColor,
+                    borderColor: `${activeItem.badgeColor}66`,
+                  }}
+                >
+                  {activeItem.exhibit}
+                </span>
+                <span className="cc-modal-category">{activeItem.category}</span>
+                <h2 id="cc-modal-title" className="cc-modal-title">{activeItem.title}</h2>
+              </div>
+              <div className="cc-modal-actions">
+                <button
+                  type="button"
+                  className="cc-modal-zoom-btn"
+                  onClick={() => setImageZoomed((z) => !z)}
+                  title={imageZoomed ? 'Reset document view' : 'Zoom document'}
+                >
+                  {imageZoomed ? 'Fit View' : 'Zoom 100%'}
+                </button>
+                <button
+                  type="button"
+                  className="cc-modal-close-btn"
+                  onClick={() => {
+                    setActiveItem(null);
+                    setImageZoomed(false);
+                  }}
+                  aria-label="Close evidence inspection"
+                >
+                  ✕ Close [Esc]
+                </button>
+              </div>
+            </div>
+
+            {/* Modal Body */}
+            <div className="cc-forensic-modal-body">
+              {/* Document / Photo Viewer */}
+              <div className={`cc-modal-doc-viewer ${imageZoomed ? 'cc-modal-doc-viewer--zoomed' : ''}`}>
+                <div className="cc-modal-image-wrapper">
+                  <img
+                    src={activeItem.image}
+                    alt={activeItem.title}
+                    className="cc-modal-doc-image"
+                    onClick={() => setImageZoomed((z) => !z)}
+                    title={imageZoomed ? 'Click to fit view' : 'Click to zoom 100%'}
+                    style={{ cursor: imageZoomed ? 'zoom-out' : 'zoom-in' }}
+                  />
+                </div>
+              </div>
+
+              {/* Forensic Details Sidebar */}
+              <div className="cc-modal-dossier-panel">
+                <div className="cc-dossier-header">
+                  <span className="cc-dossier-eyebrow">FORENSIC AUDIT DOSSIER</span>
+                  <h3>Investigative Findings</h3>
+                </div>
+
+                <p className="cc-dossier-desc">{activeItem.description}</p>
+
+                <div className="cc-dossier-metadata-table">
+                  <h4>Exhibit Metadata & Technical Attributes</h4>
+                  {activeItem.details.map((row, idx) => (
+                    <div key={idx} className="cc-dossier-meta-row">
+                      <span className="cc-meta-label">{row.label}</span>
+                      <span className="cc-meta-value">{row.value}</span>
+                    </div>
+                  ))}
+                  {/* If Exhibit 06 and server plate token available, surface token row cleanly */}
+                  {activeItem.id === 'exhibit-06' && serverPlateToken && (
+                    <div className="cc-dossier-meta-row cc-dossier-meta-row--highlight">
+                      <span className="cc-meta-label">Recovered Marker</span>
+                      <span className="cc-meta-value cc-meta-token">{serverPlateToken}</span>
+                    </div>
+                  )}
+                </div>
+
+                <div className="cc-dossier-tip">
+                  <strong>Investigator Cross-Reference:</strong>
+                  <span> All document text is rendered crisply in vector format above. Verify timestamps against the operational incident timeline and witness testimony.</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Modal Footer Navigation */}
+            <div className="cc-forensic-modal-footer">
+              <button
+                type="button"
+                className="product-btn product-btn--small product-btn--light"
+                onClick={() => navigateItem('prev')}
+              >
+                ← Previous Exhibit
+              </button>
+              <span className="cc-modal-counter">
+                Exhibit {FORENSIC_EVIDENCE_ITEMS.findIndex((it) => it.id === activeItem.id) + 1} of {FORENSIC_EVIDENCE_ITEMS.length}
+              </span>
+              <button
+                type="button"
+                className="product-btn product-btn--small product-btn--light"
+                onClick={() => navigateItem('next')}
+              >
+                Next Exhibit →
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div style={{ marginTop: '20px', padding: '14px', background: 'rgba(0, 200, 233, 0.05)', borderLeft: '3px solid var(--club)', fontSize: '13px', color: '#a3a3ad' }}>
+        Tip for investigators: Read the forensic examiner's report on the displaced video stream (DFU-REP-2026-042) to discover the exact raw frame header marker.
+      </div>
+    </div>
+  );
+}
+
+const VAULT_SIGNAL_ARTIFACTS = [
+  {
+    id: 'PKT-801-A',
+    name: 'Frame Alpha // Ingress Header',
+    channel: 'CH-8 (PRIMARY BEACON)',
+    isTargetStream: true,
+    seqIndex: 1,
+    epoch: '03:17:01.120 UTC',
+    parity: 'VERIFIED [ODD-ACK]',
+    isParityValid: true,
+    authHash: 'VALID [HASH-8A1]',
+    fragment: 'UN',
+    marker: 'PRE-01 (INGRESS DELIMITER)',
+    badgeClass: 'cc-badge--beacon',
+    status: 'AUTHENTICATED',
+    analystNotes: 'Initial transmission burst originating from gateway border node. Frame contains unmasked prefix envelope.',
+    hexDump: '45 00 00 3C 1C 46 40 00 40 06 72 3B 0A 0E 00 01 0A 0E 63 0C 55 4E 20 8A',
+  },
+  {
+    id: 'DECOY-301-E',
+    name: 'Echo Reflection // Tamper Loop',
+    channel: 'CH-3 (REPLAY ECHO)',
+    isTargetStream: false,
+    seqIndex: null,
+    epoch: '03:14:18.040 UTC',
+    parity: 'FAILED [PARITY INVERTED]',
+    isParityValid: false,
+    authHash: 'INVALID [REPLAY-MISMATCH]',
+    fragment: 'OR',
+    marker: 'ECHO-GHOST (LOOPBACK REFLECTION)',
+    badgeClass: 'cc-badge--echo',
+    status: 'REPLAY ECHO',
+    analystNotes: 'Reflected packet waveform recorded during the hardware tap installation on switch SW-4. Spurious reflection, not part of primary stream.',
+    hexDump: '45 00 00 24 3A 12 00 00 38 06 1B 94 0A 0E 00 01 0A 0E 00 01 4F 52 00 00',
+  },
+  {
+    id: 'PKT-802-B',
+    name: 'Frame Beta // Core Carrier Burst',
+    channel: 'CH-8 (PRIMARY BEACON)',
+    isTargetStream: true,
+    seqIndex: 2,
+    epoch: '03:17:03.450 UTC',
+    parity: 'VERIFIED [ODD-ACK]',
+    isParityValid: true,
+    authHash: 'VALID [HASH-8A1]',
+    fragment: 'MA',
+    marker: 'MID-02 (CARRIER CONTINUITY)',
+    badgeClass: 'cc-badge--beacon',
+    status: 'AUTHENTICATED',
+    analystNotes: 'Secondary carrier envelope captured prior to isolation trigger. Verified hash parity matching primary broadcast.',
+    hexDump: '45 00 00 40 2B 19 40 00 40 06 63 2E 0A 0E 00 01 0A 0E 63 0C 4D 41 9C 14',
+  },
+  {
+    id: 'NOISE-901-X',
+    name: 'Interference Spike // HVAC RF Glitch',
+    channel: 'CH-1 (NOISE INTERFERENCE)',
+    isTargetStream: false,
+    seqIndex: null,
+    epoch: '03:16:40.220 UTC',
+    parity: 'CORRUPTED [CRC-ERR]',
+    isParityValid: false,
+    authHash: 'NONE [UNAUTHENTICATED]',
+    fragment: 'XX',
+    marker: 'NOISE-BURST (ELECTROMAGNETIC JITTER)',
+    badgeClass: 'cc-badge--noise',
+    status: 'NOISE ARTIFACT',
+    analystNotes: 'Radio-frequency noise burst coinciding with basement HVAC compressor startup. Lacks authentication wrapper.',
+    hexDump: '00 00 FF FF AA BB CC DD 00 11 22 33 44 55 66 77 58 58 EE FF 00 00 12 34',
+  },
+  {
+    id: 'PKT-803-C',
+    name: 'Frame Gamma // Payload Transition',
+    channel: 'CH-8 (PRIMARY BEACON)',
+    isTargetStream: true,
+    seqIndex: 3,
+    epoch: '03:17:05.880 UTC',
+    parity: 'VERIFIED [ODD-ACK]',
+    isParityValid: true,
+    authHash: 'VALID [HASH-8A1]',
+    fragment: 'SK',
+    marker: 'MID-03 (PAYLOAD TRANSITION)',
+    badgeClass: 'cc-badge--beacon',
+    status: 'AUTHENTICATED',
+    analystNotes: 'Tertiary beacon segment transferring internal telemetry across the encrypted socket.',
+    hexDump: '45 00 00 3E 4D 82 40 00 40 06 41 09 0A 0E 00 01 0A 0E 63 0C 53 4B 8B 77',
+  },
+  {
+    id: 'PKT-804-D',
+    name: 'Frame Delta // Terminal Delimiter',
+    channel: 'CH-8 (PRIMARY BEACON)',
+    isTargetStream: true,
+    seqIndex: 4,
+    epoch: '03:17:07.910 UTC',
+    parity: 'VERIFIED [ODD-ACK]',
+    isParityValid: true,
+    authHash: 'VALID [HASH-8A1]',
+    fragment: 'ED',
+    marker: 'FIN-04 (TERMINAL DELIMITER)',
+    badgeClass: 'cc-badge--beacon',
+    status: 'AUTHENTICATED',
+    analystNotes: 'Final termination packet signaling teardown of the rogue bridge. Closes transmission sequence.',
+    hexDump: '45 00 00 38 9F 04 40 00 40 06 1A 7C 0A 0E 00 01 0A 0E 63 0C 45 44 FF 00',
+  },
+];
+
+function VaultSignalReconstruction({ data, onBack }) {
+  const [slots, setSlots] = useState([null, null, null, null]);
+  const [inspectingArtifact, setInspectingArtifact] = useState(null);
+  const [feedback, setFeedback] = useState(null);
+  const [isSolved, setIsSolved] = useState(false);
+
+  const isAssigned = (artifactId) => slots.some((slot) => slot?.id === artifactId);
+
+  const assignToSlot = (artifact, targetIndex = -1) => {
+    setFeedback(null);
+    setIsSolved(false);
+
+    if (isAssigned(artifact.id)) {
+      setSlots((prev) => prev.map((s) => (s?.id === artifact.id ? null : s)));
+      return;
+    }
+
+    setSlots((prev) => {
+      const next = [...prev];
+      if (targetIndex >= 0 && targetIndex < 4) {
+        next[targetIndex] = artifact;
+        return next;
+      }
+      const emptyIdx = next.findIndex((s) => s === null);
+      if (emptyIdx !== -1) {
+        next[emptyIdx] = artifact;
+      } else {
+        setFeedback({
+          type: 'error',
+          message: 'All 4 sequence slots are full. Remove an artifact before adding another.',
+        });
+      }
+      return next;
+    });
+  };
+
+  const removeFromSlot = (slotIdx) => {
+    setFeedback(null);
+    setIsSolved(false);
+    setSlots((prev) => {
+      const next = [...prev];
+      next[slotIdx] = null;
+      return next;
+    });
+  };
+
+  const handleReset = () => {
+    setSlots([null, null, null, null]);
+    setFeedback(null);
+    setIsSolved(false);
+  };
+
+  const handleReconcile = () => {
+    setFeedback(null);
+    setIsSolved(false);
+
+    const filledCount = slots.filter(Boolean).length;
+    if (filledCount < 4) {
+      setFeedback({
+        type: 'error',
+        message: `Matrix Incomplete: 4 packet fragments required. Currently assigned: ${filledCount}/4.`,
+      });
+      return;
+    }
+
+    if (slots.some((s) => s.id === 'DECOY-301-E')) {
+      setFeedback({
+        type: 'error',
+        message: 'Reconciliation Aborted: Replay echo fragment (CH-3) detected in matrix. Filter out loopback reflections.',
+      });
+      return;
+    }
+
+    if (slots.some((s) => s.id === 'NOISE-901-X')) {
+      setFeedback({
+        type: 'error',
+        message: 'Reconciliation Aborted: Parity failure. Unauthenticated RF noise spike (CH-1) detected in matrix.',
+      });
+      return;
+    }
+
+    const isCorrectOrder =
+      slots[0]?.id === 'PKT-801-A' &&
+      slots[1]?.id === 'PKT-802-B' &&
+      slots[2]?.id === 'PKT-803-C' &&
+      slots[3]?.id === 'PKT-804-D';
+
+    if (!isCorrectOrder) {
+      setFeedback({
+        type: 'error',
+        message: 'Sequence Discontinuity: Packets are out of chronological order. Align the authentic CH-8 frames by ascending sequence index (Seq 1 → 4).',
+      });
+      return;
+    }
+
+    setIsSolved(true);
+    setFeedback({
+      type: 'success',
+      message: 'Carrier Lock Established: All 4 authentic beacon frames synchronized successfully across Channel 8!',
+    });
+  };
+
+  return (
+    <div className="cc-vault-reconstruction-container">
+      <div className="cc-vault-header-block">
+        <p className="product-eyebrow">VAULT LEVEL 4 // FINAL TRANSMISSION CONTAINMENT</p>
+        <h1>Core Signal Vault: Signal Reconstruction</h1>
+
+        <div className="cc-vault-riddle-quote">
+          <p>
+            "The vault has kept the truth in fragments, not in a single hiding place. Some records are echoes, some are interruptions, and some belong to a different signal entirely. Restore the sequence that survived the disturbance. When the fragments agree, the word they protect will be yours to name."
+          </p>
+        </div>
+
+        <p style={{ color: '#a3a3ad', lineHeight: '1.6', margin: '0 0 16px' }}>
+          Signal analysis confirms the campus relay intrusion vector has been isolated.
+          6 residual packet fragments were intercepted in the vault buffer during channel containment.
+          Examine the artifacts below, filter out spurious echoes and noise spikes, and reconcile the authentic carrier frames into the alignment matrix in chronological sequence.
+        </p>
+      </div>
+
+      <div className="cc-vault-spec-banner">
+        <div className="cc-vault-spec-item">
+          <span className="cc-vault-spec-title">Target Carrier Stream</span>
+          <span className="cc-vault-spec-value" style={{ color: '#38bdf8' }}>CH-8 (PRIMARY BEACON)</span>
+        </div>
+        <div className="cc-vault-spec-item">
+          <span className="cc-vault-spec-title">Required Parity Check</span>
+          <span className="cc-vault-spec-value" style={{ color: '#10b981' }}>ODD-ACK [PARITY OK]</span>
+        </div>
+        <div className="cc-vault-spec-item">
+          <span className="cc-vault-spec-title">Carrier Checksum</span>
+          <span className="cc-vault-spec-value" style={{ color: '#72efdd' }}>VALID [HASH-8A1]</span>
+        </div>
+        <div className="cc-vault-spec-item">
+          <span className="cc-vault-spec-title">Exclusion Filters</span>
+          <span className="cc-vault-spec-value" style={{ color: '#f87171' }}>DISCARD CH-3 (ECHO) & CH-1 (NOISE)</span>
+        </div>
+      </div>
+
+      <div className="cc-vault-matrix-wrapper">
+        <div className="cc-vault-matrix-header">
+          <h3>Signal Alignment Matrix (4 Sequence Slots)</h3>
+          <span style={{ fontSize: '12px', color: '#64748b', fontFamily: 'var(--font-mono)' }}>
+            Allocated: {slots.filter(Boolean).length} / 4
+          </span>
+        </div>
+
+        <div className="cc-vault-slots-row">
+          {slots.map((item, idx) => (
+            <div key={idx} className={`cc-vault-slot-card ${item ? 'filled' : ''}`}>
+              <span className="cc-vault-slot-index">Slot {idx + 1} // Seq #{idx + 1}</span>
+              {item ? (
+                <>
+                  <button
+                    type="button"
+                    className="cc-vault-slot-remove-btn"
+                    onClick={() => removeFromSlot(idx)}
+                    title="Remove from slot"
+                  >
+                    ✕
+                  </button>
+                  <span className="cc-vault-slot-filled-id">{item.id}</span>
+                  <span className="cc-vault-slot-filled-frag">{item.fragment}</span>
+                  <span style={{ fontSize: '10px', color: item.isTargetStream ? '#38bdf8' : '#f59e0b', fontFamily: 'var(--font-mono)' }}>
+                    {item.channel}
+                  </span>
+                </>
+              ) : (
+                <span className="cc-vault-slot-empty-text">[ Empty Slot ]</span>
+              )}
+            </div>
+          ))}
+        </div>
+
+        <div className="cc-vault-matrix-controls">
+          <button
+            type="button"
+            className="product-btn product-btn--primary"
+            onClick={handleReconcile}
+          >
+            Reconcile Signal Matrix
+          </button>
+          <button
+            type="button"
+            className="product-btn product-btn--small product-btn--light"
+            onClick={handleReset}
+          >
+            Reset Alignment
+          </button>
+        </div>
+
+        {feedback && (
+          <div className={`cc-vault-feedback-box cc-vault-feedback-box--${feedback.type}`}>
+            {feedback.message}
+          </div>
+        )}
+
+        {isSolved && (
+          <div className="cc-vault-reconstructed-output">
+            <span style={{ fontSize: '11px', color: '#10b981', fontFamily: 'var(--font-mono)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
+              ✓ Transmission Reconstructed Across Channel 8
+            </span>
+            <div className="cc-vault-reconstructed-token">
+              UNMASKED
+            </div>
+            <p style={{ margin: '8px 0 12px', fontSize: '13px', color: '#cbd5e1' }}>
+              Enter this keyword into the <strong>Operation Shadow Beacon</strong> answer field on the investigation tab to authorize vault containment.
+            </p>
+            <CopyButton value="UNMASKED" />
+          </div>
+        )}
+      </div>
+
+      <div className="cc-vault-section-heading">
+        <h3>Captured Signal Artifacts Buffer</h3>
+        <span style={{ fontSize: '12px', color: '#64748b', fontFamily: 'var(--font-mono)' }}>
+          Click an artifact to inspect or assign to matrix
+        </span>
+      </div>
+
+      <div className="cc-vault-artifacts-grid">
+        {VAULT_SIGNAL_ARTIFACTS.map((artifact) => {
+          const inMatrix = isAssigned(artifact.id);
+          return (
+            <div
+              key={artifact.id}
+              className={`cc-vault-artifact-card ${inMatrix ? 'selected-in-matrix' : ''}`}
+            >
+              <div className="cc-artifact-card-header">
+                <div>
+                  <span className={`cc-artifact-id-badge ${artifact.badgeClass}`}>
+                    {artifact.id}
+                  </span>
+                  <h4 className="cc-artifact-title" style={{ marginTop: '6px' }}>
+                    {artifact.name}
+                  </h4>
+                </div>
+                {inMatrix && (
+                  <span style={{ fontSize: '10px', color: '#00c8e9', fontFamily: 'var(--font-mono)', fontWeight: 'bold' }}>
+                    [ IN MATRIX ]
+                  </span>
+                )}
+              </div>
+
+              <div className="cc-artifact-meta-list">
+                <div className="cc-artifact-meta-row">
+                  <span className="cc-meta-k">Stream Channel:</span>
+                  <span className="cc-meta-v">{artifact.channel}</span>
+                </div>
+                <div className="cc-artifact-meta-row">
+                  <span className="cc-meta-k">Captured Epoch:</span>
+                  <span className="cc-meta-v">{artifact.epoch}</span>
+                </div>
+                <div className="cc-artifact-meta-row">
+                  <span className="cc-meta-k">Parity Check:</span>
+                  <span className={`cc-meta-v ${artifact.isParityValid ? 'cc-meta-v--valid' : 'cc-meta-v--invalid'}`}>
+                    {artifact.parity}
+                  </span>
+                </div>
+                <div className="cc-artifact-meta-row">
+                  <span className="cc-meta-k">Carrier Auth:</span>
+                  <span className="cc-meta-v">{artifact.authHash}</span>
+                </div>
+              </div>
+
+              <div className="cc-artifact-payload-box">
+                <span className="cc-artifact-frag-label">Payload Fragment</span>
+                <span className="cc-artifact-frag-val">"{artifact.fragment}"</span>
+              </div>
+
+              <div className="cc-artifact-actions">
+                <button
+                  type="button"
+                  className="product-btn product-btn--small product-btn--light"
+                  onClick={() => setInspectingArtifact(artifact)}
+                >
+                  Inspect Packet
+                </button>
+                <button
+                  type="button"
+                  className={`product-btn product-btn--small ${inMatrix ? 'product-btn--danger' : 'product-btn--primary'}`}
+                  onClick={() => assignToSlot(artifact)}
+                >
+                  {inMatrix ? 'Remove from Matrix' : 'Assign to Matrix'}
+                </button>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {inspectingArtifact && (
+        <div className="cc-vault-modal-overlay" onClick={() => setInspectingArtifact(null)}>
+          <div className="cc-vault-modal-card" onClick={(e) => e.stopPropagation()}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px' }}>
+              <div>
+                <span className={`cc-artifact-id-badge ${inspectingArtifact.badgeClass}`}>
+                  {inspectingArtifact.id}
+                </span>
+                <h2 style={{ fontSize: '18px', color: '#fff', margin: '8px 0 2px' }}>
+                  {inspectingArtifact.name}
+                </h2>
+                <span style={{ fontSize: '11px', color: '#72efdd', fontFamily: 'var(--font-mono)' }}>
+                  {inspectingArtifact.marker}
+                </span>
+              </div>
+              <button
+                type="button"
+                className="cc-modal-close-btn"
+                onClick={() => setInspectingArtifact(null)}
+                aria-label="Close packet inspection"
+              >
+                ✕ Close
+              </button>
+            </div>
+
+            <div className="cc-artifact-meta-list" style={{ marginBottom: '16px' }}>
+              <div className="cc-artifact-meta-row">
+                <span className="cc-meta-k">Carrier Channel:</span>
+                <span className="cc-meta-v">{inspectingArtifact.channel}</span>
+              </div>
+              <div className="cc-artifact-meta-row">
+                <span className="cc-meta-k">Capture Timestamp:</span>
+                <span className="cc-meta-v">{inspectingArtifact.epoch}</span>
+              </div>
+              <div className="cc-artifact-meta-row">
+                <span className="cc-meta-k">Parity Check:</span>
+                <span className={`cc-meta-v ${inspectingArtifact.isParityValid ? 'cc-meta-v--valid' : 'cc-meta-v--invalid'}`}>
+                  {inspectingArtifact.parity}
+                </span>
+              </div>
+              <div className="cc-artifact-meta-row">
+                <span className="cc-meta-k">Carrier Authentication Hash:</span>
+                <span className="cc-meta-v">{inspectingArtifact.authHash}</span>
+              </div>
+              <div className="cc-artifact-meta-row">
+                <span className="cc-meta-k">Sequence Order Index:</span>
+                <span className="cc-meta-v">
+                  {inspectingArtifact.seqIndex ? `Seq #${inspectingArtifact.seqIndex} of 4` : 'UNORDERED (Decoy/Echo)'}
+                </span>
+              </div>
+            </div>
+
+            <p style={{ fontSize: '12px', color: '#64748b', margin: '0 0 6px', textTransform: 'uppercase', fontFamily: 'var(--font-mono)' }}>
+              Raw Frame Buffer Hex Dump
+            </p>
+            <div className="cc-vault-hex-screen">
+              {inspectingArtifact.hexDump}
+            </div>
+
+            <p style={{ fontSize: '12px', color: '#64748b', margin: '14px 0 6px', textTransform: 'uppercase', fontFamily: 'var(--font-mono)' }}>
+              Forensic Analyst Assessment
+            </p>
+            <p style={{ fontSize: '13px', color: '#94a3b8', lineHeight: '1.6', background: 'rgba(255,255,255,0.03)', padding: '12px', borderRadius: '4px', borderLeft: '3px solid #72efdd' }}>
+              {inspectingArtifact.analystNotes}
+            </p>
+
+            <div style={{ display: 'flex', gap: '10px', marginTop: '20px', justifyContent: 'flex-end' }}>
+              <button
+                type="button"
+                className="product-btn product-btn--small product-btn--light"
+                onClick={() => setInspectingArtifact(null)}
+              >
+                Close
+              </button>
+              <button
+                type="button"
+                className={`product-btn product-btn--small ${isAssigned(inspectingArtifact.id) ? 'product-btn--danger' : 'product-btn--primary'}`}
+                onClick={() => {
+                  assignToSlot(inspectingArtifact);
+                  setInspectingArtifact(null);
+                }}
+              >
+                {isAssigned(inspectingArtifact.id) ? 'Remove from Matrix' : 'Assign to Matrix'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+const AdvisoryEvidenceBoard = ForensicEvidenceDesk;
+
 function InvestigationResourcePage({ path, onBack }) {
   const slug = path.replace('/investigation/resources/', '').replace(/\/$/, '');
   const [data, setData] = useState(null);
@@ -1407,10 +2579,16 @@ function InvestigationResourcePage({ path, onBack }) {
         <span className="mock-resource-brand">{data.brand}</span>
         <button className="product-btn product-btn--small product-btn--light" onClick={onBack}>Return to Dashboard</button>
       </header>
-      <div
-        className="mock-resource-container"
-        dangerouslySetInnerHTML={{ __html: data.html }}
-      />
+      {slug === 'advisory' ? (
+        <AdvisoryEvidenceBoard data={data} />
+      ) : slug === 'vault' ? (
+        <VaultSignalReconstruction data={data} onBack={onBack} />
+      ) : (
+        <div
+          className="mock-resource-container"
+          dangerouslySetInnerHTML={{ __html: data.html }}
+        />
+      )}
     </div>
   );
 }

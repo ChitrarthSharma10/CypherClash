@@ -1,0 +1,71 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 550" width="500" height="550">
+  <defs>
+    <filter id="flow-shadow" x="-5%" y="-5%" width="110%" height="110%">
+      <feDropShadow dx="2" dy="4" stdDeviation="4" flood-color="#000" flood-opacity="0.35"/>
+    </filter>
+  </defs>
+  
+  <rect x="10" y="10" width="480" height="530" rx="3" fill="#0f172a" stroke="#334155" stroke-width="1.5" filter="url(#flow-shadow)"/>
+  
+  <!-- Terminal Header -->
+  <rect x="10" y="10" width="480" height="30" fill="#1e293b"/>
+  <circle cx="28" cy="25" r="4" fill="#ef4444"/>
+  <circle cx="42" cy="25" r="4" fill="#f59e0b"/>
+  <circle cx="56" cy="25" r="4" fill="#10b981"/>
+  <text x="80" y="29" font-family="monospace" font-size="9" fill="#94a3b8">flow-analyzer-core@campus-gateway-alpha: ~# pflow --inspect -r #CC-2026-0814</text>
+  
+  <!-- Flow Summary Content -->
+  <text x="25" y="65" font-family="monospace" font-size="9" fill="#38bdf8">&gt; INGRESS TELEMETRY CAPTURE RUN: 2026-08-14 03:14:02 UTC</text>
+  <text x="25" y="80" font-family="monospace" font-size="8.5" fill="#64748b">HOST: GATEWAY-ALPHA (10.14.0.1)  |  DEVICE: Cisco Catalyst 3850 (SW-4)</text>
+  
+  <line x1="25" y1="92" x2="475" y2="92" stroke="#334155" stroke-width="1"/>
+  
+  <!-- Flow Table Header -->
+  <text x="25" y="112" font-family="monospace" font-size="8" font-weight="bold" fill="#72efdd">FLOW-ID</text>
+  <text x="95" y="112" font-family="monospace" font-size="8" font-weight="bold" fill="#72efdd">SRC-IP:PORT</text>
+  <text x="220" y="112" font-family="monospace" font-size="8" font-weight="bold" fill="#72efdd">DST-IP:PORT</text>
+  <text x="345" y="112" font-family="monospace" font-size="8" font-weight="bold" fill="#72efdd">PKTS/BYTES</text>
+  <text x="430" y="112" font-family="monospace" font-size="8" font-weight="bold" fill="#72efdd">FLAGS</text>
+  
+  <line x1="25" y1="120" x2="475" y2="120" stroke="#1e293b" stroke-width="1"/>
+  
+  <!-- Row 1 -->
+  <text x="25" y="140" font-family="monospace" font-size="8" fill="#e2e8f0">FL-88190</text>
+  <text x="95" y="140" font-family="monospace" font-size="8" fill="#94a3b8">10.14.2.80:443</text>
+  <text x="220" y="140" font-family="monospace" font-size="8" fill="#94a3b8">10.14.0.1:58210</text>
+  <text x="345" y="140" font-family="monospace" font-size="8" fill="#94a3b8">1,402 / 1.8M</text>
+  <text x="430" y="140" font-family="monospace" font-size="8" fill="#10b981">ACK [OK]</text>
+  
+  <!-- Row 2: Flaggd Bridge -->
+  <rect x="20" y="150" width="460" height="24" fill="rgba(239, 68, 68, 0.15)" stroke="#ef4444" stroke-width="1"/>
+  <text x="25" y="166" font-family="monospace" font-size="8" font-weight="bold" fill="#f87171">FL-88192*</text>
+  <text x="95" y="166" font-family="monospace" font-size="8" font-weight="bold" fill="#fca5a5">10.14.99.12:8443</text>
+  <text x="220" y="166" font-family="monospace" font-size="8" font-weight="bold" fill="#fca5a5">10.14.0.1:8443</text>
+  <text x="345" y="166" font-family="monospace" font-size="8" font-weight="bold" fill="#fca5a5">42,881 / 64.2M</text>
+  <text x="430" y="166" font-family="monospace" font-size="8" font-weight="bold" fill="#f87171">SYN-BRG [ALRT]</text>
+  
+  <!-- Row 3 -->
+  <text x="25" y="196" font-family="monospace" font-size="8" fill="#e2e8f0">FL-88195</text>
+  <text x="95" y="196" font-family="monospace" font-size="8" fill="#94a3b8">8.8.8.8:53</text>
+  <text x="220" y="196" font-family="monospace" font-size="8" fill="#94a3b8">10.14.0.1:53120</text>
+  <text x="345" y="196" font-family="monospace" font-size="8" fill="#94a3b8">12 / 840B</text>
+  <text x="430" y="196" font-family="monospace" font-size="8" fill="#10b981">DNS [OK]</text>
+  
+  <!-- Analysis Box -->
+  <rect x="25" y="230" width="450" height="150" fill="#1e293b" rx="2" stroke="#334155" stroke-width="1"/>
+  <text x="38" y="252" font-family="monospace" font-size="9" font-weight="bold" fill="#f59e0b">&gt; DIAGNOSTIC PACKET INSPECTION // FLOW FL-88192</text>
+  
+  <text x="38" y="275" font-family="monospace" font-size="8" fill="#94a3b8">ETHERNET HEADER: IEEE 802.1Q VLAN 402  |  MTU: 1500  |  CHKSUM: 0x82A1</text>
+  <text x="38" y="295" font-family="monospace" font-size="8" fill="#94a3b8">SOURCE HARDWARE: Physical tap on rack switch port G1/0/4 (Room B-04)</text>
+  <text x="38" y="315" font-family="monospace" font-size="8" fill="#94a3b8">SESSION ID REF:  FLOW-TOKEN-991 [DECOY SIGNATURE]</text>
+  <text x="38" y="335" font-family="monospace" font-size="8" fill="#94a3b8">ANOMALY TRIGGER: Hardware MAC address bridged without 802.1X handshake</text>
+  <text x="38" y="355" font-family="monospace" font-size="8" fill="#38bdf8">NOTE: Camera multiplexer CAM-04 connects to the adjacent management port.</text>
+  
+  <!-- Terminal Prompt Footer -->
+  <text x="25" y="420" font-family="monospace" font-size="8.5" fill="#10b981">flow-analyzer-core@campus-gateway-alpha: ~# grep -i "DISCONTINUITY" /var/log/surveillance.log</text>
+  <text x="25" y="440" font-family="monospace" font-size="8" fill="#e2e8f0">[2026-08-14 03:14:20] CAM-04: Video container PTS desynchronization detected.</text>
+  <text x="25" y="455" font-family="monospace" font-size="8" fill="#e2e8f0">[2026-08-14 03:14:20] CAM-04: Multiplexer report generated -&gt; DFU-REP-2026-042</text>
+  
+  <line x1="25" y1="480" x2="475" y2="480" stroke="#334155" stroke-width="1"/>
+  <text x="25" y="505" font-family="monospace" font-size="8" fill="#64748b">CAPTURE BUFFER EXPORT // CAMPUS BORDER ROUTER CLUSTER</text>
+</svg>

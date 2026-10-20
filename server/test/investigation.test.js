@@ -1,26 +1,41 @@
-import "./bootstrap.js";
-import test, { after, before, beforeEach } from "node:test";
-import assert from "node:assert/strict";
-import { connectDatabase, disconnectDatabase } from "../src/db.js";
-import { createApp } from "../src/app.js";
-import { sessionStore } from "../src/sessionStore.js";
-import { InvestigationCase } from "../src/models/InvestigationCase.js";
-import { Admin } from "../src/models/Admin.js";
-import { RoundState } from "../src/models/RoundState.js";
-import { Team } from "../src/models/Team.js";
+﻿import './bootstrap.js';
+import test, { after, before, beforeEach } from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+import { connectDatabase, disconnectDatabase } from '../src/db.js';
+import { createApp } from '../src/app.js';
+import { sessionStore } from '../src/sessionStore.js';
+import { GameSession } from '../src/models/GameSession.js';
+import { Team } from '../src/models/Team.js';
+import { Admin } from '../src/models/Admin.js';
+import { ScoreEntry } from '../src/models/ScoreEntry.js';
+import { RoundState } from '../src/models/RoundState.js';
+import { EventLog } from '../src/models/EventLog.js';
+import { HintEntitlement } from '../src/models/HintEntitlement.js';
+import { TeamProgression } from '../src/models/TeamProgression.js';
 import {
   endRound,
   initializeRoundStates,
   pauseRound,
+  resumeRound,
   startRound,
-} from "../src/services/roundState.js";
-import { hashPassword } from "../src/utils/passwords.js";
+} from '../src/services/roundState.js';
+import { clearAllTotalsCache } from '../src/services/scoring.js';
+import { getLeaderboard, rebuildLeaderboard } from '../src/services/leaderboard.js';
+import { calculateInvestigationPoints, INVESTIGATION_CLUES, STAGE_HINTS } from '../src/games/investigation.js';
+import { hashPassword } from '../src/utils/passwords.js';
 
 const suffix = `${Date.now() % 1_000_000_000}${process.pid % 10000}`;
-const teamId = `CC-93${suffix}`;
-const password = "InvestigationBranchTestPassword123";
-const adminUsername = `investigationadmin${suffix}`;
-const adminPassword = "InvestigationAdminPassword123";
+const teamA = `CC-81${suffix}`;
+const teamB = `CC-82${suffix}`;
+const password = 'InvestigationTestPassword123';
+const adminUsername = `invAdmin${suffix}`;
+const adminPassword = 'InvAdminPassword123!';
 let server;
 let baseUrl;
 
@@ -28,103 +43,39 @@ async function request(path, options = {}) {
   return fetch(`${baseUrl}${path}`, options);
 }
 
-async function login() {
-  const response = await request("/api/auth/login", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
+async function teamCookie(teamId) {
+  const response = await request('/api/auth/login', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ teamId, password }),
   });
   assert.equal(response.status, 200);
-  return response.headers.get("set-cookie").split(";", 1)[0];
+  return response.headers.get('set-cookie').split(';', 1)[0];
 }
 
-async function adminLogin() {
-  const response = await request("/api/auth/admin/login", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
+async function adminCookie() {
+  const response = await request('/api/auth/admin/login', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ username: adminUsername, password: adminPassword }),
   });
   assert.equal(response.status, 200);
-  return response.headers.get("set-cookie").split(";", 1)[0];
-}
-
-function post(path, body, cookie) {
-  const headers = { "content-type": "application/json" };
-  if (cookie) headers.cookie = cookie;
-  return request(path, { method: "POST", headers, body: JSON.stringify(body) });
-}
-
-async function joinDetective(cookie) {
-  return post("/api/investigation/join", {}, cookie);
-}
-
-async function joinAnalyst(invite) {
-  return post("/api/investigation/join/analyst", { invite });
-}
-
-async function getCase() {
-  const state = await RoundState.findOne({ round: 3 })
-    .select("+investigations.inviteHash")
-    .lean();
-  return (
-    state?.investigations?.find((entry) => entry.teamId === teamId) || null
-  );
-}
-
-function deferred() {
-  let resolve;
-  const promise = new Promise((done) => {
-    resolve = done;
-  });
-  return { promise, resolve };
-}
-
-function holdNextAggregateAdmission({ afterWrite = false } = {}) {
-  const original = RoundState.findOneAndUpdate;
-  const entered = deferred();
-  const release = deferred();
-  let intercepted = false;
-  RoundState.findOneAndUpdate = function (filter, update, options) {
-    const isAdmission =
-      filter?.round === 3 &&
-      filter.status === "running" &&
-      filter.$expr?.$gt &&
-      (filter.investigations?.$elemMatch ||
-        filter.investigations?.$not?.$elemMatch);
-    if (!intercepted && isAdmission) {
-      intercepted = true;
-      RoundState.findOneAndUpdate = original;
-      const query = original.call(RoundState, filter, update, options);
-      const execute = query.exec.bind(query);
-      query.exec = async (...args) => {
-        if (afterWrite) {
-          const result = await execute(...args);
-          entered.resolve();
-          await release.promise;
-          return result;
-        }
-        entered.resolve();
-        await release.promise;
-        return execute(...args);
-      };
-      return query;
-    }
-    return original.call(RoundState, filter, update, options);
-  };
-  return {
-    entered: entered.promise,
-    release: release.resolve,
-    restore() {
-      RoundState.findOneAndUpdate = original;
-    },
-  };
+  return response.headers.get('set-cookie').split(';', 1)[0];
 }
 
 before(async () => {
   await connectDatabase();
+  await GameSession.syncIndexes();
+  await ScoreEntry.syncIndexes();
+  await HintEntitlement.syncIndexes();
   await Team.create({
-    teamId,
-    name: `Test ${teamId}`,
+    teamId: teamA,
+    name: `Test Alpha ${teamA}`,
+    passwordHash: await hashPassword(password),
+  });
+  await Team.create({
+    teamId: teamB,
+    name: `Test Beta ${teamB}`,
     passwordHash: await hashPassword(password),
   });
   await Admin.create({
@@ -132,859 +83,802 @@ before(async () => {
     passwordHash: await hashPassword(adminPassword),
   });
   server = createApp().listen(0);
-  await new Promise((resolve) => server.once("listening", resolve));
+  await new Promise((resolve) => server.once('listening', resolve));
   baseUrl = `http://127.0.0.1:${server.address().port}`;
 });
 
 beforeEach(async () => {
-  await InvestigationCase.deleteMany({ teamId });
-  await RoundState.deleteMany({ round: 3 });
+  await GameSession.deleteMany({ teamId: { $in: [teamA, teamB] } });
+  await ScoreEntry.deleteMany({ teamId: { $in: [teamA, teamB] } });
+  await HintEntitlement.deleteMany({ teamId: { $in: [teamA, teamB] } });
+  await TeamProgression.deleteMany({ teamId: { $in: [teamA, teamB] } });
+  await TeamProgression.create([
+    { teamId: teamA, initialRound: 3, maxEligibleRound: 3, waivedRounds: [1, 2] },
+    { teamId: teamB, initialRound: 3, maxEligibleRound: 3, waivedRounds: [1, 2] },
+  ]);
+  await RoundState.deleteMany({});
+  await EventLog.deleteMany({ actorId: { $in: [teamA, teamB, 'system'] } });
+  clearAllTotalsCache();
   await initializeRoundStates();
 });
 
 after(async () => {
-  if (server) await new Promise((resolve) => server.close(resolve));
-  await InvestigationCase.deleteMany({ teamId });
-  await Team.deleteMany({ teamId });
-  await Admin.deleteOne({ username: adminUsername });
-  await RoundState.deleteMany({ round: 3 });
+  if (server) {
+    await new Promise((resolve) => server.close(resolve));
+  }
+  await GameSession.deleteMany({ teamId: { $in: [teamA, teamB] } });
+  await ScoreEntry.deleteMany({ teamId: { $in: [teamA, teamB] } });
+  await HintEntitlement.deleteMany({ teamId: { $in: [teamA, teamB] } });
+  await TeamProgression.deleteMany({ teamId: { $in: [teamA, teamB] } });
+  await Team.deleteMany({ teamId: { $in: [teamA, teamB] } });
+  await Admin.deleteMany({ username: adminUsername });
+  await RoundState.deleteMany({});
+  await EventLog.deleteMany({ actorId: { $in: [teamA, teamB, 'system'] } });
   await sessionStore.close();
   await disconnectDatabase();
 });
 
-test("detective and analyst roles are claimed once with the existing invite contract", async () => {
-  await startRound(3, 300, "investigation-branch-test");
-  const prototypePreflight = await request("/api/investigation/join", {
-    method: "OPTIONS",
-    headers: {
-      origin: "http://localhost:5177",
-      "access-control-request-method": "POST",
-      "access-control-request-headers": "content-type",
-    },
-  });
-  assert.equal(prototypePreflight.status, 204);
-  assert.equal(
-    prototypePreflight.headers.get("access-control-allow-origin"),
-    "http://localhost:5177",
-  );
-
-  const detectiveCookie = await login();
-  const claims = await Promise.all([
-    joinDetective(detectiveCookie),
-    joinDetective(detectiveCookie),
-  ]);
-  assert.deepEqual(
-    claims.map((response) => response.status).sort(),
-    [201, 409],
-  );
-  const joined = await claims
-    .find((response) => response.status === 201)
-    .json();
-  assert.ok(joined.analystInvite);
-  assert.equal(joined.state.role, "detective");
-
-  const analystClaims = await Promise.all([
-    joinAnalyst(joined.analystInvite),
-    joinAnalyst(joined.analystInvite),
-  ]);
-  assert.deepEqual(
-    analystClaims.map((response) => response.status).sort(),
-    [201, 409],
-  );
-  const analystResponse = analystClaims.find(
-    (response) => response.status === 201,
-  );
-  const analystCookie = analystResponse.headers
-    .get("set-cookie")
-    .split(";", 1)[0];
-  const claimedCase = await getCase();
-  assert.ok(claimedCase.detectiveSessionHash);
-  assert.ok(claimedCase.analystSessionHash);
-
-  const [detectiveState, analystState] = await Promise.all([
-    request("/api/investigation/state", {
-      headers: { cookie: detectiveCookie },
-    }),
-    request("/api/investigation/state", { headers: { cookie: analystCookie } }),
-  ]);
-  assert.equal((await detectiveState.json()).state.role, "detective");
-  assert.equal((await analystState.json()).state.role, "analyst");
-  const publicState = await request("/api/investigation/state", {
-    headers: { cookie: detectiveCookie },
-  });
-  assert.equal(
-    Object.hasOwn((await publicState.json()).state, "finalResult"),
-    false,
-  );
-  assert.equal((await joinAnalyst(joined.analystInvite)).status, 401);
+test('calculateInvestigationPoints respects base 500, -15 penalty, -25 hint, and floor 150', () => {
+  assert.equal(calculateInvestigationPoints({ wrongAttempts: 0, hintsUsed: 0 }), 500);
+  assert.equal(calculateInvestigationPoints({ wrongAttempts: 1, hintsUsed: 0 }), 485);
+  assert.equal(calculateInvestigationPoints({ wrongAttempts: 2, hintsUsed: 1 }), 445);
+  assert.equal(calculateInvestigationPoints({ wrongAttempts: 20, hintsUsed: 1 }), 175);
+  // Floor at 150 points
+  assert.equal(calculateInvestigationPoints({ wrongAttempts: 30, hintsUsed: 1 }), 150);
+  assert.equal(calculateInvestigationPoints({ wrongAttempts: 100, hintsUsed: 1 }), 150);
 });
 
-test("evidence 2 and 3 can be collected by either role while evidence 1 is detective-only", async () => {
-  await startRound(3, 300, "investigation-branch-test");
-  const detectiveCookie = await login();
-  const joined = await (await joinDetective(detectiveCookie)).json();
-  const analystResponse = await joinAnalyst(joined.analystInvite);
-  const analystCookie = analystResponse.headers
-    .get("set-cookie")
-    .split(";", 1)[0];
-
-  assert.equal(
-    (await post("/api/investigation/evidence", { key: "ev1" }, analystCookie))
-      .status,
-    403,
-  );
-  assert.equal(
-    (await post("/api/investigation/evidence", { key: "ev1" }, detectiveCookie))
-      .status,
-    201,
-  );
-  assert.equal(
-    (await post("/api/investigation/evidence", { key: "ev4" }, analystCookie))
-      .status,
-    400,
-  );
-  assert.equal(
-    (
-      await post(
-        "/api/investigation/decrypt",
-        { token: "HELIX" },
-        detectiveCookie,
-      )
-    ).status,
-    403,
-  );
-  assert.equal(
-    (await post("/api/investigation/evidence", { key: "ev2" }, detectiveCookie))
-      .status,
-    201,
-  );
-  assert.equal(
-    (await post("/api/investigation/evidence", { key: "ev2" }, analystCookie))
-      .status,
-    409,
-  );
-  assert.equal(
-    (await post("/api/investigation/evidence", { key: "ev3" }, analystCookie))
-      .status,
-    201,
-  );
-  assert.equal(
-    (await post("/api/investigation/evidence", { key: "ev3" }, detectiveCookie))
-      .status,
-    409,
-  );
-});
-
-test("evidence, decryption, accusation, and cross-role approvals are atomic", async () => {
-  await startRound(3, 300, "investigation-branch-test");
-  const detectiveCookie = await login();
-  const joined = await (await joinDetective(detectiveCookie)).json();
-  const analystResponse = await joinAnalyst(joined.analystInvite);
-  const analystCookie = analystResponse.headers
-    .get("set-cookie")
-    .split(";", 1)[0];
-
-  assert.equal(
-    (await post("/api/investigation/evidence", { key: "ev1" }, analystCookie))
-      .status,
-    403,
-  );
-  assert.equal(
-    (await post("/api/investigation/evidence", { key: "ev1" }, detectiveCookie))
-      .status,
-    201,
-  );
-  const duplicateEvidence = await Promise.all([
-    post("/api/investigation/evidence", { key: "ev2" }, detectiveCookie),
-    post("/api/investigation/evidence", { key: "ev2" }, analystCookie),
-  ]);
-  assert.deepEqual(
-    duplicateEvidence.map((response) => response.status).sort(),
-    [201, 409],
-  );
-  assert.equal(
-    (await post("/api/investigation/evidence", { key: "ev3" }, analystCookie))
-      .status,
-    201,
-  );
-
-  assert.equal(
-    (
-      await post(
-        "/api/investigation/decrypt",
-        { token: "NOT-HELIX" },
-        analystCookie,
-      )
-    ).status,
-    400,
-  );
-  const afterFailedDecryption = await getCase();
-  assert.equal(afterFailedDecryption.decrypted, false);
-  assert.equal(afterFailedDecryption.decryptedAt, null);
-  assert.equal(
-    afterFailedDecryption.clues.some((clue) => clue.key === "ev4"),
-    false,
-  );
-
-  const decryption = await Promise.all([
-    post("/api/investigation/decrypt", { token: "HELIX" }, analystCookie),
-    post("/api/investigation/decrypt", { token: "HELIX" }, analystCookie),
-  ]);
-  assert.deepEqual(
-    decryption.map((response) => response.status).sort(),
-    [200, 200],
-  );
-
-  const accusation = await Promise.all([
-    post(
-      "/api/investigation/accusation",
-      {
-        suspect: "Mara Chen",
-        evidenceKey: "ev2",
-        reasoning:
-          "The access record connects the suspect to the archive breach.",
-      },
-      detectiveCookie,
-    ),
-    post(
-      "/api/investigation/accusation",
-      {
-        suspect: "Idris Khan",
-        evidenceKey: "ev2",
-        reasoning:
-          "A competing accusation must not replace the original submission.",
-      },
-      detectiveCookie,
-    ),
-  ]);
-  assert.deepEqual(
-    accusation.map((response) => response.status).sort(),
-    [201, 409],
-  );
-  const winningAccusation = accusation[0].status === 201
-    ? { suspect: "Mara Chen", reasoning: "The access record connects the suspect to the archive breach." }
-    : { suspect: "Idris Khan", reasoning: "A competing accusation must not replace the original submission." };
-  const submitterApproval = await post(
-    "/api/investigation/accusation/approve",
-    {},
-    detectiveCookie,
-  );
-  assert.equal(submitterApproval.status, 409);
-
-  const approvals = await Promise.all([
-    post("/api/investigation/accusation/approve", {}, analystCookie),
-    post("/api/investigation/accusation/approve", {}, analystCookie),
-  ]);
-  assert.deepEqual(
-    approvals.map((response) => response.status).sort(),
-    [200, 409],
-  );
-  const agreed = await approvals
-    .find((response) => response.status === 200)
-    .json();
-  assert.equal(agreed.state.accusation.agreed, true);
-  assert.equal(
-    (await post("/api/investigation/evidence", { key: "ev3" }, detectiveCookie))
-      .status,
-    409,
-  );
-
-  await endRound(3, "investigation-branch-test");
-  const savedCase = await getCase();
-  assert.deepEqual(
-    savedCase.finalResult.evidence.map((clue) => clue.key).sort(),
-    ["ev1", "ev2", "ev3", "ev4"],
-  );
-  assert.equal(
-    savedCase.finalResult.evidence.find((clue) => clue.key === "ev1").addedBy,
-    "detective",
-  );
-  assert.equal(
-    savedCase.finalResult.evidence.find((clue) => clue.key === "ev3").addedBy,
-    "analyst",
-  );
-  assert.ok(
-    savedCase.finalResult.evidence.every(
-      (clue) => clue.addedAt instanceof Date,
-    ),
-  );
-  assert.equal(savedCase.finalResult.decryption.succeeded, true);
-  assert.ok(savedCase.finalResult.decryption.succeededAt instanceof Date);
-  assert.deepEqual(savedCase.finalResult.accusation, {
-    submitted: true,
-    suspect: winningAccusation.suspect,
-    evidenceKey: "ev2",
-    reasoning: winningAccusation.reasoning,
-    initiatedBy: "detective",
-    initiatedAt: savedCase.finalResult.accusation.initiatedAt,
-    approvals: { detective: true, analyst: true },
-    agreed: true,
-  });
-  assert.ok(savedCase.finalResult.accusation.initiatedAt instanceof Date);
-  assert.equal(
-    savedCase.finalResult.roundEndedAt.getTime(),
-    (await RoundState.findOne({ round: 3 })).endedAt.getTime(),
-  );
-
-  const adminCookie = await adminLogin();
-  const adminResults = await request("/api/admin/investigation/final-results", {
-    headers: { cookie: adminCookie },
-  });
-  assert.equal(adminResults.status, 200);
-  const result = (await adminResults.json()).find(
-    (item) => item.teamId === teamId,
-  );
-  assert.ok(result);
-  assert.equal(result.decryption.succeeded, true);
-  assert.ok(result.decryption.succeededAt);
-  assert.equal(result.accusation.agreed, true);
-  assert.deepEqual(result.accusation.approvals, {
-    detective: true,
-    analyst: true,
-  });
-  assert.ok(result.roundEndedAt);
-});
-
-test("analyst may initiate an accusation citing collected evidence and detective approval completes agreement", async () => {
-  await startRound(3, 300, "investigation-branch-test");
-  const detectiveCookie = await login();
-  const joined = await (await joinDetective(detectiveCookie)).json();
-  const analystResponse = await joinAnalyst(joined.analystInvite);
-  const analystCookie = analystResponse.headers
-    .get("set-cookie")
-    .split(";", 1)[0];
-
-  assert.equal(
-    (
-      await post(
-        "/api/investigation/accusation",
-        {
-          suspect: "Sofia Laurent",
-          evidenceKey: "ev2",
-          reasoning:
-            "The evidence record links the suspect to the secured archive.",
-        },
-        analystCookie,
-      )
-    ).status,
-    409,
-  );
-  assert.equal(
-    (await post("/api/investigation/evidence", { key: "ev2" }, analystCookie))
-      .status,
-    201,
-  );
-  const submitted = await post(
-    "/api/investigation/accusation",
-    {
-      suspect: "Sofia Laurent",
-      evidenceKey: "ev2",
-      reasoning:
-        "The evidence record links the suspect to the secured archive.",
-    },
-    analystCookie,
-  );
-  assert.equal(submitted.status, 201);
-  assert.deepEqual((await submitted.json()).state.accusation.approvals, [
-    "analyst",
-  ]);
-  assert.equal(
-    (await post("/api/investigation/accusation/approve", {}, detectiveCookie))
-      .status,
-    200,
-  );
-  assert.equal(
-    (await post("/api/investigation/accusation/approve", {}, detectiveCookie))
-      .status,
-    409,
-  );
-  const state = await request("/api/investigation/state", {
-    headers: { cookie: detectiveCookie },
-  });
-  assert.equal((await state.json()).state.accusation.agreed, true);
-  await endRound(3, "investigation-branch-test");
-  const finalResult = (await getCase()).finalResult;
-  assert.equal(finalResult.accusation.submitted, true);
-  assert.equal(finalResult.accusation.initiatedBy, "analyst");
-  assert.deepEqual(finalResult.accusation.approvals, {
-    detective: true,
-    analyst: true,
-  });
-  assert.equal(finalResult.accusation.agreed, true);
-});
-
-test("final result records a pending accusation when the round ends before dual approval", async () => {
-  await startRound(3, 300, "investigation-branch-test");
-  const detectiveCookie = await login();
-  const joined = await (await joinDetective(detectiveCookie)).json();
-  const analystResponse = await joinAnalyst(joined.analystInvite);
-  const analystCookie = analystResponse.headers
-    .get("set-cookie")
-    .split(";", 1)[0];
-
-  assert.equal(
-    (await post("/api/investigation/evidence", { key: "ev2" }, analystCookie))
-      .status,
-    201,
-  );
-  assert.equal(
-    (
-      await post(
-        "/api/investigation/accusation",
-        {
-          suspect: "Idris Khan",
-          evidenceKey: "ev2",
-          reasoning:
-            "The recovered record places the suspect near the restricted archive.",
-        },
-        analystCookie,
-      )
-    ).status,
-    201,
-  );
-  await endRound(3, "investigation-branch-test");
-  const finalAccusation = (await getCase()).finalResult.accusation;
-  assert.equal(finalAccusation.submitted, false);
-  assert.equal(finalAccusation.initiatedBy, "analyst");
-  assert.deepEqual(finalAccusation.approvals, {
-    detective: false,
-    analyst: true,
-  });
-  assert.equal(finalAccusation.agreed, false);
-});
-
-test("admin final result persists for rounds without decryption or accusation and cannot be overwritten", async () => {
-  await startRound(3, 300, "investigation-branch-test");
-  const detectiveCookie = await login();
-  const joined = await (await joinDetective(detectiveCookie)).json();
-  const analystResponse = await joinAnalyst(joined.analystInvite);
-  const analystCookie = analystResponse.headers
-    .get("set-cookie")
-    .split(";", 1)[0];
-  assert.equal(
-    (await post("/api/investigation/evidence", { key: "ev1" }, detectiveCookie))
-      .status,
-    201,
-  );
-
-  const unauthorized = await request("/api/admin/investigation/final-results");
-  assert.equal(unauthorized.status, 403);
-  const teamAccess = await request("/api/admin/investigation/final-results", {
-    headers: { cookie: detectiveCookie },
-  });
-  assert.equal(teamAccess.status, 403);
-  const analystAccess = await request(
-    "/api/admin/investigation/final-results",
-    {
-      headers: { cookie: analystCookie },
-    },
-  );
-  assert.equal(analystAccess.status, 403);
-  const adminCookie = await adminLogin();
-
-  const ended = await request("/api/admin/rounds/3/end", {
-    method: "POST",
-    headers: { "content-type": "application/json", cookie: adminCookie },
-    body: "{}",
-  });
-  assert.equal(ended.status, 200);
-
-  const resultResponse = await request(
-    "/api/admin/investigation/final-results",
-    {
-      headers: { cookie: adminCookie },
-    },
-  );
-  assert.equal(resultResponse.status, 200);
-  const results = await resultResponse.json();
-  const result = results.find((item) => item.teamId === teamId);
-  assert.ok(result);
-  assert.equal(result.teamId, teamId);
-  assert.deepEqual(
-    result.evidence.map((clue) => clue.key),
-    ["ev1"],
-  );
-  assert.equal(result.evidence[0].addedBy, "detective");
-  assert.ok(result.evidence[0].addedAt);
-  assert.deepEqual(result.decryption, { succeeded: false, succeededAt: null });
-  assert.equal(result.accusation, null);
-  assert.ok(result.roundEndedAt);
-
-  const publicState = await request("/api/investigation/state", {
-    headers: { cookie: detectiveCookie },
-  });
-  const publicPayload = await publicState.json();
-  assert.equal(Object.hasOwn(publicPayload.state, "finalResult"), false);
-  assert.equal(Object.hasOwn(publicPayload, "finalResult"), false);
-  assert.equal(
-    (await post("/api/investigation/evidence", { key: "ev2" }, detectiveCookie))
-      .status,
-    409,
-  );
-
-  const beforeRetry = await getCase();
-  const duplicateEnd = await request("/api/admin/rounds/3/end", {
-    method: "POST",
-    headers: { "content-type": "application/json", cookie: adminCookie },
-    body: "{}",
-  });
-  assert.equal(duplicateEnd.status, 409);
-  await initializeRoundStates();
-  const afterRetry = await getCase();
-  assert.deepEqual(afterRetry.finalResult, beforeRetry.finalResult);
-  assert.equal(
-    afterRetry.finalResult.roundEndedAt.getTime(),
-    new Date(result.roundEndedAt).getTime(),
-  );
-  await startRound(3, 300, "investigation-branch-test");
-  const afterRestart = await getCase();
-  assert.deepEqual(afterRestart.finalResult, beforeRetry.finalResult);
-  assert.ok(joined.analystInvite);
-});
-
-test("manual round end records an empty evidence ledger and no decryption or accusation", async () => {
-  await startRound(3, 300, "investigation-branch-test");
-  const detectiveCookie = await login();
-  await joinDetective(detectiveCookie);
-
-  await endRound(3, "investigation-branch-test");
-  const savedCase = await getCase();
-  assert.deepEqual(savedCase.finalResult.evidence, []);
-  assert.deepEqual(savedCase.finalResult.decryption, {
-    succeeded: false,
-    succeededAt: null,
-  });
-  assert.equal(savedCase.finalResult.accusation, null);
-  assert.equal(
-    savedCase.finalResult.roundEndedAt.getTime(),
-    (await RoundState.findOne({ round: 3 })).endedAt.getTime(),
-  );
-});
-
-test("Round 3 cannot be paused after its persisted deadline before monitor closure", async () => {
-  await startRound(3, 300, "investigation-branch-test");
-  const detectiveCookie = await login();
-  await joinDetective(detectiveCookie);
-  assert.equal(
-    (await post("/api/investigation/evidence", { key: "ev1" }, detectiveCookie))
-      .status,
-    201,
-  );
-  const expiredDeadline = new Date(Date.now() - 1000);
-  await RoundState.updateOne(
-    { round: 3 },
-    { $set: { deadline: expiredDeadline } },
-  );
-
-  await assert.rejects(pauseRound(3, "investigation-branch-test"), {
-    code: "ROUND_STATE_CHANGED",
-  });
-  assert.equal(
-    (await RoundState.findOne({ round: 3 }).lean()).status,
-    "running",
-  );
-
-  await initializeRoundStates();
-  const endedRound = await RoundState.findOne({ round: 3 }).lean();
-  const savedCase = await getCase();
-  assert.equal(endedRound.status, "ended");
-  assert.equal(
-    savedCase.finalResult.roundEndedAt.getTime(),
-    expiredDeadline.getTime(),
-  );
-  assert.deepEqual(
-    savedCase.finalResult.evidence.map((clue) => clue.key),
-    ["ev1"],
-  );
-});
-
-test("startup recovers a missing final snapshot after the round end was persisted", async () => {
-  await startRound(3, 300, "investigation-branch-test");
-  const detectiveCookie = await login();
-  await joinDetective(detectiveCookie);
-  assert.equal(
-    (await post("/api/investigation/evidence", { key: "ev1" }, detectiveCookie))
-      .status,
-    201,
-  );
-
-  const endedAt = new Date(Date.now() - 1000);
-  await RoundState.updateOne(
-    { round: 3 },
-    { $set: { status: "ended", endedAt } },
-  );
-  await initializeRoundStates();
-
-  const savedCase = await getCase();
-  assert.deepEqual(
-    savedCase.finalResult.evidence.map((clue) => clue.key),
-    ["ev1"],
-  );
-  assert.equal(savedCase.finalResult.evidence[0].addedBy, "detective");
-  assert.equal(savedCase.finalResult.roundEndedAt.getTime(), endedAt.getTime());
-});
-
-test("startup migrates a legacy case into an ended round with its final snapshot", async () => {
-  const endedAt = new Date(Date.now() - 1000);
-  await RoundState.create({
-    round: 3,
-    attemptNo: 1,
-    status: "ended",
-    endedAt,
-  });
-  await InvestigationCase.create({
-    teamId,
-    round: 3,
-    attemptNo: 1,
-    detectiveJoinedAt: new Date(endedAt.getTime() - 10_000),
-    clues: [{ key: "ev1", addedBy: "detective", addedAt: endedAt }],
-  });
-
-  await initializeRoundStates();
-
-  const migratedCase = await getCase();
-  assert.ok(migratedCase);
-  assert.deepEqual(
-    migratedCase.finalResult.evidence.map((clue) => clue.key),
-    ["ev1"],
-  );
-  assert.equal(
-    migratedCase.finalResult.roundEndedAt.getTime(),
-    endedAt.getTime(),
-  );
-  assert.equal(await InvestigationCase.countDocuments({ teamId }), 1);
-});
-
-test("expired rounds remain readable but reject mutations, and old attempt sessions are stale", async () => {
-  await startRound(3, 300, "investigation-branch-test");
-  const detectiveCookie = await login();
-  const joined = await (await joinDetective(detectiveCookie)).json();
-  assert.equal(
-    (await post("/api/investigation/evidence", { key: "ev1" }, detectiveCookie))
-      .status,
-    201,
-  );
-  await RoundState.updateOne(
-    { round: 3 },
-    { $set: { deadline: new Date(Date.now() - 1000) } },
-  );
-  await initializeRoundStates();
-
-  const lockedState = await request("/api/investigation/state", {
-    headers: { cookie: detectiveCookie },
-  });
-  assert.equal(lockedState.status, 200);
-  const lockedPayload = await lockedState.json();
-  assert.equal(lockedPayload.roundStatus, "ended");
-  assert.ok(lockedPayload.deadline);
-  assert.equal(
-    (await post("/api/investigation/evidence", { key: "ev1" }, detectiveCookie))
-      .status,
-    409,
-  );
-  const endedRound = await RoundState.findOne({ round: 3 }).lean();
-  const savedCase = await getCase();
-  assert.equal(endedRound.status, "ended");
-  assert.equal(
-    savedCase.finalResult.roundEndedAt.getTime(),
-    endedRound.deadline.getTime(),
-  );
-  assert.deepEqual(
-    savedCase.finalResult.evidence.map((clue) => clue.key),
-    ["ev1"],
-  );
-  assert.equal(savedCase.finalResult.evidence[0].addedBy, "detective");
-
-  await RoundState.updateOne({ round: 3 }, { $set: { status: "ended" } });
-  await initializeRoundStates();
-  await startRound(3, 300, "investigation-branch-test");
-  const stale = await request("/api/investigation/state", {
-    headers: { cookie: detectiveCookie },
-  });
-  assert.equal(stale.status, 403);
-  assert.ok(joined.analystInvite);
-});
-
-test("a delayed evidence write is rejected after expiry before monitor closure", async () => {
-  await startRound(3, 300, "investigation-branch-test");
-  const detectiveCookie = await login();
-  await joinDetective(detectiveCookie);
-  const barrier = holdNextAggregateAdmission();
-  try {
-    const delayedWrite = post(
-      "/api/investigation/evidence",
-      { key: "ev2" },
-      detectiveCookie,
-    );
-    await barrier.entered;
-    const expiredDeadline = new Date(Date.now() - 1000);
-    await RoundState.updateOne(
-      { round: 3 },
-      { $set: { deadline: expiredDeadline } },
-    );
-    barrier.release();
-
-    assert.equal((await delayedWrite).status, 409);
-    assert.equal(
-      (await RoundState.findOne({ round: 3 }).lean()).status,
-      "running",
-    );
-    assert.deepEqual((await getCase()).clues, []);
-    assert.equal((await getCase()).finalResult, undefined);
-
-    await initializeRoundStates();
-    const endedRound = await RoundState.findOne({ round: 3 }).lean();
-    const savedCase = await getCase();
-    assert.equal(endedRound.status, "ended");
-    assert.equal(
-      savedCase.finalResult.roundEndedAt.getTime(),
-      expiredDeadline.getTime(),
-    );
-    assert.deepEqual(savedCase.finalResult.evidence, []);
-  } finally {
-    barrier.release();
-    barrier.restore();
+test('Hints do not expose canonical answers or final flags', () => {
+  for (const clue of INVESTIGATION_CLUES) {
+    const hint = STAGE_HINTS[clue.stage];
+    assert.ok(hint, `Stage ${clue.stage} must have a contextual hint`);
+    assert.equal(hint.includes(clue.expectedAnswer), false, `Hint for stage ${clue.stage} must not reveal the exact answer`);
+    assert.equal(hint.includes('CC{DOM_SLEUTH_N3TW0RK_941}'), false, 'Hints must not reveal the final flag');
   }
 });
 
-test("a mutation written before finalization is included in its immutable snapshot", async () => {
-  await startRound(3, 300, "investigation-branch-test");
-  const detectiveCookie = await login();
-  await joinDetective(detectiveCookie);
-  const barrier = holdNextAggregateAdmission({ afterWrite: true });
-  try {
-    const admittedWrite = post(
-      "/api/investigation/evidence",
-      { key: "ev2" },
-      detectiveCookie,
-    );
-    await barrier.entered;
-    assert.deepEqual(
-      (await getCase()).clues.map((clue) => clue.key),
-      ["ev2"],
-    );
-
-    await endRound(3, "investigation-branch-test");
-    const resultAtClose = (await getCase()).finalResult;
-    assert.deepEqual(
-      resultAtClose.evidence.map((clue) => clue.key),
-      ["ev2"],
-    );
-
-    barrier.release();
-    assert.equal((await admittedWrite).status, 201);
-    assert.deepEqual((await getCase()).finalResult, resultAtClose);
-    assert.equal(
-      (
-        await post(
-          "/api/investigation/evidence",
-          { key: "ev3" },
-          detectiveCookie,
-        )
-      ).status,
-      409,
-    );
-    assert.deepEqual((await getCase()).finalResult, resultAtClose);
-  } finally {
-    barrier.release();
-    barrier.restore();
+test('unauthenticated requests cannot access investigation state, resources, hints, or start game', async () => {
+  const endpoints = [
+    { method: 'GET', path: '/api/rounds/2/investigation/state' },
+    { method: 'POST', path: '/api/rounds/2/investigation/start' },
+    { method: 'POST', path: '/api/rounds/2/investigation/submit' },
+    { method: 'POST', path: '/api/rounds/2/investigation/hint' },
+    { method: 'GET', path: '/api/rounds/2/investigation/resources/incident-log' },
+    { method: 'GET', path: '/api/rounds/3/hint/status' },
+    { method: 'POST', path: '/api/rounds/3/hint' },
+  ];
+  for (const ep of endpoints) {
+    const res = await request(ep.path, {
+      method: ep.method,
+      headers: { 'content-type': 'application/json' },
+      body: ep.method === 'POST' ? '{}' : undefined,
+    });
+    assert.equal(res.status, 401, `Expected 401 for ${ep.method} ${ep.path}`);
   }
 });
 
-test("a mutation reaching the database after finalization cannot change the snapshot", async () => {
-  await startRound(3, 300, "investigation-branch-test");
-  const detectiveCookie = await login();
-  await joinDetective(detectiveCookie);
-  const barrier = holdNextAggregateAdmission();
-  try {
-    const delayedWrite = post(
-      "/api/investigation/evidence",
-      { key: "ev2" },
-      detectiveCookie,
-    );
-    await barrier.entered;
-    await endRound(3, "investigation-branch-test");
-    const resultAtClose = (await getCase()).finalResult;
-    assert.deepEqual(resultAtClose.evidence, []);
-
-    barrier.release();
-    assert.equal((await delayedWrite).status, 409);
-    assert.deepEqual((await getCase()).finalResult, resultAtClose);
-  } finally {
-    barrier.release();
-    barrier.restore();
-  }
+test('Round 2 cannot start while it has not been started by admin', async () => {
+  const cookie = await teamCookie(teamA);
+  const res = await request('/api/rounds/2/investigation/start', {
+    method: 'POST',
+    headers: { cookie, 'content-type': 'application/json' },
+    body: '{}',
+  });
+  assert.equal(res.status, 409);
+  const data = await res.json();
+  assert.equal(data.code, 'ROUND_NOT_RUNNING');
 });
 
-test("detective role claim delayed past expiry is not admitted", async () => {
-  await startRound(3, 300, "investigation-branch-test");
-  const detectiveCookie = await login();
-  const barrier = holdNextAggregateAdmission();
-  try {
-    const delayedJoin = joinDetective(detectiveCookie);
-    await barrier.entered;
-    await RoundState.updateOne(
-      { round: 3 },
-      { $set: { deadline: new Date(Date.now() - 1000) } },
-    );
-    barrier.release();
-    assert.equal((await delayedJoin).status, 409);
-    assert.deepEqual(
-      (await RoundState.findOne({ round: 3 }).lean()).investigations,
-      [],
-    );
-  } finally {
-    barrier.release();
-    barrier.restore();
+test('Resource route access control prevents skipping stages or accessing locked resources', async () => {
+  await startRound(2, 2700, 'admin');
+  const cookie = await teamCookie(teamA);
+
+  // Before starting session: access to resources is blocked
+  const earlyRes = await request('/api/rounds/2/investigation/resources/incident-log', {
+    headers: { cookie },
+  });
+  assert.equal(earlyRes.status, 403);
+
+  // Start session
+  await request('/api/rounds/2/investigation/start', {
+    method: 'POST',
+    headers: { cookie, 'content-type': 'application/json' },
+    body: '{}',
+  });
+
+  // Stage 1 resource is accessible
+  const logRes = await request('/api/rounds/2/investigation/resources/incident-log', {
+    headers: { cookie },
+  });
+  assert.equal(logRes.status, 200);
+  const logData = await logRes.json();
+  assert.ok(logData.html.includes('X-Origin-Node: ALPHA-RELAY-77'));
+
+  // Stage 2, 3, 4 resources are locked and reject with 403 RESOURCE_LOCKED
+  for (const slug of ['advisory', 'terminal', 'vault']) {
+    const lockedRes = await request(`/api/rounds/2/investigation/resources/${slug}`, {
+      headers: { cookie },
+    });
+    assert.equal(lockedRes.status, 403);
+    const lockedData = await lockedRes.json();
+    assert.equal(lockedData.code, 'RESOURCE_LOCKED');
   }
+
+  // Unknown resource returns 404
+  const notFoundRes = await request('/api/rounds/2/investigation/resources/non-existent-asset', {
+    headers: { cookie },
+  });
+  assert.equal(notFoundRes.status, 404);
 });
 
-test("analyst session saved before a delayed role claim is not authorized after expiry", async () => {
-  await startRound(3, 300, "investigation-branch-test");
-  const detectiveCookie = await login();
-  const joined = await (await joinDetective(detectiveCookie)).json();
-  const barrier = holdNextAggregateAdmission();
-  try {
-    const delayedJoin = joinAnalyst(joined.analystInvite);
-    await barrier.entered;
-    await RoundState.updateOne(
-      { round: 3 },
-      { $set: { deadline: new Date(Date.now() - 1000) } },
-    );
-    barrier.release();
-    const response = await delayedJoin;
-    assert.equal(response.status, 409);
-    const savedCase = await getCase();
-    assert.equal(savedCase.analystJoinedAt, null);
-    assert.equal(savedCase.analystSessionHash, null);
-    const analystCookie = response.headers.get("set-cookie")?.split(";", 1)[0];
-    if (analystCookie) {
-      assert.equal(
-        (
-          await request("/api/investigation/state", {
-            headers: { cookie: analystCookie },
-          })
-        ).status,
-        403,
-      );
+test('Investigation lifecycle, hints, scoring formula, ledger integration, and repeat protection', async () => {
+  await startRound(2, 2700, 'admin');
+  const cookieA = await teamCookie(teamA);
+
+  // 1. Initial state
+  let stateRes = await request('/api/rounds/2/investigation/state', { headers: { cookie: cookieA } });
+  let stateData = await stateRes.json();
+  assert.equal(stateData.status, 'not_started');
+
+  // 2. Start game
+  const startRes = await request('/api/rounds/2/investigation/start', {
+    method: 'POST',
+    headers: { cookie: cookieA, 'content-type': 'application/json' },
+    body: '{}',
+  });
+  assert.equal(startRes.status, 200);
+
+  // 3. Stage 1 hint request
+  const hintRes = await request('/api/rounds/2/investigation/hint', {
+    method: 'POST',
+    headers: { cookie: cookieA, 'content-type': 'application/json' },
+    body: JSON.stringify({ stage: 1 }),
+  });
+  assert.equal(hintRes.status, 200);
+  const hintData = await hintRes.json();
+  assert.equal(hintData.hintsUsed, 1);
+  assert.equal(hintData.penalty, 25);
+  assert.ok(hintData.hint.length > 0);
+
+  // 4. Second hint request in Round 2 must be rejected with 409 HINT_ALREADY_USED
+  const secondHintRes = await request('/api/rounds/2/investigation/hint', {
+    method: 'POST',
+    headers: { cookie: cookieA, 'content-type': 'application/json' },
+    body: JSON.stringify({ stage: 1 }),
+  });
+  assert.equal(secondHintRes.status, 409);
+  const secondHintData = await secondHintRes.json();
+  assert.equal(secondHintData.code, 'HINT_ALREADY_USED');
+
+  // 5. Wrong answer penalty check (2 wrong attempts)
+  const wrong1 = await request('/api/rounds/2/investigation/submit', {
+    method: 'POST',
+    headers: { cookie: cookieA, 'content-type': 'application/json' },
+    body: JSON.stringify({ stage: 1, answer: 'WRONG-1' }),
+  });
+  assert.equal(wrong1.status, 422);
+  const wrong2 = await request('/api/rounds/2/investigation/submit', {
+    method: 'POST',
+    headers: { cookie: cookieA, 'content-type': 'application/json' },
+    body: JSON.stringify({ stage: 1, answer: 'WRONG-2' }),
+  });
+  assert.equal(wrong2.status, 422);
+
+  // Check state reflects 2 wrong attempts and revealed hint
+  stateRes = await request('/api/rounds/2/investigation/state', { headers: { cookie: cookieA } });
+  stateData = await stateRes.json();
+  assert.equal(stateData.session.wrongAttempts, 2);
+  assert.equal(stateData.session.hintsUsed, 1);
+  assert.equal(stateData.session.revealedHint?.stage, 1);
+
+  // Verify no score is awarded yet for incomplete investigation
+  const midEntries = await ScoreEntry.find({ teamId: teamA, round: 2 });
+  assert.equal(midEntries.length, 0);
+
+  // 6. Complete stage 1
+  const stage1Res = await request('/api/rounds/2/investigation/submit', {
+    method: 'POST',
+    headers: { cookie: cookieA, 'content-type': 'application/json' },
+    body: JSON.stringify({ stage: 1, answer: 'ALPHA-RELAY-77' }),
+  });
+  assert.equal(stage1Res.status, 200);
+
+  // Stage 2 resource is now unlocked
+  const advisoryRes = await request('/api/rounds/2/investigation/resources/advisory', { headers: { cookie: cookieA } });
+  assert.equal(advisoryRes.status, 200);
+  const advisoryData = await advisoryRes.json();
+  assert.ok(advisoryData.html.includes('FRAME-SHIFT-246'));
+  assert.ok(advisoryData.html.includes('Three records describe the same moment, yet their stories refuse to agree'));
+
+  // 7. Verify old Lead 2 answer is rejected
+  const oldStage2Res = await request('/api/rounds/2/investigation/submit', {
+    method: 'POST',
+    headers: { cookie: cookieA, 'content-type': 'application/json' },
+    body: JSON.stringify({ stage: 2, answer: 'SEC-VAULT-909' }),
+  });
+  assert.equal(oldStage2Res.status, 422);
+
+  // Complete stage 2 with new answer
+  const stage2Res = await request('/api/rounds/2/investigation/submit', {
+    method: 'POST',
+    headers: { cookie: cookieA, 'content-type': 'application/json' },
+    body: JSON.stringify({ stage: 2, answer: 'FRAME-SHIFT-246' }),
+  });
+  assert.equal(stage2Res.status, 200);
+
+  // Stage 3 resource is now unlocked
+  const terminalRes = await request('/api/rounds/2/investigation/resources/terminal', { headers: { cookie: cookieA } });
+  assert.equal(terminalRes.status, 200);
+  const terminalData = await terminalRes.json();
+  assert.ok(terminalData.html.includes('The latest record appears innocent'));
+  assert.ok(terminalData.html.includes('campus-relay-telemetry'));
+
+  // 8. Verify old Lead 3 answers are rejected
+  const oldStage3Res = await request('/api/rounds/2/investigation/submit', {
+    method: 'POST',
+    headers: { cookie: cookieA, 'content-type': 'application/json' },
+    body: JSON.stringify({ stage: 3, answer: 'REWIND-KEY-731' }),
+  });
+  assert.equal(oldStage3Res.status, 422);
+
+  // Complete stage 3 with new challenge token
+  const stage3Res = await request('/api/rounds/2/investigation/submit', {
+    method: 'POST',
+    headers: { cookie: cookieA, 'content-type': 'application/json' },
+    body: JSON.stringify({ stage: 3, answer: 'hellowor!d' }),
+  });
+  assert.equal(stage3Res.status, 200);
+
+  // Stage 4 resource (vault) is now unlocked
+  const vaultRes = await request('/api/rounds/2/investigation/resources/vault', { headers: { cookie: cookieA } });
+  assert.equal(vaultRes.status, 200);
+  const vaultData = await vaultRes.json();
+  assert.ok(vaultData.html.includes('The vault has kept the truth in fragments'));
+  assert.ok(vaultData.html.includes('Signal Reconstruction'));
+
+  // Verify old Lead 4 answer is rejected
+  const oldStage4Res = await request('/api/rounds/2/investigation/submit', {
+    method: 'POST',
+    headers: { cookie: cookieA, 'content-type': 'application/json' },
+    body: JSON.stringify({ stage: 4, answer: 'CC{DOM_SLEUTH_N3TW0RK_941}' }),
+  });
+  assert.equal(oldStage4Res.status, 422);
+
+  // 9. Complete stage 4 (final keyword)
+  // Formula: max(150, 500 - (15 * 5) - (25 * 1))
+  // wrongAttempts: 2 initial + 1 (old stage 2) + 1 (old stage 3) + 1 (old stage 4) = 5 wrong attempts
+  // Penalty = 5 * 15 + 25 = 75 + 25 = 100 -> Score = 400 points
+  const finalRes = await request('/api/rounds/2/investigation/submit', {
+    method: 'POST',
+    headers: { cookie: cookieA, 'content-type': 'application/json' },
+    body: JSON.stringify({ stage: 4, answer: 'UNMASKED' }),
+  });
+  assert.equal(finalRes.status, 200);
+  const finalData = await finalRes.json();
+  assert.equal(finalData.completed, true);
+  assert.equal(finalData.points, 400);
+
+  // 10. Ledger verification: exactly ONE ScoreEntry must exist
+  const scoreEntries = await ScoreEntry.find({ teamId: teamA, round: 2, kind: 'game_result' });
+  assert.equal(scoreEntries.length, 1);
+  assert.equal(scoreEntries[0].amount, 400);
+  assert.equal(scoreEntries[0].game, 'investigation');
+
+  // 11. Replay and duplicate submission protection: repeated final submit returns 409
+  const repeatRes = await request('/api/rounds/2/investigation/submit', {
+    method: 'POST',
+    headers: { cookie: cookieA, 'content-type': 'application/json' },
+    body: JSON.stringify({ stage: 4, answer: 'UNMASKED' }),
+  });
+  assert.equal(repeatRes.status, 409);
+  const repeatEntries = await ScoreEntry.find({ teamId: teamA, round: 2, kind: 'game_result' });
+  assert.equal(repeatEntries.length, 1);
+
+  // 12. Leaderboard integration
+  await rebuildLeaderboard();
+  const board = await getLeaderboard(teamA);
+  const row = board.rows.find((r) => r.name === `Test Alpha ${teamA}`);
+  assert.ok(row);
+  assert.equal(row.r2, 400);
+  assert.equal(row.total, 400);
+});
+
+test('Concurrent final submissions cannot create duplicate ScoreEntry records', async () => {
+  await startRound(2, 2700, 'admin');
+  const cookieA = await teamCookie(teamA);
+
+  await request('/api/rounds/2/investigation/start', {
+    method: 'POST',
+    headers: { cookie: cookieA, 'content-type': 'application/json' },
+    body: '{}',
+  });
+
+  // Solve stages 1-3
+  for (const [stage, answer] of [[1, 'ALPHA-RELAY-77'], [2, 'FRAME-SHIFT-246'], [3, 'hellowor!d']]) {
+    await request('/api/rounds/2/investigation/submit', {
+      method: 'POST',
+      headers: { cookie: cookieA, 'content-type': 'application/json' },
+      body: JSON.stringify({ stage, answer }),
+    });
+  }
+
+  // Fire 5 concurrent final submissions for stage 4
+  const promises = Array.from({ length: 5 }, () =>
+    request('/api/rounds/2/investigation/submit', {
+      method: 'POST',
+      headers: { cookie: cookieA, 'content-type': 'application/json' },
+      body: JSON.stringify({ stage: 4, answer: 'UNMASKED' }),
+    })
+  );
+
+  const responses = await Promise.all(promises);
+  const statuses = responses.map((r) => r.status);
+  // Exactly one request must succeed with 200, others receive 409
+  assert.equal(statuses.filter((s) => s === 200).length, 1);
+  assert.equal(statuses.filter((s) => s === 409).length, 4);
+
+  // Verify only 1 ScoreEntry exists
+  const entries = await ScoreEntry.find({ teamId: teamA, round: 2, kind: 'game_result' });
+  assert.equal(entries.length, 1);
+});
+
+test('Concurrent hint requests in Round 2 cannot consume multiple hints', async () => {
+  await startRound(2, 2700, 'admin');
+  const cookieA = await teamCookie(teamA);
+
+  await request('/api/rounds/2/investigation/start', {
+    method: 'POST',
+    headers: { cookie: cookieA, 'content-type': 'application/json' },
+    body: '{}',
+  });
+
+  // Send 5 concurrent hint requests for stage 1
+  const promises = Array.from({ length: 5 }, () =>
+    request('/api/rounds/2/investigation/hint', {
+      method: 'POST',
+      headers: { cookie: cookieA, 'content-type': 'application/json' },
+      body: JSON.stringify({ stage: 1 }),
+    })
+  );
+
+  const responses = await Promise.all(promises);
+  const statuses = responses.map((r) => r.status);
+  assert.equal(statuses.filter((s) => s === 200).length, 1);
+  assert.equal(statuses.filter((s) => s === 409).length, 4);
+
+  const session = await GameSession.findOne({ teamId: teamA, round: 2 });
+  assert.equal(session.progress.hintsUsed, 1);
+});
+
+test('Round 2 and Round 3 hint entitlements are independent and isolated', async () => {
+  // Start Round 2 and use hint
+  await startRound(2, 2700, 'admin');
+  const cookieA = await teamCookie(teamA);
+
+  await request('/api/rounds/2/investigation/start', {
+    method: 'POST',
+    headers: { cookie: cookieA, 'content-type': 'application/json' },
+    body: '{}',
+  });
+
+  await request('/api/rounds/2/investigation/hint', {
+    method: 'POST',
+    headers: { cookie: cookieA, 'content-type': 'application/json' },
+    body: JSON.stringify({ stage: 1 }),
+  });
+
+  // End Round 2 and start Round 3
+  await endRound(2, 'admin');
+  await startRound(3, 1800, 'admin');
+
+  // Round 3 status shows hint is available (0 hints used)
+  const statusRes = await request('/api/rounds/3/hint/status', { headers: { cookie: cookieA } });
+  assert.equal(statusRes.status, 200);
+  const statusData = await statusRes.json();
+  assert.equal(statusData.hintsUsed, 0);
+  assert.equal(statusData.available, true);
+
+  // Consume Round 3 hint
+  const r3HintRes = await request('/api/rounds/3/hint', {
+    method: 'POST',
+    headers: { cookie: cookieA, 'content-type': 'application/json' },
+    body: '{}',
+  });
+  assert.equal(r3HintRes.status, 200);
+
+  // Second Round 3 hint is rejected
+  const r3SecondRes = await request('/api/rounds/3/hint', {
+    method: 'POST',
+    headers: { cookie: cookieA, 'content-type': 'application/json' },
+    body: '{}',
+  });
+  assert.equal(r3SecondRes.status, 409);
+
+  // Check Round 2 entitlement remains 1 and Round 3 entitlement remains 1
+  const ent2 = await HintEntitlement.findOne({ teamId: teamA, round: 2 });
+  const ent3 = await HintEntitlement.findOne({ teamId: teamA, round: 3 });
+  assert.equal(ent2.hintsUsed, 1);
+  assert.equal(ent3.hintsUsed, 1);
+});
+
+test('Round deadline enforcement: actions rejected once round has ended or expired', async () => {
+  await startRound(2, 2700, 'admin');
+  const cookieA = await teamCookie(teamA);
+
+  await request('/api/rounds/2/investigation/start', {
+    method: 'POST',
+    headers: { cookie: cookieA, 'content-type': 'application/json' },
+    body: '{}',
+  });
+
+  // Admin ends Round 2 early
+  await endRound(2, 'admin');
+
+  // Submit clue returns 409 ROUND_NOT_ACTIVE
+  const submitRes = await request('/api/rounds/2/investigation/submit', {
+    method: 'POST',
+    headers: { cookie: cookieA, 'content-type': 'application/json' },
+    body: JSON.stringify({ stage: 1, answer: 'ALPHA-RELAY-77' }),
+  });
+  assert.equal(submitRes.status, 409);
+
+  // Hint returns 409 ROUND_NOT_RUNNING
+  const hintRes = await request('/api/rounds/2/investigation/hint', {
+    method: 'POST',
+    headers: { cookie: cookieA, 'content-type': 'application/json' },
+    body: JSON.stringify({ stage: 1 }),
+  });
+  assert.equal(hintRes.status, 409);
+});
+
+test('Cross-team isolation: Team B cannot see or alter Team A progress', async () => {
+  await startRound(2, 2700, 'admin');
+  const cookieA = await teamCookie(teamA);
+  const cookieB = await teamCookie(teamB);
+
+  await request('/api/rounds/2/investigation/start', {
+    method: 'POST',
+    headers: { cookie: cookieA, 'content-type': 'application/json' },
+    body: '{}',
+  });
+  await request('/api/rounds/2/investigation/submit', {
+    method: 'POST',
+    headers: { cookie: cookieA, 'content-type': 'application/json' },
+    body: JSON.stringify({ stage: 1, answer: 'ALPHA-RELAY-77' }),
+  });
+
+  const stateBRes = await request('/api/rounds/2/investigation/state', { headers: { cookie: cookieB } });
+  const stateBData = await stateBRes.json();
+  assert.equal(stateBData.status, 'not_started');
+
+  await request('/api/rounds/2/investigation/start', {
+    method: 'POST',
+    headers: { cookie: cookieB, 'content-type': 'application/json' },
+    body: '{}',
+  });
+
+  const stateARes = await request('/api/rounds/2/investigation/state', { headers: { cookie: cookieA } });
+  const stateAData = await stateARes.json();
+  assert.equal(stateAData.session.stage, 2);
+});
+
+test('Session independence: team playing investigation does not disturb admin session in same browser', async () => {
+  await startRound(2, 2700, 'admin');
+  const cookieAdmin = await adminCookie();
+  const cookieTeam = await teamCookie(teamA);
+
+  const adminRoundsRes = await request('/api/admin/rounds', { headers: { cookie: cookieAdmin } });
+  assert.equal(adminRoundsRes.status, 200);
+
+  await request('/api/rounds/2/investigation/start', {
+    method: 'POST',
+    headers: { cookie: cookieTeam, 'content-type': 'application/json' },
+    body: '{}',
+  });
+
+  const adminCheck = await request('/api/admin/rounds', { headers: { cookie: cookieAdmin } });
+  assert.equal(adminCheck.status, 200);
+});
+
+test('Hint failure handling: database error on GameSession rolls back HintEntitlement and allows clean retry', async () => {
+  await startRound(2, 2700, 'admin');
+  const cookieTeam = await teamCookie(teamA);
+
+  await request('/api/rounds/2/investigation/start', {
+    method: 'POST',
+    headers: { cookie: cookieTeam, 'content-type': 'application/json' },
+    body: '{}',
+  });
+
+  // Temporarily stub GameSession.findOneAndUpdate to simulate transient DB write failure
+  const originalFindOneAndUpdate = GameSession.findOneAndUpdate;
+  let simulatedFailure = true;
+  GameSession.findOneAndUpdate = async function (...args) {
+    if (simulatedFailure && args[0]?._id) {
+      simulatedFailure = false;
+      throw new Error('Simulated transient database write collision');
     }
+    return originalFindOneAndUpdate.apply(this, args);
+  };
+
+  try {
+    const failedRes = await request('/api/rounds/2/investigation/hint', {
+      method: 'POST',
+      headers: { cookie: cookieTeam, 'content-type': 'application/json' },
+      body: JSON.stringify({ stage: 1 }),
+    });
+    // Internal server error due to DB write failure
+    assert.equal(failedRes.status, 500);
+
+    // Verify compensating rollback: HintEntitlement must NOT be left consumed
+    const danglingEntitlement = await HintEntitlement.findOne({ teamId: teamA, round: 2 });
+    assert.equal(danglingEntitlement, null, 'HintEntitlement must be rolled back on session update failure');
+
+    // Verify session progress did not record hint consumption
+    const sessionDoc = await GameSession.findOne({ teamId: teamA, round: 2 });
+    assert.equal(sessionDoc.progress?.hintsUsed || 0, 0);
+
+    // Now retry when DB is operational: hint consumption must succeed cleanly
+    const retryRes = await request('/api/rounds/2/investigation/hint', {
+      method: 'POST',
+      headers: { cookie: cookieTeam, 'content-type': 'application/json' },
+      body: JSON.stringify({ stage: 1 }),
+    });
+    assert.equal(retryRes.status, 200);
+    const retryData = await retryRes.json();
+    assert.equal(retryData.hintsUsed, 1);
+    assert.equal(retryData.penalty, 25);
+
+    // Verify both documents are now in sync with hintsUsed: 1
+    const finalEntitlement = await HintEntitlement.findOne({ teamId: teamA, round: 2 });
+    const finalSession = await GameSession.findOne({ teamId: teamA, round: 2 });
+    assert.equal(finalEntitlement.hintsUsed, 1);
+    assert.equal(finalSession.progress.hintsUsed, 1);
   } finally {
-    barrier.release();
-    barrier.restore();
+    GameSession.findOneAndUpdate = originalFindOneAndUpdate;
   }
 });
 
-test("expired analyst invites cannot be redeemed", async () => {
-  await startRound(3, 300, "investigation-branch-test");
-  const detectiveCookie = await login();
-  const joined = await (await joinDetective(detectiveCookie)).json();
-  await RoundState.updateOne(
-    { round: 3, "investigations.teamId": teamId },
-    {
-      $set: {
-        "investigations.$.inviteExpiresAt": new Date(Date.now() - 1000),
-      },
-    },
-  );
-  assert.equal((await joinAnalyst(joined.analystInvite)).status, 401);
+test('Lead 1 regression: existing answer ALPHA-RELAY-77 and resource content remain strictly intact', async () => {
+  await startRound(2, 2700, 'admin');
+  const cookieTeam = await teamCookie(teamA);
+
+  await request('/api/rounds/2/investigation/start', {
+    method: 'POST',
+    headers: { cookie: cookieTeam, 'content-type': 'application/json' },
+    body: '{}',
+  });
+
+  const clue1 = INVESTIGATION_CLUES.find((c) => c.stage === 1);
+  assert.equal(clue1.expectedAnswer, 'ALPHA-RELAY-77');
+  assert.equal(clue1.resource, '/investigation/resources/incident-log');
+  assert.ok(clue1.prompt.includes('The alarm speaks of damage, but damage is only the end of a story'));
+
+  const logRes = await request('/api/rounds/2/investigation/resources/incident-log', {
+    headers: { cookie: cookieTeam },
+  });
+  assert.equal(logRes.status, 200);
+  const logData = await logRes.json();
+  assert.ok(logData.html.includes('X-Origin-Node: ALPHA-RELAY-77'));
+  assert.ok(logData.html.includes('mock-log-table'));
+
+  // Wrong answer is rejected
+  const wrongRes = await request('/api/rounds/2/investigation/submit', {
+    method: 'POST',
+    headers: { cookie: cookieTeam, 'content-type': 'application/json' },
+    body: JSON.stringify({ stage: 1, answer: 'WRONG-ORIGIN-NODE' }),
+  });
+  assert.equal(wrongRes.status, 422);
+
+  // Correct answer is accepted
+  const correctRes = await request('/api/rounds/2/investigation/submit', {
+    method: 'POST',
+    headers: { cookie: cookieTeam, 'content-type': 'application/json' },
+    body: JSON.stringify({ stage: 1, answer: 'ALPHA-RELAY-77' }),
+  });
+  assert.equal(correctRes.status, 200);
+});
+
+test('Lead 2 redesign: accepts FRAME-SHIFT-246, rejects old SEC-VAULT-909, and resource embeds evidence board', async () => {
+  await startRound(2, 2700, 'admin');
+  const cookieTeam = await teamCookie(teamA);
+
+  await request('/api/rounds/2/investigation/start', {
+    method: 'POST',
+    headers: { cookie: cookieTeam, 'content-type': 'application/json' },
+    body: '{}',
+  });
+  await request('/api/rounds/2/investigation/submit', {
+    method: 'POST',
+    headers: { cookie: cookieTeam, 'content-type': 'application/json' },
+    body: JSON.stringify({ stage: 1, answer: 'ALPHA-RELAY-77' }),
+  });
+
+  const clue2 = INVESTIGATION_CLUES.find((c) => c.stage === 2);
+  assert.equal(clue2.expectedAnswer, 'FRAME-SHIFT-246');
+  assert.ok(clue2.prompt.includes('Three records describe the same moment, yet their stories refuse to agree'));
+
+  const advisoryRes = await request('/api/rounds/2/investigation/resources/advisory', {
+    headers: { cookie: cookieTeam },
+  });
+  assert.equal(advisoryRes.status, 200);
+  const advisoryData = await advisoryRes.json();
+  assert.ok(advisoryData.html.includes('FRAME-SHIFT-246'));
+  assert.ok(advisoryData.html.includes('Three records describe the same moment'));
+  assert.ok(advisoryData.html.includes('DFU-REP-2026-042'));
+  assert.ok(advisoryData.html.includes('doc-forensic-report.svg'));
+  assert.ok(advisoryData.html.includes('cctv-server-rack.jpg'));
+
+  // Old answer must be rejected
+  const oldRes = await request('/api/rounds/2/investigation/submit', {
+    method: 'POST',
+    headers: { cookie: cookieTeam, 'content-type': 'application/json' },
+    body: JSON.stringify({ stage: 2, answer: 'SEC-VAULT-909' }),
+  });
+  assert.equal(oldRes.status, 422);
+
+  // New answer accepted and unlocks Lead 3
+  const newRes = await request('/api/rounds/2/investigation/submit', {
+    method: 'POST',
+    headers: { cookie: cookieTeam, 'content-type': 'application/json' },
+    body: JSON.stringify({ stage: 2, answer: 'FRAME-SHIFT-246' }),
+  });
+  assert.equal(newRes.status, 200);
+  const submitData = await newRes.json();
+  assert.equal(submitData.stage, 3);
+
+  // Lead 3 resource is now accessible
+  const terminalRes = await request('/api/rounds/2/investigation/resources/terminal', {
+    headers: { cookie: cookieTeam },
+  });
+  assert.equal(terminalRes.status, 200);
+
+  // Verify all 13 forensic assets exist locally in public/assets/forensic/
+  const forensicDir = path.resolve(__dirname, '../../public/assets/forensic');
+  const expectedAssets = [
+    'doc-incident-timeline.svg',
+    'cctv-server-rack.jpg',
+    'cctv-corridor.jpg',
+    'doc-access-logs.svg',
+    'doc-network-flow.svg',
+    'doc-forensic-report.svg',
+    'hardware-network-tap.jpg',
+    'hardware-tamper-switch.jpg',
+    'smartcard-badge-bag.jpg',
+    'doc-officer-statement.svg',
+    'doc-investigator-notes.svg',
+    'doc-evidence-inventory.svg',
+    'doc-floorplan-topology.svg',
+  ];
+  for (const asset of expectedAssets) {
+    const fullPath = path.join(forensicDir, asset);
+    assert.ok(fs.existsSync(fullPath), `Forensic asset ${asset} must exist locally`);
+  }
+
+  // Verify doc-forensic-report.svg contains the canonical answer
+  const forensicReportSvg = fs.readFileSync(path.join(forensicDir, 'doc-forensic-report.svg'), 'utf8');
+  assert.ok(forensicReportSvg.includes('FRAME-SHIFT-246'));
+
+  // Verify production bundle does not leak canonical answer
+  const distDir = path.resolve(__dirname, '../../dist/assets');
+  if (fs.existsSync(distDir)) {
+    const jsFiles = fs.readdirSync(distDir).filter((f) => f.endsWith('.js'));
+    for (const jsFile of jsFiles) {
+      const jsContent = fs.readFileSync(path.join(distDir, jsFile), 'utf8');
+      assert.ok(!jsContent.includes('FRAME-SHIFT-246'), `Production JS bundle ${jsFile} must not leak FRAME-SHIFT-246`);
+    }
+  }
+});
+
+test('Lead 3 redesign: accepts hellowor!d, rejects old REWIND-KEY-731 and SHADOW-KEY-418, and resource links CyberHint repository', async () => {
+  await startRound(2, 2700, 'admin');
+  const cookieTeam = await teamCookie(teamA);
+
+  await request('/api/rounds/2/investigation/start', {
+    method: 'POST',
+    headers: { cookie: cookieTeam, 'content-type': 'application/json' },
+    body: '{}',
+  });
+  await request('/api/rounds/2/investigation/submit', {
+    method: 'POST',
+    headers: { cookie: cookieTeam, 'content-type': 'application/json' },
+    body: JSON.stringify({ stage: 1, answer: 'ALPHA-RELAY-77' }),
+  });
+  await request('/api/rounds/2/investigation/submit', {
+    method: 'POST',
+    headers: { cookie: cookieTeam, 'content-type': 'application/json' },
+    body: JSON.stringify({ stage: 2, answer: 'FRAME-SHIFT-246' }),
+  });
+
+  const clue3 = INVESTIGATION_CLUES.find((c) => c.stage === 3);
+  assert.equal(clue3.expectedAnswer, 'hellowor!d');
+  assert.ok(clue3.prompt.includes('The latest record appears innocent'));
+
+  const terminalRes = await request('/api/rounds/2/investigation/resources/terminal', {
+    headers: { cookie: cookieTeam },
+  });
+  assert.equal(terminalRes.status, 200);
+  const terminalData = await terminalRes.json();
+  assert.ok(terminalData.html.includes('The latest record appears innocent'));
+  assert.ok(terminalData.html.includes('campus-relay-telemetry'));
+  assert.ok(terminalData.html.includes('https://github.com/DDuggad/CyberHint'));
+
+  // Old answers must be rejected
+  const oldRes1 = await request('/api/rounds/2/investigation/submit', {
+    method: 'POST',
+    headers: { cookie: cookieTeam, 'content-type': 'application/json' },
+    body: JSON.stringify({ stage: 3, answer: 'SHADOW-KEY-418' }),
+  });
+  assert.equal(oldRes1.status, 422);
+
+  const oldRes2 = await request('/api/rounds/2/investigation/submit', {
+    method: 'POST',
+    headers: { cookie: cookieTeam, 'content-type': 'application/json' },
+    body: JSON.stringify({ stage: 3, answer: 'REWIND-KEY-731' }),
+  });
+  assert.equal(oldRes2.status, 422);
+
+  // New answer accepted
+  const newRes = await request('/api/rounds/2/investigation/submit', {
+    method: 'POST',
+    headers: { cookie: cookieTeam, 'content-type': 'application/json' },
+    body: JSON.stringify({ stage: 3, answer: 'hellowor!d' }),
+  });
+  assert.equal(newRes.status, 200);
+});
+
+test('Lead 4 redesign: accepts UNMASKED, rejects invalid answers, and resource provides signal reconstruction', async () => {
+  await startRound(2, 2700, 'admin');
+  const cookieTeam = await teamCookie(teamA);
+
+  await request('/api/rounds/2/investigation/start', {
+    method: 'POST',
+    headers: { cookie: cookieTeam, 'content-type': 'application/json' },
+    body: '{}',
+  });
+  await request('/api/rounds/2/investigation/submit', {
+    method: 'POST',
+    headers: { cookie: cookieTeam, 'content-type': 'application/json' },
+    body: JSON.stringify({ stage: 1, answer: 'ALPHA-RELAY-77' }),
+  });
+  await request('/api/rounds/2/investigation/submit', {
+    method: 'POST',
+    headers: { cookie: cookieTeam, 'content-type': 'application/json' },
+    body: JSON.stringify({ stage: 2, answer: 'FRAME-SHIFT-246' }),
+  });
+  await request('/api/rounds/2/investigation/submit', {
+    method: 'POST',
+    headers: { cookie: cookieTeam, 'content-type': 'application/json' },
+    body: JSON.stringify({ stage: 3, answer: 'hellowor!d' }),
+  });
+
+  const clue4 = INVESTIGATION_CLUES.find((c) => c.stage === 4);
+  assert.equal(clue4.expectedAnswer, 'UNMASKED');
+  assert.ok(clue4.prompt.includes('The vault has kept the truth in fragments'));
+
+  const vaultRes = await request('/api/rounds/2/investigation/resources/vault', {
+    headers: { cookie: cookieTeam },
+  });
+  assert.equal(vaultRes.status, 200);
+  const vaultData = await vaultRes.json();
+  assert.ok(vaultData.html.includes('The vault has kept the truth in fragments'));
+  assert.ok(vaultData.html.includes('Signal Reconstruction'));
+
+  // Old answer must be rejected
+  const oldRes = await request('/api/rounds/2/investigation/submit', {
+    method: 'POST',
+    headers: { cookie: cookieTeam, 'content-type': 'application/json' },
+    body: JSON.stringify({ stage: 4, answer: 'CC{DOM_SLEUTH_N3TW0RK_941}' }),
+  });
+  assert.equal(oldRes.status, 422);
+
+  // New answer accepted
+  const newRes = await request('/api/rounds/2/investigation/submit', {
+    method: 'POST',
+    headers: { cookie: cookieTeam, 'content-type': 'application/json' },
+    body: JSON.stringify({ stage: 4, answer: 'UNMASKED' }),
+  });
+  assert.equal(newRes.status, 200);
+  const newData = await newRes.json();
+  assert.equal(newData.completed, true);
 });

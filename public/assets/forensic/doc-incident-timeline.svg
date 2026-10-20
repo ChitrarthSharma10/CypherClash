@@ -1,0 +1,83 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 650" width="500" height="650">
+  <defs>
+    <filter id="paper-shadow" x="-5%" y="-5%" width="110%" height="110%">
+      <feDropShadow dx="2" dy="4" stdDeviation="4" flood-color="#000" flood-opacity="0.35"/>
+    </filter>
+  </defs>
+  
+  <!-- Document Base -->
+  <rect x="10" y="10" width="480" height="630" rx="3" fill="#f8fafc" stroke="#cbd5e1" stroke-width="1.5" filter="url(#paper-shadow)"/>
+  
+  <!-- Header Banner -->
+  <rect x="25" y="25" width="450" height="42" fill="#0f172a" rx="2"/>
+  <text x="40" y="46" font-family="'Courier New', monospace" font-size="11" font-weight="bold" fill="#72efdd" letter-spacing="1">CAMPUS IT SECURITY OPERATIONS // INCIDENT DOSSIER</text>
+  <text x="40" y="58" font-family="'Courier New', monospace" font-size="9" fill="#94a3b8">INCIDENT REF: #CC-2026-0814  |  SECURITY LEVEL: RESTRICTED</text>
+  
+  <!-- Stamp -->
+  <rect x="360" y="75" width="100" height="28" rx="2" fill="none" stroke="#ef4444" stroke-width="1.8" stroke-dasharray="3,1" transform="rotate(-4 410 89)"/>
+  <text x="410" y="93" font-family="'Courier New', monospace" font-size="10" font-weight="bold" fill="#ef4444" text-anchor="middle" letter-spacing="1.5" transform="rotate(-4 410 89)">OFFICIAL AUDIT</text>
+  
+  <!-- Metadata Box -->
+  <rect x="25" y="75" width="320" height="60" fill="#f1f5f9" stroke="#e2e8f0" stroke-width="1"/>
+  <text x="35" y="92" font-family="monospace" font-size="9" fill="#475569">DATE OF INCIDENT: 2026-08-14</text>
+  <text x="35" y="106" font-family="monospace" font-size="9" fill="#475569">LOCATION: Building C (Computing), Room B-04</text>
+  <text x="35" y="120" font-family="monospace" font-size="9" fill="#475569">INVESTIGATING LEAD: Det. R. Cross (Badge #812)</text>
+  
+  <!-- Section Title -->
+  <text x="25" y="156" font-family="'Courier New', monospace" font-size="11" font-weight="bold" fill="#0f172a">1. OPERATIONAL INCIDENT TIMELINE (UTC)</text>
+  <line x1="25" y1="162" x2="475" y2="162" stroke="#0f172a" stroke-width="1"/>
+  
+  <!-- Timeline Table Header -->
+  <rect x="25" y="172" width="450" height="20" fill="#e2e8f0"/>
+  <text x="32" y="186" font-family="monospace" font-size="8.5" font-weight="bold" fill="#1e293b">TIME</text>
+  <text x="110" y="186" font-family="monospace" font-size="8.5" font-weight="bold" fill="#1e293b">SOURCE</text>
+  <text x="220" y="186" font-family="monospace" font-size="8.5" font-weight="bold" fill="#1e293b">RECORDED EVENT</text>
+  
+  <!-- Timeline Rows -->
+  <text x="32" y="208" font-family="monospace" font-size="8" fill="#334155">02:58:12</text>
+  <text x="110" y="208" font-family="monospace" font-size="8" fill="#334155">Reader Ext</text>
+  <text x="220" y="208" font-family="monospace" font-size="8" fill="#334155">Guard Vance exterior gate badge swipe</text>
+  
+  <text x="32" y="228" font-family="monospace" font-size="8" fill="#334155">03:09:40</text>
+  <text x="110" y="228" font-family="monospace" font-size="8" fill="#334155">Door B-04</text>
+  <text x="220" y="228" font-family="monospace" font-size="8" fill="#334155">Maintenance badge #FAC-9412 unlocks server room</text>
+  
+  <rect x="25" y="238" width="450" height="24" fill="#fef2f2"/>
+  <text x="32" y="254" font-family="monospace" font-size="8" font-weight="bold" fill="#b91c1c">03:14:02</text>
+  <text x="110" y="254" font-family="monospace" font-size="8" font-weight="bold" fill="#b91c1c">GATEWAY-ALPHA</text>
+  <text x="220" y="254" font-family="monospace" font-size="8" font-weight="bold" fill="#b91c1c">[CRITICAL] Ingress bridge alert: TCP/8443 opened</text>
+  
+  <text x="32" y="278" font-family="monospace" font-size="8" fill="#334155">03:14:15</text>
+  <text x="110" y="278" font-family="monospace" font-size="8" fill="#334155">CAM-02</text>
+  <text x="220" y="278" font-family="monospace" font-size="8" fill="#334155">Motion in basement corridor outside Door B-04</text>
+  
+  <rect x="25" y="288" width="450" height="24" fill="#fffbeb"/>
+  <text x="32" y="304" font-family="monospace" font-size="8" font-weight="bold" fill="#b45309">03:14:38</text>
+  <text x="110" y="304" font-family="monospace" font-size="8" font-weight="bold" fill="#b45309">CAM-04</text>
+  <text x="220" y="304" font-family="monospace" font-size="8" font-weight="bold" fill="#b45309">Server room recording: aisle appears static [DISCREPANCY]</text>
+  
+  <text x="32" y="328" font-family="monospace" font-size="8" fill="#334155">03:16:50</text>
+  <text x="110" y="328" font-family="monospace" font-size="8" fill="#334155">Door B-04</text>
+  <text x="220" y="328" font-family="monospace" font-size="8" fill="#334155">Physical magnetic sensor verifies door closed</text>
+  
+  <text x="32" y="348" font-family="monospace" font-size="8" fill="#334155">03:17:05</text>
+  <text x="110" y="348" font-family="monospace" font-size="8" fill="#334155">IDS Gateway</text>
+  <text x="220" y="348" font-family="monospace" font-size="8" fill="#334155">Rogue relay broadcast terminates; perimeter isolated</text>
+  
+  <!-- Narrative Section -->
+  <text x="25" y="390" font-family="'Courier New', monospace" font-size="11" font-weight="bold" fill="#0f172a">2. FORENSIC IRREGULARITY FINDINGS</text>
+  <line x1="25" y1="396" x2="475" y2="396" stroke="#0f172a" stroke-width="1"/>
+  
+  <rect x="25" y="406" width="450" height="150" fill="#f1f5f9" stroke="#e2e8f0" stroke-width="1" rx="2"/>
+  <text x="35" y="426" font-family="monospace" font-size="8.5" fill="#334155">• While badge telemetry confirms access to Server Room B-04 at 03:09 UTC and</text>
+  <text x="45" y="440" font-family="monospace" font-size="8.5" fill="#334155">network alarms peaked at 03:14 UTC, CCTV CAM-04 exhibited suspicious continuity.</text>
+  <text x="35" y="464" font-family="monospace" font-size="8.5" fill="#334155">• Initial review suggested the room was empty, but Officer Vance noticed video stutter.</text>
+  <text x="45" y="478" font-family="monospace" font-size="8.5" fill="#334155">Raw multiplexer streams were sent to the Digital Forensics Unit for analysis.</text>
+  <text x="35" y="502" font-family="monospace" font-size="8.5" font-weight="bold" fill="#0369a1">• Cross-reference required: Compare Door B-04 Access Logs with DFU Report</text>
+  <text x="45" y="516" font-family="monospace" font-size="8.5" font-weight="bold" fill="#b91c1c">(DFU-REP-2026-042) on CAM-04 video stream to isolate displaced frame marker.</text>
+  
+  <!-- Footer Seal -->
+  <line x1="25" y1="580" x2="475" y2="580" stroke="#cbd5e1" stroke-width="1"/>
+  <text x="25" y="605" font-family="monospace" font-size="8" fill="#64748b">CAMPUS POLICE EVIDENCE DIVISION  //  CASE FILE #CC-2026-0814</text>
+  <text x="25" y="618" font-family="monospace" font-size="7.5" fill="#94a3b8">DO NOT REMOVE FROM FORENSIC REPOSITORY WITHOUT WRITTEN CHAIN OF CUSTODY</text>
+</svg>

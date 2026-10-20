@@ -1,0 +1,76 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 450 550" width="450" height="550">
+  <defs>
+    <filter id="pad-shadow" x="-5%" y="-5%" width="110%" height="110%">
+      <feDropShadow dx="3" dy="5" stdDeviation="4" flood-color="#000" flood-opacity="0.35"/>
+    </filter>
+  </defs>
+  
+  <!-- Yellow Legal Notepad Base -->
+  <rect x="10" y="10" width="430" height="530" rx="4" fill="#fef9c3" stroke="#fde047" stroke-width="1.5" filter="url(#pad-shadow)"/>
+  
+  <!-- Red Top Binding Tape -->
+  <rect x="10" y="10" width="430" height="35" rx="3" fill="#991b1b"/>
+  <circle cx="60" cy="27" r="4" fill="#fef9c3"/>
+  <circle cx="390" cy="27" r="4" fill="#fef9c3"/>
+  
+  <!-- Margin Lines -->
+  <line x1="75" y1="45" x2="75" y2="540" stroke="#f87171" stroke-width="1.2"/>
+  <line x1="78" y1="45" x2="78" y2="540" stroke="#f87171" stroke-width="0.8"/>
+  
+  <!-- Horizontal Lined Paper Rules -->
+  <line x1="10" y1="80" x2="440" y2="80" stroke="#93c5fd" stroke-width="0.8"/>
+  <line x1="10" y1="115" x2="440" y2="115" stroke="#93c5fd" stroke-width="0.8"/>
+  <line x1="10" y1="150" x2="440" y2="150" stroke="#93c5fd" stroke-width="0.8"/>
+  <line x1="10" y1="185" x2="440" y2="185" stroke="#93c5fd" stroke-width="0.8"/>
+  <line x1="10" y1="220" x2="440" y2="220" stroke="#93c5fd" stroke-width="0.8"/>
+  <line x1="10" y1="255" x2="440" y2="255" stroke="#93c5fd" stroke-width="0.8"/>
+  <line x1="10" y1="290" x2="440" y2="290" stroke="#93c5fd" stroke-width="0.8"/>
+  <line x1="10" y1="325" x2="440" y2="325" stroke="#93c5fd" stroke-width="0.8"/>
+  <line x1="10" y1="360" x2="440" y2="360" stroke="#93c5fd" stroke-width="0.8"/>
+  <line x1="10" y1="395" x2="440" y2="395" stroke="#93c5fd" stroke-width="0.8"/>
+  <line x1="10" y1="430" x2="440" y2="430" stroke="#93c5fd" stroke-width="0.8"/>
+  <line x1="10" y1="465" x2="440" y2="465" stroke="#93c5fd" stroke-width="0.8"/>
+  <line x1="10" y1="500" x2="440" y2="500" stroke="#93c5fd" stroke-width="0.8"/>
+
+  <!-- Handwritten Notes Style -->
+  <text x="90" y="74" font-family="'Comic Sans MS', 'Chalkboard SE', 'Bradley Hand', cursive, sans-serif" font-size="12" font-weight="bold" fill="#1e3a8a">
+    CASE NOTES: Campus Relay Breach (#CC-2026-0814)
+  </text>
+  
+  <text x="90" y="108" font-family="'Comic Sans MS', 'Chalkboard SE', cursive, sans-serif" font-size="10.5" fill="#1e3a8a">
+    1. Timeline contradiction! Check CAM-04 vs Badge log.
+  </text>
+  <text x="90" y="143" font-family="'Comic Sans MS', 'Chalkboard SE', cursive, sans-serif" font-size="10" fill="#1e3a8a">
+    - Badge #FAC-9412 entered Room B-04 at 03:09 UTC.
+  </text>
+  <text x="90" y="178" font-family="'Comic Sans MS', 'Chalkboard SE', cursive, sans-serif" font-size="10" fill="#1e3a8a">
+    - Network ingress peaked at 03:14 on GATEWAY-ALPHA.
+  </text>
+  <text x="90" y="213" font-family="'Comic Sans MS', 'Chalkboard SE', cursive, sans-serif" font-size="10" fill="#b91c1c">
+    - But CAM-04 CCTV shows an EMPTY AISLE at 03:14:38?!
+  </text>
+  <text x="90" y="248" font-family="'Comic Sans MS', 'Chalkboard SE', cursive, sans-serif" font-size="10.5" font-weight="bold" fill="#1e3a8a">
+    Video was spliced or looped to hide the intruder!
+  </text>
+  <text x="90" y="283" font-family="'Comic Sans MS', 'Chalkboard SE', cursive, sans-serif" font-size="10" fill="#1e3a8a">
+    2. Sent raw DVR hard drive to Forensics Lab (DFU).
+  </text>
+  <text x="90" y="318" font-family="'Comic Sans MS', 'Chalkboard SE', cursive, sans-serif" font-size="10" fill="#1e3a8a">
+    Examiner Rostova analyzed the container stream.
+  </text>
+  <text x="90" y="353" font-family="'Comic Sans MS', 'Chalkboard SE', cursive, sans-serif" font-size="10.5" font-weight="bold" fill="#b91c1c">
+    3. SEE REPORT: DFU-REP-2026-042!
+  </text>
+  <text x="90" y="388" font-family="'Comic Sans MS', 'Chalkboard SE', cursive, sans-serif" font-size="10" fill="#1e3a8a">
+    Displaced frame analysis reveals the exact raw container
+  </text>
+  <text x="90" y="423" font-family="'Comic Sans MS', 'Chalkboard SE', cursive, sans-serif" font-size="10" fill="#1e3a8a">
+    marker injected into the video feed.
+  </text>
+  <text x="90" y="458" font-family="'Comic Sans MS', 'Chalkboard SE', cursive, sans-serif" font-size="10" fill="#1e3a8a">
+    That displaced frame marker is the key to the sequence.
+  </text>
+  <text x="90" y="493" font-family="'Comic Sans MS', 'Chalkboard SE', cursive, sans-serif" font-size="9.5" fill="#475569">
+    - Det. R. Cross // Lead Field Investigator
+  </text>
+</svg>

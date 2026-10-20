@@ -1,0 +1,85 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 580" width="500" height="580">
+  <defs>
+    <filter id="inv-shadow" x="-5%" y="-5%" width="110%" height="110%">
+      <feDropShadow dx="2" dy="4" stdDeviation="4" flood-color="#000" flood-opacity="0.35"/>
+    </filter>
+  </defs>
+  
+  <rect x="10" y="10" width="480" height="560" rx="2" fill="#f8fafc" stroke="#cbd5e1" stroke-width="1.5" filter="url(#inv-shadow)"/>
+  
+  <!-- Header -->
+  <rect x="25" y="25" width="450" height="38" fill="#1e293b" rx="2"/>
+  <text x="40" y="44" font-family="'Courier New', monospace" font-size="10.5" font-weight="bold" fill="#f59e0b" letter-spacing="1">POLICE FORENSIC DIVISION // EVIDENCE INVENTORY</text>
+  <text x="40" y="55" font-family="'Courier New', monospace" font-size="8.5" fill="#94a3b8">CHAIN OF CUSTODY LOG  |  MASTER REPOSITORY: VAULT-B</text>
+  
+  <text x="25" y="85" font-family="monospace" font-size="9" fill="#475569">CASE: #CC-2026-0814  |  SEIZING OFFICER: Det. R. Cross</text>
+  <text x="320" y="85" font-family="monospace" font-size="9" fill="#475569">SEAL INTEGRITY: INTACT</text>
+  <line x1="25" y1="92" x2="475" y2="92" stroke="#0f172a" stroke-width="1"/>
+  
+  <!-- Table Header -->
+  <rect x="25" y="100" width="450" height="22" fill="#e2e8f0"/>
+  <text x="32" y="115" font-family="monospace" font-size="8" font-weight="bold" fill="#1e293b">ITEM ID</text>
+  <text x="110" y="115" font-family="monospace" font-size="8" font-weight="bold" fill="#1e293b">DESCRIPTION</text>
+  <text x="280" y="115" font-family="monospace" font-size="8" font-weight="bold" fill="#1e293b">LOCATION RECOVERED</text>
+  <text x="415" y="115" font-family="monospace" font-size="8" font-weight="bold" fill="#1e293b">CUSTODY</text>
+  
+  <!-- Row 1 -->
+  <text x="32" y="145" font-family="monospace" font-size="8" fill="#0f172a">EV-8820-A</text>
+  <text x="110" y="145" font-family="monospace" font-size="8" fill="#334155">CCTV DVR Drive (CAM-04 Stream)</text>
+  <text x="280" y="145" font-family="monospace" font-size="8" fill="#334155">Security Console Rack #2</text>
+  <text x="415" y="145" font-family="monospace" font-size="8" fill="#0284c7">DFU LAB</text>
+  
+  <!-- Row 2 -->
+  <text x="32" y="180" font-family="monospace" font-size="8" fill="#0f172a">EV-8820-B</text>
+  <text x="110" y="180" font-family="monospace" font-size="8" fill="#334155">Hardware Ethernet Tap &amp; Splicer</text>
+  <text x="280" y="180" font-family="monospace" font-size="8" fill="#334155">Rack B-04 Switch G1/0/4</text>
+  <text x="415" y="180" font-family="monospace" font-size="8" fill="#0284c7">VAULT LOCK</text>
+  
+  <!-- Row 3 -->
+  <text x="32" y="215" font-family="monospace" font-size="8" fill="#0f172a">EV-8820-C</text>
+  <text x="110" y="215" font-family="monospace" font-size="8" fill="#334155">Cloned RFID Access Keycard #004</text>
+  <text x="280" y="215" font-family="monospace" font-size="8" fill="#334155">Basement Stairwell Door</text>
+  <text x="415" y="215" font-family="monospace" font-size="8" fill="#0284c7">VAULT LOCK</text>
+  
+  <!-- Row 4 -->
+  <text x="32" y="250" font-family="monospace" font-size="8" fill="#0f172a">EV-8820-D</text>
+  <text x="110" y="250" font-family="monospace" font-size="8" fill="#334155">Cut Fiber Patch Cables (Orange)</text>
+  <text x="280" y="250" font-family="monospace" font-size="8" fill="#334155">Floor beneath Rack B-04</text>
+  <text x="415" y="250" font-family="monospace" font-size="8" fill="#0284c7">VAULT LOCK</text>
+  
+  <line x1="25" y1="280" x2="475" y2="280" stroke="#cbd5e1" stroke-width="1"/>
+  
+  <!-- Barcode and Verification Stamp -->
+  <rect x="25" y="300" width="220" height="90" fill="#f1f5f9" stroke="#cbd5e1" stroke-width="1"/>
+  <text x="35" y="320" font-family="monospace" font-size="8.5" font-weight="bold" fill="#0f172a">BARCODE VERIFICATION:</text>
+  
+  <!-- Mock Barcode lines -->
+  <rect x="35" y="330" width="4" height="35" fill="#000"/>
+  <rect x="42" y="330" width="2" height="35" fill="#000"/>
+  <rect x="48" y="330" width="6" height="35" fill="#000"/>
+  <rect x="58" y="330" width="2" height="35" fill="#000"/>
+  <rect x="64" y="330" width="5" height="35" fill="#000"/>
+  <rect x="74" y="330" width="3" height="35" fill="#000"/>
+  <rect x="82" y="330" width="6" height="35" fill="#000"/>
+  <rect x="92" y="330" width="2" height="35" fill="#000"/>
+  <rect x="98" y="330" width="4" height="35" fill="#000"/>
+  <rect x="106" y="330" width="6" height="35" fill="#000"/>
+  <rect x="116" y="330" width="3" height="35" fill="#000"/>
+  <rect x="124" y="330" width="5" height="35" fill="#000"/>
+  <text x="35" y="380" font-family="monospace" font-size="7.5" fill="#64748b">*CC-EV-8820-MASTER-AUDIT*</text>
+  
+  <!-- Evidence Seal Badge -->
+  <circle cx="360" cy="345" r="38" fill="none" stroke="#d97706" stroke-width="2" stroke-dasharray="4,2"/>
+  <text x="360" y="342" font-family="monospace" font-size="8.5" font-weight="bold" fill="#d97706" text-anchor="middle">OFFICIAL</text>
+  <text x="360" y="354" font-family="monospace" font-size="8.5" font-weight="bold" fill="#d97706" text-anchor="middle">EVIDENCE</text>
+  
+  <line x1="25" y1="420" x2="475" y2="420" stroke="#cbd5e1" stroke-width="1"/>
+  
+  <rect x="25" y="430" width="450" height="75" fill="#f1f5f9" stroke="#cbd5e1" stroke-width="1" rx="2"/>
+  <text x="35" y="452" font-family="monospace" font-size="8" font-weight="bold" fill="#0f172a">INVENTORY SUMMARY:</text>
+  <text x="35" y="470" font-family="monospace" font-size="8" fill="#475569">All evidence containers sealed with tamper-evident tape. Item EV-8820-A</text>
+  <text x="35" y="485" font-family="monospace" font-size="8" fill="#475569">released to Digital Forensics Laboratory for multiplexer container recovery</text>
+  <text x="35" y="498" font-family="monospace" font-size="8" font-weight="bold" fill="#0284c7">(DFU Report #DFU-REP-2026-042).</text>
+  
+  <text x="25" y="535" font-family="monospace" font-size="8" fill="#64748b">RECORDING CLERK: S. Henderson, Evidence Custodian</text>
+</svg>
