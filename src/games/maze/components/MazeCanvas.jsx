@@ -215,6 +215,84 @@ function createAdventurerMesh() {
 }
 
 /**
+ * 3D Hunter Mesh - Chaser avatar with ominous dark obsidian armor, glowing crimson horns & visor, and red aura
+ */
+function createHunterMesh() {
+  const hunter = new THREE.Group();
+
+  // Dark obsidian helmet/hood
+  const hoodGeo = new THREE.CylinderGeometry(0.28, 0.32, 0.38, 16);
+  const armorMat = new THREE.MeshStandardMaterial({
+    color: 0x0f172a,
+    roughness: 0.3,
+    metalness: 0.85,
+  });
+  const hood = new THREE.Mesh(hoodGeo, armorMat);
+  hood.position.y = 1.05;
+  hunter.add(hood);
+
+  // Horns / Spikes on helmet
+  const hornMat = new THREE.MeshStandardMaterial({ color: 0xdc2626, roughness: 0.2, metalness: 0.9 });
+  const hornL = new THREE.Mesh(new THREE.ConeGeometry(0.06, 0.3, 8), hornMat);
+  hornL.position.set(-0.2, 1.25, 0);
+  hornL.rotation.z = 0.4;
+  const hornR = new THREE.Mesh(new THREE.ConeGeometry(0.06, 0.3, 8), hornMat);
+  hornR.position.set(0.2, 1.25, 0);
+  hornR.rotation.z = -0.4;
+  hunter.add(hornL, hornR);
+
+  // Glowing Crimson Visor / Eyes
+  const visorMat = new THREE.MeshBasicMaterial({ color: 0xff0033 });
+  const visor = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.08, 0.12), visorMat);
+  visor.position.set(0, 0.98, 0.22);
+  hunter.add(visor);
+
+  // Torso / Heavy Cyber Armor
+  const torsoMat = new THREE.MeshStandardMaterial({
+    color: 0x1e1b4b,
+    roughness: 0.4,
+    metalness: 0.7,
+  });
+  const torso = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.46, 0.28), torsoMat);
+  torso.position.y = 0.58;
+  hunter.add(torso);
+
+  // Crimson Core Reactor on Chest
+  const coreMat = new THREE.MeshStandardMaterial({
+    color: 0xef4444,
+    emissive: 0xdc2626,
+    emissiveIntensity: 2.0,
+    roughness: 0.2,
+  });
+  const core = new THREE.Mesh(new THREE.OctahedronGeometry(0.1), coreMat);
+  core.position.set(0, 0.62, 0.15);
+  hunter.add(core);
+
+  // Legs / Armored Greaves
+  const greaveMat = new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.4, metalness: 0.8 });
+  const legL = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.09, 0.34, 10), greaveMat);
+  legL.position.set(-0.12, 0.17, 0);
+  const legR = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.09, 0.34, 10), greaveMat);
+  legR.position.set(0.12, 0.17, 0);
+  hunter.add(legL, legR);
+
+  // Menacing Red Aura Point Light
+  const hunterLight = new THREE.PointLight(0xff0044, 2.8, 6.0, 1.2);
+  hunterLight.position.set(0, 1.2, 0);
+  hunter.add(hunterLight);
+
+  // Ground Warning Beacon Ring
+  const ringMat = new THREE.MeshBasicMaterial({ color: 0xff0033, transparent: true, opacity: 0.65 });
+  const ring = new THREE.Mesh(new THREE.RingGeometry(0.32, 0.42, 24), ringMat);
+  ring.rotation.x = -Math.PI / 2;
+  ring.position.y = 0.04;
+  hunter.add(ring);
+
+  hunter.scale.set(1.95, 1.95, 1.95);
+  return hunter;
+}
+
+/**
  * 3D Golden Treasure Vault Chest with sparkling gem mounds
  */
 function createTreasureVaultMesh() {
@@ -854,6 +932,11 @@ export default function MazeCanvas({ state, gameState, playerId }) {
     const playerAdventurer = createAdventurerMesh();
     scene.add(playerAdventurer);
 
+    // 3D Hunter Mesh (server-authoritative hunter chasing player)
+    const hunterMesh = createHunterMesh();
+    hunterMesh.visible = false;
+    scene.add(hunterMesh);
+
     // Gem Geometries & Materials
     const sapphireMat = new THREE.MeshStandardMaterial({
       color: 0x38bdf8,
@@ -970,6 +1053,12 @@ export default function MazeCanvas({ state, gameState, playerId }) {
     let targetX = charX;
     let targetZ = charZ;
 
+    let hunterX = 1.5 * CELL_SIZE;
+    let hunterZ = 1.5 * CELL_SIZE;
+    let prevHunterX = hunterX;
+    let prevHunterZ = hunterZ;
+    let hunterYaw = 0;
+
     let currentYaw = 0; // Camera horizontal look angle
     let targetYaw = 0;
     let prevCharX = charX;
@@ -1047,6 +1136,27 @@ export default function MazeCanvas({ state, gameState, playerId }) {
       // Player Torchlight: radiates warm light around character and corridor
       torchLight.position.set(charX, 3.5, charZ);
       forwardFlashLight.position.set(charX, 2.5, charZ);
+
+      // Hunter model: rendered for both players with distinctive red glow
+      if (stateNow.hunter) {
+        hunterMesh.visible = true;
+        const targetHX = stateNow.hunter.x * CELL_SIZE;
+        const targetHZ = stateNow.hunter.y * CELL_SIZE;
+        hunterX += (targetHX - hunterX) * 0.25;
+        hunterZ += (targetHZ - hunterZ) * 0.25;
+
+        const hMoveDist = Math.hypot(targetHX - prevHunterX, targetHZ - prevHunterZ);
+        if (hMoveDist > 0.01) {
+          hunterYaw = Math.atan2(targetHX - prevHunterX, targetHZ - prevHunterZ);
+        }
+        prevHunterX = targetHX;
+        prevHunterZ = targetHZ;
+
+        hunterMesh.position.set(hunterX, stateNow.hunter.active ? Math.abs(Math.sin(animTime * 14)) * 0.08 : 0, hunterZ);
+        hunterMesh.rotation.y = hunterYaw + Math.PI;
+      } else {
+        hunterMesh.visible = false;
+      }
 
       // Animate Collectibles (floating & rotating gems)
       stateNow.collectibles?.forEach((item) => {

@@ -26,6 +26,12 @@ export class MazeGameEngine {
       vy: 0,
     };
 
+    this.hunter = {
+      x: this.layout.start.x,
+      y: this.layout.start.y,
+      active: false,
+    };
+
     this.collectibles = this.layout.collectibles.map((c) => ({ ...c, collected: false }));
     this.checkpoints = this.layout.checkpoints.map((cp) => ({ ...cp, passed: false }));
     this.switches = this.layout.switches.map((sw) => ({ ...sw, active: false, activatedCount: 0 }));
@@ -168,6 +174,9 @@ export class MazeGameEngine {
 
     // Check Trigger Interactions (Collectibles, Switches, Checkpoints, Exit)
     this.checkTriggers(now);
+
+    // Authoritative Server Hunter Update
+    this.updateHunter(dt, now);
 
     // Broadcast State
     if (this.onStateUpdate) {
@@ -386,6 +395,171 @@ export class MazeGameEngine {
     });
   }
 
+  isHunterBlocked(col, row) {
+    if (col < 0 || col >= this.layout.width || row < 0 || row >= this.layout.height) return true;
+    if (this.layout.grid[row][col] === 1) return true;
+    for (const b of this.barriers) {
+      if (!b.open && b.x === col && b.y === row) return true;
+    }
+    return false;
+  }
+
+  getPathDistance(x1, y1, x2, y2) {
+    if (x1 === x2 && y1 === y2) return 0;
+    const q = [[x1, y1, 0]];
+    const visited = new Set([`${x1},${y1}`]);
+    while (q.length > 0) {
+      const [cx, cy, dist] = q.shift();
+      if (cx === x2 && cy === y2) return dist;
+      for (const [dx, dy] of [[0, 1], [0, -1], [1, 0], [-1, 0]]) {
+        const nx = cx + dx;
+        const ny = cy + dy;
+        const key = `${nx},${ny}`;
+        if (!visited.has(key) && !this.isHunterBlocked(nx, ny)) {
+          visited.add(key);
+          q.push([nx, ny, dist + 1]);
+        }
+      }
+    }
+    return Infinity;
+  }
+
+  getShortestPathNextCell(startX, startY, targetX, targetY) {
+    if (startX === targetX && startY === targetY) return null;
+    const q = [[targetX, targetY]];
+    const parent = new Map();
+    const visited = new Set([`${targetX},${targetY}`]);
+
+    while (q.length > 0) {
+      const [cx, cy] = q.shift();
+      if (cx === startX && cy === startY) break;
+      for (const [dx, dy] of [[0, 1], [0, -1], [1, 0], [-1, 0]]) {
+        const nx = cx + dx;
+        const ny = cy + dy;
+        const key = `${nx},${ny}`;
+        if (!visited.has(key) && !this.isHunterBlocked(nx, ny)) {
+          visited.add(key);
+          parent.set(key, [cx, cy]);
+          q.push([nx, ny]);
+        }
+      }
+    }
+
+    const next = parent.get(`${startX},${startY}`);
+    return next ? { x: next[0], y: next[1] } : null;
+  }
+
+  updateHunter(dt, now) {
+    if (this.status !== 'RUNNING') return;
+
+    const startCol = Math.floor(this.layout.start.x);
+    const startRow = Math.floor(this.layout.start.y);
+    const charCol = Math.floor(this.character.x);
+    const charRow = Math.floor(this.character.y);
+
+    // If hunter is not yet active, activate once player is at least HUNTER_START_DISTANCE cells away
+    if (!this.hunter.active) {
+      const distFromStart = this.getPathDistance(startCol, startRow, charCol, charRow);
+      if (distFromStart >= (GAME_CONFIG.HUNTER_START_DISTANCE || 45)) {
+        this.hunter.active = true;
+        this.addEvent('HUNTER_ALERT', 'Warning: Hunter detected behind! Keep moving.');
+      }
+    }
+
+    if (!this.hunter.active) {
+      // Hunter waits at start position
+      return;
+    }
+
+    const hunterSpeed = GAME_CONFIG.SPEED * (GAME_CONFIG.HUNTER_SPEED_MULTIPLIER || 1.4);
+    const step = hunterSpeed * dt;
+
+    const hCol = Math.floor(this.hunter.x);
+    const hRow = Math.floor(this.hunter.y);
+
+    if (hCol === charCol && hRow === charRow) {
+      // In same cell: move directly towards character center
+      const dx = this.character.x - this.hunter.x;
+      const dy = this.character.y - this.hunter.y;
+      const d = Math.hypot(dx, dy);
+      if (d > 0.001) {
+        const move = Math.min(step, d);
+        this.hunter.x += (dx / d) * move;
+        this.hunter.y += (dy / d) * move;
+      }
+    } else {
+      const nextCell = this.getShortestPathNextCell(hCol, hRow, charCol, charRow);
+      if (nextCell) {
+        const targetX = nextCell.x + 0.5;
+        const targetY = nextCell.y + 0.5;
+
+        if (nextCell.x !== hCol) {
+          // Horizontal move: nudge Y towards center of current corridor
+          const yCenter = hRow + 0.5;
+          const yDiff = yCenter - this.hunter.y;
+          this.hunter.y += Math.sign(yDiff) * Math.min(Math.abs(yDiff), step * 0.5);
+
+          const xDiff = targetX - this.hunter.x;
+          this.hunter.x += Math.sign(xDiff) * Math.min(Math.abs(xDiff), step);
+        } else {
+          // Vertical move: nudge X towards center of current corridor
+          const xCenter = hCol + 0.5;
+          const xDiff = xCenter - this.hunter.x;
+          this.hunter.x += Math.sign(xDiff) * Math.min(Math.abs(xDiff), step * 0.5);
+
+          const yDiff = targetY - this.hunter.y;
+          this.hunter.y += Math.sign(yDiff) * Math.min(Math.abs(yDiff), step);
+        }
+      }
+    }
+
+    // Check catch condition
+    const catchDist = Math.hypot(this.character.x - this.hunter.x, this.character.y - this.hunter.y);
+    if (catchDist < 0.55) {
+      this.handleHunterCatch(now);
+    }
+  }
+
+  handleHunterCatch(now) {
+    this.restartsCount = (this.restartsCount || 0) + 1;
+    this.character.x = this.layout.start.x;
+    this.character.y = this.layout.start.y;
+    this.character.vx = 0;
+    this.character.vy = 0;
+
+    // Hunter back at its start distance (start cell, dormant until player reaches distance)
+    this.hunter.x = this.layout.start.x;
+    this.hunter.y = this.layout.start.y;
+    this.hunter.active = false;
+
+    // Reset team's maze score and progress to the starting state (collected items restored)
+    this.score = 0;
+    this.penalties = 0;
+    this.collisionsCount = 0;
+    this.portalAlertCount = 0;
+    this.portalNotice = null;
+
+    this.collectibles.forEach((c) => (c.collected = false));
+    this.checkpoints.forEach((cp) => (cp.passed = false));
+    this.switches.forEach((sw) => {
+      sw.active = false;
+      sw.activatedCount = 0;
+    });
+    this.barriers.forEach((b) => {
+      b.open = false;
+      b.openUntil = 0;
+    });
+
+    // Game timer must keep running and must not reset. Do not end the game on catch.
+    this.respawnNotice = '⚠️ CAUGHT BY HUNTER · RESET TO START · TIMER RUNNING';
+    this.addEvent('HUNTER_CATCH', 'The hunter caught you! Reset to start, timer continues.');
+
+    this.repository.logEvent(this.sessionId, 'HUNTER_CATCH', {
+      restartsCount: this.restartsCount,
+      timeElapsedMs: Math.round(this.timeElapsedMs),
+    });
+  }
+
   endGame(completed, reason) {
     this.status = completed ? 'FINISHED' : 'TERMINATED';
     this.endedAt = new Date().toISOString();
@@ -493,6 +667,9 @@ export class MazeGameEngine {
         this.collectibles.forEach((c) => (c.collected = false));
         this.checkpoints.forEach((cp) => (cp.passed = false));
         this.barriers.forEach((b) => (b.open = false));
+        this.hunter.x = this.layout.start.x;
+        this.hunter.y = this.layout.start.y;
+        this.hunter.active = false;
         this.status = (this.players.P1.connected && this.players.P2.connected) ? 'RUNNING' : 'WAITING_FOR_PLAYERS';
         this.addEvent('ADMIN', 'Game reset by admin.');
         if (this.status === 'RUNNING') this.startTickLoop();
@@ -531,6 +708,11 @@ export class MazeGameEngine {
         y: Number(this.character.y.toFixed(3)),
         vx: this.character.vx,
         vy: this.character.vy,
+      },
+      hunter: {
+        x: Number(this.hunter.x.toFixed(3)),
+        y: Number(this.hunter.y.toFixed(3)),
+        active: this.hunter.active,
       },
       collectibles: this.collectibles,
       checkpoints: this.checkpoints,
