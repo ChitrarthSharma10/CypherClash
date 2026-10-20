@@ -1116,10 +1116,12 @@ export default function RunnerCanvas({ state, gameState, playerId, onGoldCollect
         }
       });
 
-      // Synchronize Checkpoint Arches (250m, 500m, 750m)
-      const totalCp = st?.totalCheckpoints ?? 3;
+      // Synchronize Checkpoint Arches
+      const courseLength = st?.courseLengthMeters ?? 3000;
+      const totalCp = st?.totalCheckpoints ?? 8;
+      const cpStep = totalCp > 0 ? courseLength / totalCp : 375;
       for (let c = 1; c <= totalCp; c++) {
-        const cpDist = c * 250;
+        const cpDist = Math.round(c * cpStep);
         const cpId = `cp-${cpDist}`;
         const gate = getOrCreateCheckpointGate(cpId);
         const relZ = -(cpDist - playerDist);
@@ -1127,8 +1129,7 @@ export default function RunnerCanvas({ state, gameState, playerId, onGoldCollect
         gate.visible = relZ > -150 && relZ < 20;
       }
 
-      // Synchronize 3D Grand Finish Line at 1000m
-      const courseLength = st?.courseLengthMeters ?? 1000;
+      // Synchronize 3D Grand Finish Line at courseLength (3000m)
       const finishRelZ = -(courseLength - playerDist);
       finishLineGroup.position.set(0, 0, finishRelZ);
       finishLineGroup.visible = finishRelZ > -180 && finishRelZ < 25;

@@ -13,20 +13,20 @@ export const GAME_CONFIG = {
   // Track & Lane Specs
   TOTAL_LANES: 3,             // -1: Left, 0: Center, 1: Right
   LANE_POSITIONS: [-1, 0, 1],
-  COURSE_LENGTH_METERS: 4200, // Total distance to 3D Finish Line (~3.5 minute co-op sprint)
-  CHECKPOINT_INTERVAL_METERS: 525, // 8 Checkpoints every 525m
+  COURSE_LENGTH_METERS: 3000, // Total distance to 3D Finish Line
+  CHECKPOINT_INTERVAL_METERS: 375, // 8 Checkpoints every 375m (3000m total)
   
   // Jump & Slide Physics
   JUMP_DURATION_SEC: 0.75,
   JUMP_MAX_HEIGHT: 2.2,
   SLIDE_DURATION_SEC: 1.0,
 
-  // Runner Speeds (meters / second) - Tuned for continuous 3-4 minute co-op run
-  BASE_SPEED: 17.5,
+  // Runner Speeds (meters / second) - Tuned for comfortably doable co-op run
+  BASE_SPEED: 12.25,               // Tunable base speed constant (lowered by ~30%)
   SPEED_ACCELERATION: 0.035,
-  MAX_SPEED: 22.5,
-  COLLISION_RECOVERY_TIME_SEC: 1.5,
-  COLLISION_SLOWDOWN_FACTOR: 0.45,
+  MAX_SPEED: 16.0,
+  COLLISION_RECOVERY_TIME_SEC: 3.0, // Massive slowdown for 3 seconds on collision
+  COLLISION_SLOWDOWN_FACTOR: 0.25,  // Slow to 25% of normal speed on collision
 
   // Scoring (Points divided according to time taken, capped at 500 total)
   SCORING: {

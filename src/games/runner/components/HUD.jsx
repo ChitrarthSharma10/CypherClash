@@ -11,10 +11,10 @@ export default function HUD({ state, gameState, playerId }) {
   const penalties = current?.penalties ?? 0;
   const collisionsCount = current?.collisionsCount ?? 0;
   const distanceMeters = current?.distanceMeters ?? 0;
-  const courseLengthMeters = current?.courseLengthMeters ?? 1000;
+  const courseLengthMeters = current?.courseLengthMeters ?? 3000;
   const goldBarsCollected = current?.goldBarsCollected ?? current?.coinsCollected ?? 0;
   const checkpointsPassed = current?.checkpointsPassed ?? 0;
-  const totalCheckpoints = current?.totalCheckpoints ?? 3;
+  const totalCheckpoints = current?.totalCheckpoints ?? 8;
   const respawnNotice = current?.respawnNotice;
 
   const activePowerUps = current?.activePowerUps ?? {};
