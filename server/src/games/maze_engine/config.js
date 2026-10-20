@@ -15,14 +15,14 @@ export const GAME_CONFIG = {
   BARRIER_OPEN_DURATION_MS: 4800,  // Co-op window
   HAZARD_PENALTY: 30,              // EMP shockwave point deduction
 
-  // Scoring table (Points divided according to time taken to finish the maze, capped at 500 total)
+  // Scoring table: max 500 total for flawless run (140 collectibles + 60 checkpoints + 60 switches + 140 escape + 100 speed)
   SCORING: {
-    COLLECTIBLE_POINTS: 10,
-    CHECKPOINT_POINTS: 15,
-    SWITCH_POINTS: 15,
-    COMPLETION_BONUS: 150,
-    TIME_POINTS_DIVIDEND: 25000,   // Points divided by finish time: Math.round(25000 / finishTimeSec)
-    COLLISION_SCORE_PENALTY: 0,        // 0 penalty: wall collision does not reduce score
+    COLLECTIBLE_POINTS: 10,            // 14 Collectibles = 140 pts
+    CHECKPOINT_POINTS: 15,             // 4 Checkpoints = 60 pts
+    SWITCH_POINTS: 15,                 // 4 Switches = 60 pts
+    COMPLETION_BONUS: 140,             // Ancient treasure vault escape bonus
+    TIME_POINTS_DIVIDEND: 10000,       // Speed bonus up to 100 pts: Math.min(100, Math.round(10000 / finishTimeSec))
+    COLLISION_SCORE_PENALTY: 10,       // Wall collision penalty deduction (-10 pts per bump)
   },
 };
 

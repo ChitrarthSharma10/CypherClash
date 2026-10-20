@@ -244,6 +244,48 @@ function TreasureVaultIcon() {
   );
 }
 
+function HunterIcon() {
+  return (
+    <svg width="56" height="56" viewBox="0 0 64 64" fill="none">
+      <defs>
+        <linearGradient id="hunterArmor" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="#1e293b" />
+          <stop offset="100%" stopColor="#0f172a" />
+        </linearGradient>
+        <linearGradient id="hornGrad" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stopColor="#ef4444" />
+          <stop offset="100%" stopColor="#991b1b" />
+        </linearGradient>
+        <radialGradient id="hunterAura" cx="50%" cy="50%" r="50%">
+          <stop offset="0%" stopColor="#ef4444" stopOpacity="0.4" />
+          <stop offset="100%" stopColor="#ef4444" stopOpacity="0" />
+        </radialGradient>
+      </defs>
+      {/* Red Menacing Aura Glow */}
+      <circle cx="32" cy="32" r="28" fill="url(#hunterAura)" />
+      {/* Horns / Spikes */}
+      <polygon points="20,10 24,22 17,20" fill="url(#hornGrad)" />
+      <polygon points="44,10 47,20 40,22" fill="url(#hornGrad)" />
+      {/* Obsidian Helmet / Hood */}
+      <path d="M22 20C22 13 26 11 32 11C38 11 42 13 42 20C42 27 40 33 32 33C24 33 22 27 22 20Z" fill="url(#hunterArmor)" stroke="#ef4444" strokeWidth="1.2" />
+      {/* Glowing Crimson Visor / Eyes */}
+      <rect x="25" y="22" width="14" height="4" rx="2" fill="#ff0033" />
+      <circle cx="28" cy="24" r="1.2" fill="#fff" />
+      <circle cx="36" cy="24" r="1.2" fill="#fff" />
+      {/* Heavy Cyber Torso */}
+      <path d="M21 35L43 35L40 49L24 49L21 35Z" fill="#0f172a" stroke="#334155" strokeWidth="1.2" />
+      {/* Crimson Core Reactor */}
+      <polygon points="32,38 36,42 32,46 28,42" fill="#ef4444" />
+      <polygon points="32,40 34,42 32,44 30,42" fill="#fca5a5" />
+      {/* Armored Greaves */}
+      <rect x="23" y="49" width="7" height="9" rx="2" fill="#0f172a" stroke="#1e293b" />
+      <rect x="34" y="49" width="7" height="9" rx="2" fill="#0f172a" stroke="#1e293b" />
+      <rect x="22" y="56" width="9" height="4" rx="1.5" fill="#ef4444" opacity="0.8" />
+      <rect x="33" y="56" width="9" height="4" rx="1.5" fill="#ef4444" opacity="0.8" />
+    </svg>
+  );
+}
+
 export default function MapGuidelinesModal({ isOpen, onClose }) {
   if (!isOpen) return null;
 
@@ -257,34 +299,42 @@ export default function MapGuidelinesModal({ isOpen, onClose }) {
       badgeText: 'CO-OP PLAYER',
     },
     {
+      icon: <HunterIcon />,
+      name: 'Shadow Hunter',
+      category: 'Server Maze Pursuer',
+      effect: 'Relentlessly chases players along shortest paths! If caught: reset to start & collected items restored, while TIMER KEEPS RUNNING!',
+      badgeType: 'badge-reduce',
+      badgeText: '⚠️ CATCH RESETS TO START',
+    },
+    {
       icon: <GemsIcon />,
       name: 'Gems & Jewels',
       category: 'Sapphires & Rubies',
-      effect: 'Walk over floating gemstones to collect points',
+      effect: 'Walk over floating gemstones (14 gems across the maze, +10 pts each = 140 pts max)',
       badgeType: 'badge-add',
-      badgeText: '+25 PTS (Added)',
+      badgeText: '+10 PTS (14 Gems = 140)',
     },
     {
       icon: <WayMarkerIcon />,
       name: 'WAY Marker',
       category: 'Expedition Checkpoint',
-      effect: 'Reach compass waypoints to secure expedition route',
+      effect: 'Reach ancient compass waypoints to secure route (4 waypoints, +15 pts each = 60 pts)',
       badgeType: 'badge-add',
-      badgeText: '+50 PTS (Added)',
+      badgeText: '+15 PTS (4 CP = 60)',
     },
     {
       icon: <RunePedestalIcon />,
       name: 'RUNE Pedestal',
       category: 'Ancient Altar Switch',
-      effect: 'Step on rune altar to unlock red iron gates',
+      effect: 'Step on rune altar to open corresponding Red Iron Gates (4 switches, +15 pts each = 60 pts)',
       badgeType: 'badge-add',
-      badgeText: '+35 PTS (Added)',
+      badgeText: '+15 PTS (4 SW = 60)',
     },
     {
       icon: <RedGateIcon />,
       name: 'Red Iron Gate',
       category: 'Portcullis Barrier',
-      effect: 'Closed gate blocks passage until corresponding Rune Switch is unlocked',
+      effect: 'Closed gate blocks passage for both players and the Hunter until corresponding Rune Switch is unlocked',
       badgeType: 'badge-neutral',
       badgeText: 'SECURITY GATE',
     },
@@ -292,7 +342,7 @@ export default function MapGuidelinesModal({ isOpen, onClose }) {
       icon: <DigPitTrapIcon />,
       name: 'Dig / Spike Pit',
       category: 'Sunken Hazard Excavation',
-      effect: 'Cannot move ahead · Falling in restarts the game from start!',
+      effect: 'Sunken spike pit hazard · Falling in restarts the expedition from the beginning! Wall bumps: -10 pts.',
       badgeType: 'badge-reduce',
       badgeText: '⚠️ RESTARTS GAME',
     },
@@ -300,9 +350,9 @@ export default function MapGuidelinesModal({ isOpen, onClose }) {
       icon: <TreasureVaultIcon />,
       name: 'Treasure Vault',
       category: 'Legendary Golden Chest',
-      effect: 'Reach the ancient vault to complete expedition',
+      effect: 'Reach the ancient vault to escape (+140 pts) plus up to +100 speed bonus. Flawless run = 500 PTS MAX.',
       badgeType: 'badge-bonus',
-      badgeText: '+500 PTS (Bonus)',
+      badgeText: 'MAX 500 PTS (Flawless Run)',
     },
   ];
 

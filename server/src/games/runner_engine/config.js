@@ -28,16 +28,16 @@ export const GAME_CONFIG = {
   COLLISION_RECOVERY_TIME_SEC: 3.0, // Massive slowdown for 3 seconds on collision
   COLLISION_SLOWDOWN_FACTOR: 0.25,  // Slow to 25% of normal speed on collision
 
-  // Scoring (Points divided according to time taken, capped at 500 total)
+  // Scoring: max 500 total for flawless run (120 distance + 120 checkpoints + ~100 pickups/agility + 100 finish + 60 speed)
   SCORING: {
-    POINTS_PER_METER: 0.02,      // +1 pt per 50 meters
+    POINTS_PER_METER: 0.04,      // 3000m * 0.04 = 120 pts for distance
     GOLD_BAR_VALUE: 5,           // Stolen Gold Bar pickup (+5 pts, or +10 pts with 2X)
     VAULT_VALUE: 20,             // Stolen Vault chest pickup
     CHECKPOINT_BONUS: 15,        // Synchronized checkpoint pass (8 checkpoints = 120 pts)
     AGILITY_BONUS: 5,            // Successfully jumping hurdle or sliding under sign
-    BASE_COMPLETION_BONUS: 120,  // Crossing the Finish Line
-    TIME_POINTS_DIVIDEND: 25000, // Points divided by finish time: 25000 / finishTimeSec (~125 pts)
-    COLLISION_PENALTY: 20,       // Collision stumble penalty
+    BASE_COMPLETION_BONUS: 100,  // Crossing the 3000m Finish Line
+    TIME_POINTS_DIVIDEND: 8000,  // Speed bonus up to ~60 pts: Math.min(60, Math.round(8000 / finishTimeSec))
+    COLLISION_PENALTY: 25,       // Collision stumble deduction (-25 pts & 3s slowdown)
   },
 
   // Talking Tom Gold Run Power-Ups

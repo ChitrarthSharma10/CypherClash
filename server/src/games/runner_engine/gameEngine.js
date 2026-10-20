@@ -669,12 +669,11 @@ export class RunnerGameEngine {
 
     // Points divided according to the time taken to finish the game:
     // Faster completion yields substantially higher score!
-    // Formula: 120,000 / finishTimeSec (e.g. 30s = 4000 pts, 40s = 3000 pts, 60s = 2000 pts, 120s = 1000 pts)
-    const timePoints = completed ? Math.round(GAME_CONFIG.SCORING.TIME_POINTS_DIVIDEND / finishTimeSec) : 0;
+    const timePoints = completed ? Math.min(60, Math.round(GAME_CONFIG.SCORING.TIME_POINTS_DIVIDEND / finishTimeSec)) : 0;
     const completionBonus = completed ? GAME_CONFIG.SCORING.BASE_COMPLETION_BONUS : 0;
 
     const baseScore = this.totalCalculatedScore || 0;
-    const finalScore = Math.max(0, Math.min(500, baseScore + timePoints + completionBonus));
+    const finalScore = Math.max(0, Math.min(500, Math.round(baseScore + timePoints + completionBonus)));
 
     const result = {
       gameId: GAME_CONFIG.GAME_ID,

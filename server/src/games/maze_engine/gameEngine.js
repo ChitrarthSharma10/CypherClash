@@ -574,8 +574,8 @@ export class MazeGameEngine {
 
     if (completed) {
       completionBonus = GAME_CONFIG.SCORING.COMPLETION_BONUS;
-      timePoints = Math.round(GAME_CONFIG.SCORING.TIME_POINTS_DIVIDEND / finishTimeSec);
-      this.score = Math.min(500, this.score + completionBonus + timePoints);
+      timePoints = Math.min(100, Math.round(GAME_CONFIG.SCORING.TIME_POINTS_DIVIDEND / finishTimeSec));
+      this.score = Math.max(0, Math.min(500, Math.round(this.score + completionBonus + timePoints)));
       this.addEvent('COMPLETE', `MAZE ESCAPED in ${finishTimeSec}s! +${completionBonus} completion & +${timePoints} time points!`);
     } else {
       this.addEvent('TERMINATED', 'Game terminated. Final score recorded.');

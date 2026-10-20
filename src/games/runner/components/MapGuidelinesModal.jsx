@@ -256,17 +256,17 @@ export default function MapGuidelinesModal({ isOpen, onClose }) {
       icon: <WoodenHurdleIcon />,
       name: 'Wooden Hurdle',
       category: 'Low Sawhorse Barrier',
-      effect: 'Jump over or dodge to prevent collision',
+      effect: 'Jump over or dodge! Collision incurs a -25 pts deduction and 3s speed slowdown',
       badgeType: 'badge-reduce',
-      badgeText: '-20 PTS (Reduced)',
+      badgeText: '-25 PTS (Reduced)',
     },
     {
       icon: <DeliveryTruckIcon />,
       name: 'Delivery Truck',
       category: 'High Box Vehicle',
-      effect: 'Switch lanes to dodge oncoming truck',
+      effect: 'Switch lanes to dodge! Collision incurs a -25 pts deduction and 3s speed slowdown',
       badgeType: 'badge-reduce',
-      badgeText: '-30 PTS (Reduced)',
+      badgeText: '-25 PTS (Reduced)',
     },
     {
       icon: <MagnetIcon />,
@@ -296,9 +296,9 @@ export default function MapGuidelinesModal({ isOpen, onClose }) {
       icon: <FinishGantryIcon />,
       name: 'Finish Gantry',
       category: 'Highway Finish Arch',
-      effect: 'Cross the finish line to complete the run',
+      effect: 'Cross the 3000m finish line! Flawless run with distance, checkpoints & gold awards up to 500 PTS MAX.',
       badgeType: 'badge-bonus',
-      badgeText: '+500 PTS (Bonus)',
+      badgeText: 'MAX 500 PTS (Flawless Run)',
     },
   ];
 
