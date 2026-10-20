@@ -51,6 +51,17 @@ function App() {
     return () => window.removeEventListener('popstate', handlePopState);
   }, []);
 
+  useEffect(() => {
+    if (path === '/') {
+      const timer = setTimeout(() => {
+        if (typeof window.__initCcNav === 'function') {
+          window.__initCcNav();
+        }
+      }, 50);
+      return () => clearTimeout(timer);
+    }
+  }, [path]);
+
   return (
     <div className="app-shell">
       {path === '/' && <header className="cc-top">
@@ -2304,7 +2315,9 @@ createRoot(document.getElementById('root')).render(<StrictMode><App /></StrictMo
 (function () {
   function initNav() {
     const nav = document.querySelector('.cc-top__nav');
-    if (!nav) { setTimeout(initNav, 0); return; }
+    if (!nav) return;
+    if (nav.classList.contains('is-ready')) return;
+    window.__initCcNav = initNav;
     const pill = nav.querySelector('.cc-top__pill');
     const links = Array.from(nav.querySelectorAll('.cc-top__link'));
     const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;

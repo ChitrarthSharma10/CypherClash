@@ -1,30 +1,31 @@
 import { useState, useEffect, useRef } from 'react';
 
-export default function HUD({ state, playerId }) {
-  const timeElapsedMs = state?.timeElapsedMs ?? 0;
+export default function HUD({ state, gameState, playerId }) {
+  const current = state || gameState;
+  const timeElapsedMs = current?.timeElapsedMs ?? 0;
   const totalSeconds = Math.max(0, Math.floor(timeElapsedMs / 1000));
   const mins = String(Math.floor(totalSeconds / 60)).padStart(2, '0');
   const secs = String(totalSeconds % 60).padStart(2, '0');
 
-  const score = state?.score ?? 0;
-  const penalties = state?.penalties ?? 0;
-  const collisionsCount = state?.collisionsCount ?? 0;
-  const distanceMeters = state?.distanceMeters ?? 0;
-  const courseLengthMeters = state?.courseLengthMeters ?? 1000;
-  const goldBarsCollected = state?.goldBarsCollected ?? state?.coinsCollected ?? 0;
-  const checkpointsPassed = state?.checkpointsPassed ?? 0;
-  const totalCheckpoints = state?.totalCheckpoints ?? 3;
-  const respawnNotice = state?.respawnNotice;
+  const score = current?.score ?? 0;
+  const penalties = current?.penalties ?? 0;
+  const collisionsCount = current?.collisionsCount ?? 0;
+  const distanceMeters = current?.distanceMeters ?? 0;
+  const courseLengthMeters = current?.courseLengthMeters ?? 1000;
+  const goldBarsCollected = current?.goldBarsCollected ?? current?.coinsCollected ?? 0;
+  const checkpointsPassed = current?.checkpointsPassed ?? 0;
+  const totalCheckpoints = current?.totalCheckpoints ?? 3;
+  const respawnNotice = current?.respawnNotice;
 
-  const activePowerUps = state?.activePowerUps ?? {};
+  const activePowerUps = current?.activePowerUps ?? {};
   const magnetSec = activePowerUps.magnetTimer ?? 0;
   const doubleGoldSec = activePowerUps.doubleGoldTimer ?? 0;
   const shieldSec = activePowerUps.shieldTimer ?? 0;
 
   const isMeP1 = playerId === 'P1';
-  const speedTier = state?.speedTier ?? 1;
-  const speed = state?.speed ?? 16.0;
-  const nextSurgeSec = state?.nextSurgeSec ?? 0;
+  const speedTier = current?.speedTier ?? 1;
+  const speed = current?.speed ?? 16.0;
+  const nextSurgeSec = current?.nextSurgeSec ?? 0;
 
   // Dynamic Score Animation State
   const prevScoreRef = useRef(score);

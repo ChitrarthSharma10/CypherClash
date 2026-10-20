@@ -57,6 +57,7 @@ function RunnerMonitor({
   return (
     <div className="participant-monitor-card" style={{ width: '100%', maxWidth: '1440px', margin: '0 auto', display: 'flex', flexDirection: 'column' }}>
       <HUD
+        state={gameState}
         gameState={gameState}
         roomStatus={roomStatus}
         playerId={playerId}
@@ -73,13 +74,14 @@ function RunnerMonitor({
         />
 
         {restartAlert && (
-          <div className="pit-fall-alert-banner">
-            <div className="pit-fall-pulse" />
-            <div className="pit-fall-icon">💥</div>
-            <div className="pit-fall-text-col">
-              <span className="pit-fall-title">{restartAlert.title}</span>
-              <span className="pit-fall-desc">{restartAlert.subtext}</span>
+          <div key={restartAlert.id} className="game-restarted-overlay">
+            <div className="restarted-badge">
+              <span className="restarted-icon">⚠️</span>
+              <span className="restarted-title">{restartAlert.title || 'GAME RESTARTED'}</span>
             </div>
+            <p className="restarted-subtext">
+              {restartAlert.subtext || 'COLLISION DETECTED · RESET TO 0.0M · CLOCK RUNNING'}
+            </p>
           </div>
         )}
 

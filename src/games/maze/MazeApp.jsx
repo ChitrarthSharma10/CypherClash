@@ -100,6 +100,7 @@ function MazeMonitor({
   return (
     <div className="participant-monitor-card" style={{ width: '100%', maxWidth: '1440px', margin: '0 auto', display: 'flex', flexDirection: 'column' }}>
       <HUD
+        state={gameState}
         gameState={gameState}
         roomStatus={roomStatus}
         playerId={playerId}

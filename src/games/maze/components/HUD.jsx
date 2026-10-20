@@ -1,24 +1,25 @@
 import { useState, useEffect, useRef } from 'react';
 
-export default function HUD({ state, playerId }) {
-  const timeElapsedMs = state?.timeElapsedMs ?? 0;
+export default function HUD({ state, gameState, playerId }) {
+  const current = state || gameState;
+  const timeElapsedMs = current?.timeElapsedMs ?? 0;
   const totalSeconds = Math.max(0, Math.floor(timeElapsedMs / 1000));
   const mins = String(Math.floor(totalSeconds / 60)).padStart(2, '0');
   const secs = String(totalSeconds % 60).padStart(2, '0');
 
-  const score = state?.score ?? 0;
-  const penalties = state?.penalties ?? 0;
-  const collisionsCount = state?.collisionsCount ?? 0;
+  const score = current?.score ?? 0;
+  const penalties = current?.penalties ?? 0;
+  const collisionsCount = current?.collisionsCount ?? 0;
 
-  const p1Connected = state?.players?.P1?.connected;
-  const p2Connected = state?.players?.P2?.connected;
+  const p1Connected = current?.players?.P1?.connected;
+  const p2Connected = current?.players?.P2?.connected;
   const isMeP1 = playerId === 'P1';
 
-  const collectedCount = state?.collectibles?.filter((c) => c.collected).length ?? 0;
-  const totalCollectibles = state?.collectibles?.length ?? 8;
+  const collectedCount = current?.collectibles?.filter((c) => c.collected).length ?? 0;
+  const totalCollectibles = current?.collectibles?.length ?? 8;
 
-  const checkpointsPassed = state?.checkpoints?.filter((cp) => cp.passed).length ?? 0;
-  const totalCheckpoints = state?.checkpoints?.length ?? 3;
+  const checkpointsPassed = current?.checkpoints?.filter((cp) => cp.passed).length ?? 0;
+  const totalCheckpoints = current?.checkpoints?.length ?? 3;
 
   // Dynamic Score Animation State
   const prevScoreRef = useRef(score);
