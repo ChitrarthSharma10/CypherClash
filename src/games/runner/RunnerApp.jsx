@@ -190,7 +190,7 @@ function RunnerMonitor({
         </div>
       </div>
 
-      {result && <ResultsModal result={result} onRestart={handleRestart} />}
+      {result && <ResultsModal result={result} onRestart={onBack || handleRestart} onBack={onBack} />}
     </div>
   );
 }

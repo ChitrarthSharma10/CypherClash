@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { requireTeam } from '../middleware/auth.js';
 import { validateBody } from '../middleware/validation.js';
 import { GameSession } from '../models/GameSession.js';
+import { ScoreEntry } from '../models/ScoreEntry.js';
 import { GAMES, GAME_NAMES, TOTAL_ROUNDS, isGameAllowedInRound } from '../games/names.js';
 import { gameValidators } from '../games/validators.js';
 import { listRoundStates } from '../services/roundState.js';
@@ -132,8 +133,14 @@ router.post(
         return responseError(res, 409, 'ROUND_NOT_RUNNING', 'A new game cannot start while the round is paused');
       }
 
-      if (await GameSession.exists({ ...key, status: { $in: ['submitted', 'failed'] } })) {
-        return responseError(res, 409, 'GAME_ALREADY_FINISHED', 'Game session has already finished');
+      const completedScore = await ScoreEntry.exists({
+        teamId: req.team.teamId,
+        round: round.round,
+        game: req.params.game,
+        kind: 'game_result',
+      });
+      if (completedScore || (await GameSession.exists({ ...key, status: { $in: ['submitted', 'failed'] } }))) {
+        return responseError(res, 409, 'GAME_ALREADY_FINISHED', 'You have already completed this game');
       }
 
       const startedAt = new Date();

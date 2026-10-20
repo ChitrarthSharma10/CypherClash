@@ -673,7 +673,7 @@ export class RunnerGameEngine {
     const completionBonus = completed ? GAME_CONFIG.SCORING.BASE_COMPLETION_BONUS : 0;
 
     const baseScore = this.totalCalculatedScore || 0;
-    const finalScore = Math.max(0, baseScore + timePoints + completionBonus);
+    const finalScore = Math.max(0, Math.min(500, baseScore + timePoints + completionBonus));
 
     const result = {
       gameId: GAME_CONFIG.GAME_ID,

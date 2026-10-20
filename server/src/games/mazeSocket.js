@@ -1,6 +1,7 @@
 import { MazeGameEngine } from './maze_engine/gameEngine.js';
 import { MAZE_LAYOUTS } from './maze_engine/config.js';
 import { submitGameResult } from '../services/scoring.js';
+import { ScoreEntry } from '../models/ScoreEntry.js';
 import { logEvent } from '../utils/logging.js';
 import { getRoundState, onRoundStateChange } from '../services/roundState.js';
 
@@ -87,7 +88,7 @@ export function getOrCreateMazeEngine(io, teamId, sessionId = `maze_${teamId}`, 
       io.to(teamId).emit('maze:game_over', finalResult);
       try {
         const rawScore = finalResult.score ?? finalResult.standardResult?.score ?? 0;
-        const points = Math.max(0, Math.min(1000, Math.round(rawScore)));
+        const points = Math.max(0, Math.min(500, Math.round(rawScore)));
         await submitGameResult(teamId, 'maze', points);
         await logEvent({
           type: 'game score submitted',
@@ -107,7 +108,7 @@ export function getOrCreateMazeEngine(io, teamId, sessionId = `maze_${teamId}`, 
 }
 
 export function registerMazeHandlers(io, socket) {
-  socket.on('maze:join_room', ({ teamId, sessionId, playerId, mazeId }) => {
+  socket.on('maze:join_room', async ({ teamId, sessionId, playerId, mazeId }) => {
     if (!teamId) {
       socket.emit('maze:error_message', { message: 'teamId is required' });
       return;
@@ -122,6 +123,33 @@ export function registerMazeHandlers(io, socket) {
         message: 'Round 1 is not running',
       });
       return;
+    }
+
+    try {
+      const existingScore = await ScoreEntry.findOne({
+        teamId,
+        round: 1,
+        game: 'maze',
+        kind: 'game_result',
+      }).lean();
+
+      if (existingScore) {
+        socket.emit('maze:room_status', {
+          p1Connected: true,
+          p2Connected: true,
+          status: 'COMPLETED',
+          message: 'Game already completed by your team',
+        });
+        socket.emit('maze:game_over', {
+          completed: true,
+          score: existingScore.amount,
+          finalScore: existingScore.amount,
+          alreadyCompleted: true,
+        });
+        return;
+      }
+    } catch {
+      // Proceed on lookup failure
     }
 
     const normPlayerId = (playerId === 'P2' || playerId === '2' || String(playerId).toLowerCase().includes('2')) ? 'P2' : 'P1';
@@ -146,7 +174,7 @@ export function registerMazeHandlers(io, socket) {
     socket.emit('maze:game_tick', engine.getStatePayload());
   });
 
-  socket.on('maze:player_input', ({ teamId, sessionId, playerId, axis, dir }) => {
+  socket.on('maze:player_input', async ({ teamId, sessionId, playerId, axis, dir }) => {
     const tId = teamId || socket.data.mazeTeamId;
     const pId = playerId || socket.data.mazePlayerId;
     if (!tId || !pId) return;
@@ -154,6 +182,15 @@ export function registerMazeHandlers(io, socket) {
     if (!isRound1Running()) {
       socket.emit('maze:input_rejected', { reason: 'Round 1 is not running' });
       return;
+    }
+
+    try {
+      if (await ScoreEntry.exists({ teamId: tId, round: 1, game: 'maze', kind: 'game_result' })) {
+        socket.emit('maze:input_rejected', { reason: 'Game already completed by your team' });
+        return;
+      }
+    } catch {
+      // ignore
     }
 
     let engine = activeEngines.get(tId);

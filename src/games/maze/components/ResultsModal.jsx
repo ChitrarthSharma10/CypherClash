@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import confetti from 'canvas-confetti';
 
-export default function ResultsModal({ result, onRestart }) {
+export default function ResultsModal({ result, onRestart, onBack }) {
   useEffect(() => {
     if (result && result.completed) {
       try {
@@ -47,7 +47,7 @@ export default function ResultsModal({ result, onRestart }) {
             {completed && (
               <>
                 <tr>
-                  <td>Time Score Bonus (100,000 / {durationSec}s)</td>
+                  <td>Time Score Bonus (25,000 / {durationSec}s)</td>
                   <td className="val positive" style={{ color: '#ffffff', fontWeight: 700 }}>+{breakdown?.timePoints || 0}</td>
                 </tr>
                 <tr>
@@ -78,10 +78,10 @@ export default function ResultsModal({ result, onRestart }) {
         <div style={{ display: 'flex', gap: '12px', justifyContent: 'center', marginTop: '14px' }}>
           <button
             className="front-btn-primary"
-            style={{ width: '100%', background: 'rgba(255, 255, 255, 0.15)', color: '#ffffff', border: '1px solid rgba(255, 255, 255, 0.4)' }}
-            onClick={onRestart}
+            style={{ width: '100%', background: '#00c8e9', color: '#000000', fontWeight: 800, border: 'none', padding: '12px 18px', borderRadius: '10px', cursor: 'pointer' }}
+            onClick={onBack || onRestart}
           >
-            PLAY AGAIN
+            {completed ? 'RETURN TO DASHBOARD (SCORE RECORDED)' : 'RETURN TO DASHBOARD'}
           </button>
         </div>
       </div>

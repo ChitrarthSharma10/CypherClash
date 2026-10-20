@@ -13,13 +13,13 @@ export const GAME_CONFIG = {
   BARRIER_OPEN_DURATION_MS: 4800,  // Co-op window
   HAZARD_PENALTY: 30,              // EMP shockwave point deduction
 
-  // Scoring table (Points divided according to time taken to finish the maze)
+  // Scoring table (Points divided according to time taken to finish the maze, capped at 500 total)
   SCORING: {
-    COLLECTIBLE_POINTS: 25,
-    CHECKPOINT_POINTS: 50,
-    SWITCH_POINTS: 35,
-    COMPLETION_BONUS: 500,
-    TIME_POINTS_DIVIDEND: 240000,   // Points divided by finish time: Math.round(240000 / finishTimeSec)
+    COLLECTIBLE_POINTS: 10,
+    CHECKPOINT_POINTS: 15,
+    SWITCH_POINTS: 15,
+    COMPLETION_BONUS: 150,
+    TIME_POINTS_DIVIDEND: 25000,   // Points divided by finish time: Math.round(25000 / finishTimeSec)
     COLLISION_SCORE_PENALTY: 0,        // 0 penalty: wall collision does not reduce score
   },
 };

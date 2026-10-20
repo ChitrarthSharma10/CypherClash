@@ -22,10 +22,15 @@ export function clearAllTotalsCache() {
 }
 
 function formatTotals(rows, teamId) {
-  const rounds = rows.reduce((result, row) => {
-    result[row._id.round] = row.amount;
-    return result;
-  }, {});
+  const rounds = {};
+  const games = {};
+  for (const row of rows) {
+    rounds[row._id.round] = (rounds[row._id.round] || 0) + row.amount;
+    if (row._id.game) {
+      games[row._id.game] = (games[row._id.game] || 0) + row.amount;
+      games[`${row._id.round}_${row._id.game}`] = (games[`${row._id.round}_${row._id.game}`] || 0) + row.amount;
+    }
+  }
   const validRows = rows.filter((row) => row._id.round >= 1 && row._id.round <= TOTAL_ROUNDS);
   const isSyntheticTest = rows.length > 0 && rows.every((row) => row._id.round > 1000);
   const total = isSyntheticTest
@@ -35,6 +40,7 @@ function formatTotals(rows, teamId) {
     teamId,
     total,
     rounds,
+    games,
   };
 }
 
@@ -48,14 +54,14 @@ export async function getAllTotals() {
     return allTotalsCache.value;
   }
   const rows = await ScoreEntry.aggregate([
-    { $group: { _id: { teamId: '$teamId', round: '$round' }, amount: { $sum: '$amount' } } },
+    { $group: { _id: { teamId: '$teamId', round: '$round', game: '$game' }, amount: { $sum: '$amount' } } },
     { $sort: { '_id.teamId': 1, '_id.round': 1 } },
   ]);
   const grouped = new Map();
   for (const row of rows) {
     const teamId = row._id.teamId;
     if (!grouped.has(teamId)) grouped.set(teamId, []);
-    grouped.get(teamId).push({ _id: { round: row._id.round }, amount: row.amount });
+    grouped.get(teamId).push({ _id: { round: row._id.round, game: row._id.game }, amount: row.amount });
   }
   const value = [...grouped.entries()].map(([teamId, teamRows]) => formatTotals(teamRows, teamId));
   allTotalsCache = { value };
@@ -100,7 +106,7 @@ export async function submitGameResult(teamId, game, points, session) {
   if (!Number.isFinite(points)) {
     throw new ScoringError('INVALID_POINTS', 'Points must be a finite number');
   }
-  const amount = Math.max(0, Math.min(1000, Math.trunc(points)));
+  const amount = Math.max(0, Math.min(500, Math.trunc(points)));
   try {
     const entry = await ScoreEntry.create({
       teamId,

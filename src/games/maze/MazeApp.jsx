@@ -117,24 +117,22 @@ function MazeMonitor({
         />
 
         {restartAlert && (
-          <div className="pit-fall-alert-banner">
-            <div className="pit-fall-pulse" />
-            <div className="pit-fall-icon">⚠️</div>
-            <div className="pit-fall-text-col">
-              <span className="pit-fall-title">{restartAlert.title}</span>
-              <span className="pit-fall-desc">{restartAlert.subtext}</span>
+          <div key={restartAlert.id} className="game-restarted-overlay">
+            <div className="restarted-badge">
+              <span className="restarted-icon">⚠️</span>
+              <span className="restarted-title">{restartAlert.title || 'GAME RESTARTED'}</span>
             </div>
+            <p className="restarted-subtext">{restartAlert.subtext || 'PIT TRAP DETECTED · RESETTING'}</p>
           </div>
         )}
 
         {portalAlert && (
-          <div className="door-unlock-banner">
-            <div className="door-unlock-pulse" />
-            <div className="door-unlock-icon">⚡</div>
-            <div className="door-unlock-text-col">
-              <span className="door-unlock-title">{portalAlert.title}</span>
-              <span className="door-unlock-desc">{portalAlert.subtext}</span>
+          <div key={portalAlert.id} className="portal-activated-overlay">
+            <div className="portal-badge">
+              <span className="portal-icon">⚡</span>
+              <span className="portal-title">{portalAlert.title || 'DOOR UNLOCKED'}</span>
             </div>
+            <p className="portal-subtext">{portalAlert.subtext}</p>
           </div>
         )}
 
@@ -242,7 +240,7 @@ function MazeMonitor({
         </div>
       </div>
 
-      {result && <ResultsModal result={result} onRestart={handleRestart} />}
+      {result && <ResultsModal result={result} onRestart={onBack || handleRestart} onBack={onBack} />}
     </div>
   );
 }

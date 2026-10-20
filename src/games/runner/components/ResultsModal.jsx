@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import confetti from 'canvas-confetti';
 
-export default function ResultsModal({ result, onRestart }) {
+export default function ResultsModal({ result, onRestart, onBack }) {
   useEffect(() => {
     if (result?.completed) {
       confetti({
@@ -37,7 +37,7 @@ export default function ResultsModal({ result, onRestart }) {
             <strong style={{ color: '#ffffff' }}>{durationSec}s (~{(durationSec / 60).toFixed(1)} min)</strong>
           </div>
           <div className="result-row" style={{ color: '#ffffff' }}>
-            <span>Time Score Bonus (240,000 / {durationSec}s):</span>
+            <span>Time Score Bonus (25,000 / {durationSec}s):</span>
             <strong style={{ color: '#ffffff', fontWeight: 700 }}>+{breakdown?.timePoints ?? 0} PTS</strong>
           </div>
           <div className="result-row">
@@ -54,8 +54,12 @@ export default function ResultsModal({ result, onRestart }) {
           </div>
         </div>
 
-        <button className="play-game-big-btn" style={{ width: '100%', marginTop: '16px', background: '#ffffff', color: '#000000', fontWeight: 700 }} onClick={onRestart}>
-          PLAY AGAIN (0.0M)
+        <button
+          className="play-game-big-btn"
+          style={{ width: '100%', marginTop: '16px', background: '#00c8e9', color: '#000000', fontWeight: 800, border: 'none', padding: '14px', borderRadius: '10px', cursor: 'pointer' }}
+          onClick={onBack || onRestart}
+        >
+          {completed ? 'RETURN TO DASHBOARD (SCORE RECORDED)' : 'RETURN TO DASHBOARD'}
         </button>
       </div>
     </div>

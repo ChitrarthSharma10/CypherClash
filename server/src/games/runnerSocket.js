@@ -1,5 +1,6 @@
 import { RunnerGameEngine } from './runner_engine/gameEngine.js';
 import { submitGameResult } from '../services/scoring.js';
+import { ScoreEntry } from '../models/ScoreEntry.js';
 import { logEvent } from '../utils/logging.js';
 import { getRoundState, onRoundStateChange } from '../services/roundState.js';
 
@@ -86,7 +87,7 @@ export function getOrCreateRunnerEngine(io, teamId, sessionId = `runner_${teamId
       io.to(teamId).emit('runner:game_over', finalResult);
       try {
         const rawScore = finalResult.score ?? finalResult.finalScore ?? 0;
-        const points = Math.max(0, Math.min(1000, Math.round(rawScore)));
+        const points = Math.max(0, Math.min(500, Math.round(rawScore)));
         await submitGameResult(teamId, 'runner', points);
         await logEvent({
           type: 'game score submitted',
@@ -106,7 +107,7 @@ export function getOrCreateRunnerEngine(io, teamId, sessionId = `runner_${teamId
 }
 
 export function registerRunnerHandlers(io, socket) {
-  socket.on('runner:join_room', ({ teamId, sessionId, playerId, isRefresh }) => {
+  socket.on('runner:join_room', async ({ teamId, sessionId, playerId, isRefresh }) => {
     if (!teamId) {
       socket.emit('runner:error_message', { message: 'teamId is required' });
       return;
@@ -123,6 +124,33 @@ export function registerRunnerHandlers(io, socket) {
       return;
     }
 
+    try {
+      const existingScore = await ScoreEntry.findOne({
+        teamId,
+        round: 1,
+        game: 'runner',
+        kind: 'game_result',
+      }).lean();
+
+      if (existingScore) {
+        socket.emit('runner:room_status', {
+          p1Connected: true,
+          p2Connected: true,
+          status: 'COMPLETED',
+          message: 'Game already completed by your team',
+        });
+        socket.emit('runner:game_over', {
+          completed: true,
+          score: existingScore.amount,
+          finalScore: existingScore.amount,
+          alreadyCompleted: true,
+        });
+        return;
+      }
+    } catch {
+      // Proceed on lookup failure
+    }
+
     const normPlayerId = (playerId === 'P2' || playerId === '2' || String(playerId).toLowerCase().includes('2')) ? 'P2' : 'P1';
     socket.data.runnerTeamId = teamId;
     socket.data.runnerPlayerId = normPlayerId;
@@ -131,7 +159,7 @@ export function registerRunnerHandlers(io, socket) {
 
     const engine = getOrCreateRunnerEngine(io, teamId, sessionId);
 
-    if (isRefresh || engine.status === 'FINISHED' || engine.status === 'EXPIRED') {
+    if (isRefresh || engine.status === 'EXPIRED') {
       engine.adminAction('reset');
     }
 
@@ -150,13 +178,22 @@ export function registerRunnerHandlers(io, socket) {
     socket.emit('runner:game_tick', engine.getStatePayload());
   });
 
-  socket.on('runner:play_game', ({ teamId }) => {
+  socket.on('runner:play_game', async ({ teamId }) => {
     const tId = teamId || socket.data.runnerTeamId;
     if (!tId) return;
 
     if (!isRound1Running()) {
       socket.emit('runner:error_message', { message: 'Round 1 is not running' });
       return;
+    }
+
+    try {
+      if (await ScoreEntry.exists({ teamId: tId, round: 1, game: 'runner', kind: 'game_result' })) {
+        socket.emit('runner:error_message', { message: 'Game already completed by your team' });
+        return;
+      }
+    } catch {
+      // ignore
     }
 
     let engine = activeEngines.get(tId);
@@ -174,7 +211,7 @@ export function registerRunnerHandlers(io, socket) {
     engine.adminAction('reset');
   });
 
-  socket.on('runner:restart_game', ({ teamId, sessionId }) => {
+  socket.on('runner:restart_game', async ({ teamId, sessionId }) => {
     const tId = teamId || socket.data.runnerTeamId;
     if (!tId) return;
 
@@ -183,13 +220,22 @@ export function registerRunnerHandlers(io, socket) {
       return;
     }
 
+    try {
+      if (await ScoreEntry.exists({ teamId: tId, round: 1, game: 'runner', kind: 'game_result' })) {
+        socket.emit('runner:error_message', { message: 'Game already completed by your team' });
+        return;
+      }
+    } catch {
+      // ignore
+    }
+
     let engine = activeEngines.get(tId);
     if (!engine) engine = getOrCreateRunnerEngine(io, tId, sessionId);
     if (!engine) return;
     engine.startGame();
   });
 
-  socket.on('runner:player_input', ({ teamId, sessionId, action, direction, playerId }) => {
+  socket.on('runner:player_input', async ({ teamId, sessionId, action, direction, playerId }) => {
     const tId = teamId || socket.data.runnerTeamId;
     const pId = playerId || socket.data.runnerPlayerId;
     if (!tId || !pId) return;
@@ -197,6 +243,15 @@ export function registerRunnerHandlers(io, socket) {
     if (!isRound1Running()) {
       socket.emit('runner:input_rejected', { reason: 'Round 1 is not running' });
       return;
+    }
+
+    try {
+      if (await ScoreEntry.exists({ teamId: tId, round: 1, game: 'runner', kind: 'game_result' })) {
+        socket.emit('runner:input_rejected', { reason: 'Game already completed by your team' });
+        return;
+      }
+    } catch {
+      // ignore
     }
 
     let engine = activeEngines.get(tId);

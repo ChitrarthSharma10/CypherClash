@@ -346,9 +346,12 @@ function Dashboard({ onLogout }) {
   const roundOneRunning = round?.round === 1 && round.status === 'running';
   const roundTwoRunning = round?.round === 2 && round.status === 'running';
   const roundThreeRunning = round?.round === 3 && round.status === 'running';
-  const circuitCompleted = Object.hasOwn(scores, '1');
-  const investigationCompleted = Object.hasOwn(scores, '2');
-  const roundThreeCompleted = Object.hasOwn(scores, '3');
+  const games = data.score?.games || {};
+  const circuitCompleted = Boolean(games['circuit'] || games['1_circuit']);
+  const mazeCompleted = Boolean(games['maze'] || games['1_maze']);
+  const runnerCompleted = Boolean(games['runner'] || games['1_runner']);
+  const investigationCompleted = Object.hasOwn(scores, '2') || Boolean(games['investigation'] || games['2_investigation']);
+  const roundThreeCompleted = Object.hasOwn(scores, '3') || Boolean(games['3_investigation']);
   return <main className="product-page dashboard-page cc-dashboard">
     <header className="cc-dashboard-header">
       <div>
@@ -436,19 +439,29 @@ function Dashboard({ onLogout }) {
           </button>
         </article>
         <article className="cc-play-card cc-play-card--coral">
-          <div className="cc-play-card__top"><span>02 / CO-OP</span><span className={`cc-game-status cc-game-status--${roundOneRunning ? 'available' : 'locked'}`}>{roundOneRunning ? 'LIVE' : 'LOCKED'}</span></div>
+          <div className="cc-play-card__top">
+            <span>02 / CO-OP</span>
+            <span className={`cc-game-status cc-game-status--${mazeCompleted ? 'completed' : roundOneRunning ? 'available' : 'locked'}`}>
+              {mazeCompleted ? 'COMPLETED' : roundOneRunning ? 'LIVE' : 'LOCKED'}
+            </span>
+          </div>
           <h3>Dual-Control Maze</h3>
           <p>Coordinate two controls to navigate one shared maze.</p>
-          <button className="cc-play-card__button" disabled={!roundOneRunning} onClick={() => navigate('/dashboard/maze')}>
-            Play Dual-Control Maze <span aria-hidden="true">↗</span>
+          <button className="cc-play-card__button" disabled={!roundOneRunning || mazeCompleted} onClick={() => navigate('/dashboard/maze')}>
+            {mazeCompleted ? 'Completed' : 'Play Dual-Control Maze'} <span aria-hidden="true">↗</span>
           </button>
         </article>
         <article className="cc-play-card cc-play-card--sky">
-          <div className="cc-play-card__top"><span>03 / REFLEX</span><span className={`cc-game-status cc-game-status--${roundOneRunning ? 'available' : 'locked'}`}>{roundOneRunning ? 'LIVE' : 'LOCKED'}</span></div>
+          <div className="cc-play-card__top">
+            <span>03 / REFLEX</span>
+            <span className={`cc-game-status cc-game-status--${runnerCompleted ? 'completed' : roundOneRunning ? 'available' : 'locked'}`}>
+              {runnerCompleted ? 'COMPLETED' : roundOneRunning ? 'LIVE' : 'LOCKED'}
+            </span>
+          </div>
           <h3>Cyber Runner</h3>
           <p>Work in sync to dodge obstacles and collect points.</p>
-          <button className="cc-play-card__button" disabled={!roundOneRunning} onClick={() => navigate('/dashboard/runner')}>
-            Play Cyber Runner <span aria-hidden="true">↗</span>
+          <button className="cc-play-card__button" disabled={!roundOneRunning || runnerCompleted} onClick={() => navigate('/dashboard/runner')}>
+            {runnerCompleted ? 'Completed' : 'Play Cyber Runner'} <span aria-hidden="true">↗</span>
           </button>
         </article>
       </div>
@@ -631,32 +644,78 @@ function getActiveGameElapsedMs(game, round, serverOffsetMs, now) {
 }
 
 function DualControlMazeScreen({ onBack, onLogout }) {
-  const { data: teamData, error: pollingError } = useVisiblePolling(() => apiRequest('/api/team/me'));
+  const { data: screenData, error: pollingError } = useVisiblePolling(async () => {
+    const [team, score] = await Promise.all([
+      apiRequest('/api/team/me'),
+      apiRequest('/api/team/score'),
+    ]);
+    return { team, score };
+  });
   useEffect(() => {
     if (pollingError === 'Authentication required') onLogout();
   }, [pollingError, onLogout]);
 
-  if (!teamData && !pollingError) return <LoadingState label="Loading Dual-Control Maze…" />;
-  if (!teamData) return <ErrorState message={pollingError} onRetry={() => window.location.reload()} />;
+  if (!screenData && !pollingError) return <LoadingState label="Loading Dual-Control Maze…" />;
+  if (!screenData) return <ErrorState message={pollingError} onRetry={() => window.location.reload()} />;
+
+  const mazeCompleted = Boolean(screenData.score?.games?.['maze'] || screenData.score?.games?.['1_maze']);
+  if (mazeCompleted) {
+    const recordedScore = screenData.score?.games?.['maze'] ?? screenData.score?.games?.['1_maze'];
+    return (
+      <div className="product-page" style={{ textAlign: 'center', padding: '60px 20px', maxWidth: '600px', margin: '40px auto', background: 'rgba(10, 16, 28, 0.95)', border: '1px solid rgba(0, 200, 233, 0.3)', borderRadius: '20px', boxShadow: '0 0 40px rgba(0, 200, 233, 0.15)' }}>
+        <div style={{ fontSize: '48px', marginBottom: '16px' }}>🏆</div>
+        <h2 style={{ color: '#fff', fontSize: '26px', marginBottom: '12px', fontWeight: 800 }}>Game Already Completed</h2>
+        <p style={{ color: 'rgba(255,255,255,0.75)', fontSize: '14px', lineHeight: 1.6, marginBottom: '24px' }}>
+          Your team has completed Dual-Control Maze with a score of <strong style={{ color: '#00c8e9' }}>{recordedScore} PTS</strong> recorded on the tournament leaderboard. Each game can only be played once per team.
+        </p>
+        <button className="product-btn product-btn--primary" onClick={onBack}>
+          Return to Dashboard
+        </button>
+      </div>
+    );
+  }
 
   return <MazeApp
-    teamId={teamData.teamId}
+    teamId={screenData.team.teamId}
     onBack={onBack}
     onLogout={onLogout}
   />;
 }
 
 function CyberRunnerScreen({ onBack, onLogout }) {
-  const { data: teamData, error: pollingError } = useVisiblePolling(() => apiRequest('/api/team/me'));
+  const { data: screenData, error: pollingError } = useVisiblePolling(async () => {
+    const [team, score] = await Promise.all([
+      apiRequest('/api/team/me'),
+      apiRequest('/api/team/score'),
+    ]);
+    return { team, score };
+  });
   useEffect(() => {
     if (pollingError === 'Authentication required') onLogout();
   }, [pollingError, onLogout]);
 
-  if (!teamData && !pollingError) return <LoadingState label="Loading Cyber Runner…" />;
-  if (!teamData) return <ErrorState message={pollingError} onRetry={() => window.location.reload()} />;
+  if (!screenData && !pollingError) return <LoadingState label="Loading Cyber Runner…" />;
+  if (!screenData) return <ErrorState message={pollingError} onRetry={() => window.location.reload()} />;
+
+  const runnerCompleted = Boolean(screenData.score?.games?.['runner'] || screenData.score?.games?.['1_runner']);
+  if (runnerCompleted) {
+    const recordedScore = screenData.score?.games?.['runner'] ?? screenData.score?.games?.['1_runner'];
+    return (
+      <div className="product-page" style={{ textAlign: 'center', padding: '60px 20px', maxWidth: '600px', margin: '40px auto', background: 'rgba(10, 16, 28, 0.95)', border: '1px solid rgba(255, 42, 68, 0.3)', borderRadius: '20px', boxShadow: '0 0 40px rgba(255, 42, 68, 0.15)' }}>
+        <div style={{ fontSize: '48px', marginBottom: '16px' }}>🏆</div>
+        <h2 style={{ color: '#fff', fontSize: '26px', marginBottom: '12px', fontWeight: 800 }}>Game Already Completed</h2>
+        <p style={{ color: 'rgba(255,255,255,0.75)', fontSize: '14px', lineHeight: 1.6, marginBottom: '24px' }}>
+          Your team has completed Cyber Runner with a score of <strong style={{ color: '#ff2a44' }}>{recordedScore} PTS</strong> recorded on the tournament leaderboard. Each game can only be played once per team.
+        </p>
+        <button className="product-btn product-btn--primary" onClick={onBack}>
+          Return to Dashboard
+        </button>
+      </div>
+    );
+  }
 
   return <RunnerApp
-    teamId={teamData.teamId}
+    teamId={screenData.team.teamId}
     onBack={onBack}
     onLogout={onLogout}
   />;
