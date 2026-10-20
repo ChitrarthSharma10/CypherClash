@@ -1,4 +1,5 @@
-import mongoose from 'mongoose';
+import mongoose from "mongoose";
+import { investigationCaseSchema } from "./InvestigationCase.js";
 
 const roundStateSchema = new mongoose.Schema(
   {
@@ -6,15 +7,18 @@ const roundStateSchema = new mongoose.Schema(
     attemptNo: { type: Number, min: 1, default: 1 },
     status: {
       type: String,
-      enum: ['not_started', 'running', 'paused', 'ended'],
-      default: 'not_started',
+      enum: ["not_started", "running", "paused", "ended"],
+      default: "not_started",
     },
     startedAt: { type: Date },
     deadline: { type: Date },
     durationSec: { type: Number, min: 1 },
     pausedAt: { type: Date },
+    endedAt: { type: Date },
+    revision: { type: Number, default: 0 },
+    investigations: { type: [investigationCaseSchema], default: [] },
   },
   { timestamps: true },
 );
 
-export const RoundState = mongoose.model('RoundState', roundStateSchema);
+export const RoundState = mongoose.model("RoundState", roundStateSchema);

@@ -34,7 +34,13 @@ npm start
 
 The API listens on `PORT` and exposes `/api/health`, which returns `{ "ok": true }`.
 
-The browser must send requests with credentials enabled because authentication uses an httpOnly session cookie. Configure the exact frontend URL with `FRONTEND_ORIGIN`.
+The browser must send requests with credentials enabled because authentication uses an httpOnly session cookie. Configure exact frontend origins with `FRONTEND_ORIGIN`; multiple origins may be comma-separated, for example `http://localhost:5173,http://localhost:5177` for local testing.
+
+## Round 3 investigation consistency
+
+Round 3 investigation cases are embedded in the RoundState document. Each role claim, evidence/decryption/accusation mutation, and approval is admitted by one atomic update to that document, requiring the active attempt and a deadline later than MongoDB's `$$NOW`. Manual end and expiry update the same document and snapshot the current attempt in that atomic operation. The atomic document write is the ordering point: requests whose write is processed after the database deadline or after closure are rejected, and writes ordered before closure are included in the final snapshot. The HTTP response or durable acknowledgment can arrive after the deadline; this is not a hard real-time completion guarantee.
+
+This design serializes Round 3 writes on one document and is subject to MongoDB's 16 MiB BSON document limit. Keep the number and retained activity volume of investigation cases bounded; larger deployments need a transaction-capable or separately serialized storage design.
 
 ## Security notes
 

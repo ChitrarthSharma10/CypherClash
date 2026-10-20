@@ -1,4 +1,4 @@
-import { randomBytes } from 'node:crypto';
+﻿import { randomBytes } from 'node:crypto';
 import express from 'express';
 import { z } from 'zod';
 import { requireTeam } from '../middleware/auth.js';

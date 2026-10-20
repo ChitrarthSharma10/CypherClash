@@ -4,7 +4,8 @@ import { z } from 'zod';
 import { requireTeam } from '../middleware/auth.js';
 import { validateBody } from '../middleware/validation.js';
 import { GameSession } from '../models/GameSession.js';
-import { GAMES, GAME_NAMES } from '../games/names.js';
+import { ScoreEntry } from '../models/ScoreEntry.js';
+import { GAMES, GAME_NAMES, TOTAL_ROUNDS, isGameAllowedInRound } from '../games/names.js';
 import { gameValidators } from '../games/validators.js';
 import { listRoundStates } from '../services/roundState.js';
 import { ScoringError, submitGameResult } from '../services/scoring.js';
@@ -98,11 +99,11 @@ router.post(
     ) {
       return responseError(res, 409, 'ROUND_NOT_RUNNING', 'Round is not running');
     }
-    if (req.params.game === 'circuit' && round.round !== 1) {
-      return responseError(res, 409, 'GAME_NOT_AVAILABLE_FOR_ROUND', 'Circuit Sync is available in Round 1');
+    if (!isGameAllowedInRound(req.params.game, round.round)) {
+      return responseError(res, 409, 'GAME_NOT_AVAILABLE_FOR_ROUND', `${req.params.game} is not available in Round ${round.round}`);
     }
 
-    if (round.round >= 2 && round.round <= 4) {
+    if (round.round >= 2 && round.round <= TOTAL_ROUNDS) {
       if (!(await isTeamEligibleForRound(req.team.teamId, round.round))) {
         return responseError(res, 403, 'PROGRESSION_PREREQUISITE_NOT_MET', 'Team does not meet the progression prerequisites for this round');
       }
@@ -132,8 +133,14 @@ router.post(
         return responseError(res, 409, 'ROUND_NOT_RUNNING', 'A new game cannot start while the round is paused');
       }
 
-      if (await GameSession.exists({ ...key, status: { $in: ['submitted', 'failed'] } })) {
-        return responseError(res, 409, 'GAME_ALREADY_FINISHED', 'Game session has already finished');
+      const completedScore = await ScoreEntry.exists({
+        teamId: req.team.teamId,
+        round: round.round,
+        game: req.params.game,
+        kind: 'game_result',
+      });
+      if (completedScore || (await GameSession.exists({ ...key, status: { $in: ['submitted', 'failed'] } }))) {
+        return responseError(res, 409, 'GAME_ALREADY_FINISHED', 'You have already completed this game');
       }
 
       const startedAt = new Date();

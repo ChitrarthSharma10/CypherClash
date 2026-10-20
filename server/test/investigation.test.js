@@ -1,4 +1,4 @@
-import './bootstrap.js';
+﻿import './bootstrap.js';
 import test, { after, before, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';

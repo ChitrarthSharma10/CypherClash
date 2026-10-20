@@ -31,10 +31,15 @@ if (!['lax', 'strict', 'none'].includes(sameSite)) {
   throw new Error('COOKIE_SAMESITE must be lax, strict, or none');
 }
 
+const configuredOrigins = process.env.FRONTEND_ORIGIN.split(',').map((origin) => origin.trim()).filter(Boolean);
+const defaultOrigins = ['http://localhost:5173', 'http://localhost:5177', 'http://localhost:5157'];
+const frontendOrigins = Array.from(new Set([...configuredOrigins, ...defaultOrigins]));
+
 export const config = {
   mongoUri: process.env.MONGO_URI,
   sessionSecret: process.env.SESSION_SECRET,
-  frontendOrigin: process.env.FRONTEND_ORIGIN,
+  frontendOrigins,
+  frontendOrigin: configuredOrigins[0] || 'http://localhost:5173',
   port: Number(process.env.PORT || 4000),
   cookieSecure: process.env.COOKIE_SECURE === 'true',
   cookieSameSite: sameSite,
@@ -43,5 +48,5 @@ export const config = {
   adminUsername: process.env.ADMIN_USERNAME,
   adminPassword: process.env.ADMIN_PASSWORD,
   seedSampleTeams: process.env.SEED_SAMPLE_TEAMS === 'true',
-  investigationLead3GithubUrl: (process.env.INVESTIGATION_LEAD3_GITHUB_URL || '').trim(),
+  investigationLead3GithubUrl: (process.env.INVESTIGATION_LEAD3_GITHUB_URL || 'https://github.com/DDuggad/CyberHint').trim(),
 };

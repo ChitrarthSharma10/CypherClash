@@ -25,6 +25,7 @@ export const TEAM_ID_PATTERN = /^CC-\d{3,}$/;
 const teamLoginSchema = z.object({
   teamId: z.string().trim().regex(TEAM_ID_PATTERN).max(20),
   password: z.string().min(1).max(128),
+  playerSlot: z.enum(['P1', 'P2']).optional(),
 }).strict();
 
 const adminLoginSchema = z.object({
@@ -140,11 +141,12 @@ router.post(
 
       await withTeamLoginLock(team.teamId, async () => {
         await regenerateSession(req);
-        await destroyTeamSessions(team.teamId);
         const now = new Date();
         await Team.updateOne({ _id: team._id }, { $set: { lastSeenAt: now, lastLoginAt: now } });
         req.session.role = 'team';
         req.session.teamId = team.teamId;
+        req.session.playerSlot = req.body.playerSlot || 'P1';
+        req.session.playerId = req.session.playerSlot;
         await saveSession(req);
       });
       recordTeamPresence(team.teamId);

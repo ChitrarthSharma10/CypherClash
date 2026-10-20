@@ -368,3 +368,30 @@ test('only accepts whitelisted game names', async () => {
     { code: 'INVALID_GAME' },
   );
 });
+
+test('investigation scoring formula: max(150, 500 - 15 * W) with floor 150', () => {
+  const formula = (wrongCount) => Math.max(150, 500 - 15 * wrongCount);
+  assert.equal(formula(0), 500);
+  assert.equal(formula(2), 470);
+  assert.equal(formula(4), 440);
+  assert.equal(formula(10), 350);
+  assert.equal(formula(28), 150);
+  assert.equal(formula(29), 150);
+  assert.equal(formula(100), 150);
+});
+
+test('double scoring prevention: team cannot be scored twice for the same game attempt', async () => {
+  const round = testRounds[8];
+  await startRound(round, 60, 'scoring-test-admin');
+  const first = await submitGameResult(teamA, 'investigation', 470);
+  assert.ok(first._id);
+
+  await assert.rejects(
+    submitGameResult(teamA, 'investigation', 500),
+    { code: 'RESULT_ALREADY_SUBMITTED' },
+  );
+
+  const count = await ScoreEntry.countDocuments({ teamId: teamA, round, game: 'investigation' });
+  assert.equal(count, 1);
+});
+

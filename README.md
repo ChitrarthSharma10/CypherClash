@@ -1,135 +1,60 @@
 # CypherClash
 
-CypherClash is an event-grade web platform and competition engine built for cybersecurity tournament operations. The entire competition lifecycle is managed through a single unified application: team authentication, real-time cooperative puzzles, inspect-element investigations, append-only score ledgers, live leaderboards, administrative round controls, and team progression overrides.
+CypherClash is an event-grade web platform and competition engine built for cybersecurity tournament operations. The entire competition lifecycle is managed through a single unified application: team authentication, real-time cooperative mini-games, forensic inspect-element investigations, collaborative dual-role incident response, append-only score ledgers, live leaderboards, and administrative tournament controls.
 
 ---
 
-## 1. Project Overview & Architecture
+## 1. Tournament Structure & Games
 
-CypherClash is designed for student cybersecurity tournaments where teams compete in-person using a single shared screen and keyboard.
+CypherClash features a structured 3-round competitive tournament where all gameplay scores are audited, append-only, and capped at **500 points maximum per game**. Once a team completes a game, it is finalized and cannot be replayed.
 
-- **One Session Per Team**: Each team receives a unique Team ID (`CC-###`) and password. Per-player accounts are omitted by design; both team members participate on a single shared physical machine.
-- **Client/Server Authority Separation**: The browser is strictly a display and input layer. The server exclusively governs identity, timing, validation, stage progression, hint entitlements, score calculation, and persistence.
-- **Independent Session Roles**: Tournament administrators and participating teams authenticate using separate session cookies (`cc_admin.sid` and `cc_team.sid`), allowing administrators and teams to remain simultaneously active in the same browser across separate tabs.
-- **Auditable Score Ledger**: Scores are never mutated directly. Every score update is recorded as an immutable `ScoreEntry` document in an append-only ledger with an explicit reason, actor, and timestamp.
-- **State-Gated Progression**: Round eligibility and tournament progress are separated from the global tournament round clock. Overriding or waiving a team's prerequisites does not alter the global round status or fabricate gameplay points.
-
-```
-                    ┌─────────────────────────────────────────┐
-                    │      CypherClash Frontend (React/Vite)  │
-                    │  - Landing Page     - Team Dashboard    │
-                    │  - Circuit Sync     - Operation Beacon  │
-                    │  - Live Leaderboard - Admin Control Room│
-                    └────────────────────┬────────────────────┘
-                                         │ HTTP REST / Polling
-                                         ▼
-                    ┌─────────────────────────────────────────┐
-                    │       CypherClash API (Node/Express)     │
-                    │  - Session Auth     - Rate Limiters     │
-                    │  - Game Validators  - Progression Engine│
-                    │  - Round Timers     - Score Ledger      │
-                    └────────────────────┬────────────────────┘
-                                         │ Mongoose ODM
-                                         ▼
-                    ┌─────────────────────────────────────────┐
-                    │              MongoDB Database           │
-                    │  - Teams            - RoundStates       │
-                    │  - GameSessions     - ScoreEntries      │
-                    │  - HintEntitlements - TeamProgressions  │
-                    │  - EventLogs        - Sessions          │
-                    └─────────────────────────────────────────┘
-```
-
----
-
-## 2. Technology Stack
-
-- **Frontend**:
-  - React 18+ (SPA with lightweight pathname/history routing)
-  - Vite (build tool and dev server)
-  - Vanilla CSS design system with responsive dark cyberpunk aesthetics
-  - Pure SVG schematic renderer for interactive circuit tracing
-- **Backend**:
-  - Node.js (ES Modules)
-  - Express 5
-  - Mongoose 8 (MongoDB ODM)
-  - `express-session` & `connect-mongo` (database-backed HTTP-only cookie sessions)
-  - `bcryptjs` (secure password hashing)
-  - `helmet` (HTTP security headers)
-  - `express-rate-limit` (brute-force defense)
-  - `zod` (runtime request body schema validation)
-  - `cors` (credential-aware cross-origin resource sharing)
-  - `dotenv` (environment configuration)
-- **Transport**:
-  - Stateless HTTP REST endpoints with visibility-aware tab polling (25-second cadence while visible).
-  - In-memory server caches for leaderboard snapshots and team presence to prevent database bottlenecks.
-  - No WebSockets or Socket.IO required.
-
----
-
-## 3. Implemented Features & Project Status
-
-### Fully Implemented
-- [x] **Authentication & Independent Sessions**: Isolated cookie jars (`cc_admin.sid` for admin, `cc_team.sid` for teams) preventing session collision.
-- [x] **Admin Control Room**: Live round controls (start, pause, resume with deadline extension, end, restart attempts), team creation, password resets, login lockout clearance, manual score adjustments, and audit logging.
-- [x] **Round 1 — Circuit Sync**: Cooperative Boolean logic puzzle with 5 sequential stages (3, 4, 4, 5, and 6 switches) using AND, OR, XOR, NAND, NOR, NOT, and XNOR gates. Inputs are recorded locally with timestamps and deterministically replayed server-side.
-- [x] **Round 2 — Operation Shadow Beacon**: Four-stage web hijacking investigation (Incident Log analysis, rogue relay identification, authentication trace token retrieval, and final beacon neutralization). Features stage-gated resources, answer normalization, wrong-answer penalties, and single-use tactical hints.
-- [x] **Team Progression Override & Round Skip System**:
-  - *Action A (Advance)*: Advance team to a selected target round with optional prerequisite waivers.
-  - *Action B (Waive/Status)*: Configure individual round requirements as `waived`, `pending`, or `completed_normally` (enforces gameplay evidence check).
-  - *Action C (Initial Progression)*: Select starting round (Round 1–4) during team creation.
-  - *Action D (Safe Revert)*: Revoke overrides safely with disruption warnings if subsequent gameplay records exist.
-  - *Audit Trail*: Immutable audit log of all progression overrides displayed in the admin modal.
-- [x] **Append-Only Score Ledger**: Atomic `submitGameResult` service with duplicate-submission protection (`teamId + round + attemptNo + game` unique partial index).
-- [x] **Live Leaderboard**: Real-time standings computed from verified round score ledger entries; Bias Points displayed separately.
-
-### Placeholders & Pending Work
-- [ ] **Dual-Control Maze (Round 1)**: Card disabled; validator returns 501 Not Implemented.
-- [ ] **Cyber Runner (Round 1)**: Card disabled; validator returns 501 Not Implemented.
-- [ ] **Round 3 Gameplay Challenge**: Challenge engine is in development on a separate integration branch (`origin/feature/round3-investigation`). Shared hint entitlement and progression eligibility check groundwork are implemented and ready for integration.
-
----
-
-## 4. Game Rules & Scoring Policies
-
-### Round 1: Circuit Sync
-- **Format**: 5 sequential Boolean gate stages on a shared screen.
-- **Controls**: Keys `1`–`6` (or UI buttons) to toggle switches; `Enter` to test circuit.
-- **Scoring**: Maximum **200 points** awarded only after all 5 stages match their target lamps.
-- **Validation**: Server re-simulates the exact timestamped switch input log against the session seed.
+### Round 1: Cooperative Mini-Games
+1. **Circuit Sync (Logic Challenge)**
+   - 5 sequential Boolean gate stages (AND, OR, XOR, NAND, NOR, NOT, XNOR).
+   - Trace electrical signal flow, toggle switches (Keys `1`–`6` or buttons), and test circuits (`Enter`).
+   - Capped at **500 points max**.
+2. **Dual-Control Maze (Co-op Coordination)**
+   - Two teammates control one shared avatar through a 3D labyrinth with gates, rune portals, and hazardous spike pits.
+   - **Player 1**: Vertical Controls (`W`/`S` or `Up`/`Down`).
+   - **Player 2**: Horizontal Controls (`A`/`D` or `Left`/`Right`).
+   - Collect data packets, activate portals to open portcullises, and reach the vault exit.
+   - Capped at **500 points max**.
+3. **Cyber Runner (Reflex & Timing)**
+   - High-speed 3-lane co-op obstacle sprint across an infinite cyberway.
+   - **Player 1**: Jump (`W`/`Up`) and Slide (`S`/`Down`).
+   - **Player 2**: Lane Steering Left (`A`/`Left`) and Right (`D`/`Right`).
+   - Collect gold pickups, vault chests, clear sector checkpoints, and cross the finish line.
+   - Capped at **500 points max**.
 
 ### Round 2: Operation Shadow Beacon (Hidden Clue Investigation)
-- **Format**: 4-stage sequential incident investigation.
-  - Stage 1: Security incident log inspection.
-  - Stage 2: Rogue relay domain analysis in network traces.
-  - Stage 3: Auth trace token extraction from mock portal assets.
-  - Stage 4: Beacon neutralization flag verification.
-- **Tactical Hint Entitlement**: Exactly one hint available per team for Round 2, imposing an irreversible **-25 point penalty**.
-- **Scoring Formula**:
-  $$\text{score} = \max(150, 500 - (15 \times \text{wrongAttempts}) - (25 \times \text{hintsUsed}))$$
-  - Base score: **500 points**.
-  - Incorrect answer submission: **-15 points** per mistake.
-  - Hint deduction: **-25 points** (if confirmed).
-  - Completion floor: **150 points** (applies only upon successful completion of all four stages; incomplete sessions do not receive completion points).
-- **Resource Protection**: Clue resources and download endpoints return HTTP 403 until the preceding stage is solved. Canonical answers and flags are stored strictly on the server.
+- 4-stage sequential web UI incident investigation:
+  - **Lead 1**: High-Priority Gateway Alert Log analysis (`ALPHA-RELAY-77`).
+  - **Lead 2**: Digital Forensic Evidence Desk with 13 photo/document exhibits, timeline correlation, and CCTV analysis (`FRAME-SHIFT-246`).
+  - **Lead 3**: Historical Git repository commit ledger inspection via challenge repository link (`hellowor!d`).
+  - **Lead 4**: Core Signal Vault with interactive Signal Reconstruction Matrix (`UNMASKED`).
+- Features stage-gated resources, answer normalization, wrong-answer penalties (-15 pts), and single-use tactical hints (-25 pts).
+- Scoring: $\max(150, 500 - (15 \times \text{wrongAttempts}) - (25 \times \text{hintsUsed}))$. Capped at **500 points max** (floor: 150 pts).
 
-### Score Ledger & Leaderboard Integrity
-- Waived rounds grant **0 points** and record **no fabricated gameplay sessions**.
-- Legitimately earned scores are never altered by progression overrides or waiver revocations.
-- Total competition rank is determined exclusively by round gameplay points.
+### Round 3: Digital Detective (Collaborative Incident Response)
+- Two distinct roles operating on a shared case board:
+  - **Lead Detective**: Claims incident room, copies private analyst invite link, submits field evidence.
+  - **Forensic Analyst**: Joins via private invite link, decrypts packet payloads with recovery tokens.
+- **Accusation Agreement**: Either player can initiate a suspect accusation citing collected evidence; the other player must review and approve it.
+- Scoring: $\max(150, 500 - (15 \times \text{wrongAttempts}))$. Capped at **500 points max**.
 
 ---
 
-## 5. Prerequisites
+## 2. Quickstart: Clone & Run
 
-Before running CypherClash locally, ensure you have:
+> [!CAUTION]
+> **DATABASE SAFETY NOTICE**:
+> Test teams, sample passwords, seed scripts, and migration helpers are strictly intended for a **LOCAL** development database (`mongodb://127.0.0.1:27017/cypherclash`).
+> **NEVER** run seed or delete scripts against a shared production or cloud MongoDB database.
+
+### Prerequisites
 - **Node.js**: v18.0.0 or higher (v20+ recommended).
 - **npm**: v9.0.0 or higher.
-- **MongoDB**: Local MongoDB instance running on port 27017 or a MongoDB Atlas connection URI.
-
----
-
-## 6. Local Setup & Startup Guide
+- **MongoDB**: Local MongoDB instance running on port 27017.
 
 ### Step 1: Clone Repository
 ```bash
@@ -137,59 +62,39 @@ git clone https://github.com/ChitrarthSharma10/CypherClash.git
 cd CypherClash
 ```
 
-### Step 2: Configure Environment Variables
-
-1. **Frontend Environment**:
-   Copy `.env.example` to `.env` in the root directory:
+### Step 2: Configure Environment Files
+1. **Frontend**:
    ```bash
    cp .env.example .env
    ```
-   *Default contents:*
-   ```env
-   VITE_API_URL=http://localhost:4000
-   ```
+   *(Default: `VITE_API_URL=http://localhost:4000`)*
 
-2. **Backend Environment**:
-   Copy `server/.env.example` to `server/.env`:
+2. **Backend**:
    ```bash
    cp server/.env.example server/.env
    ```
-   *Edit `server/.env` with your local settings:*
-   ```env
-   MONGO_URI=mongodb://127.0.0.1:27017/cypherclash
-   MONGO_URI_TEST=mongodb://127.0.0.1:27017/cypherclash_test
-   SESSION_SECRET=replace-with-a-secure-random-secret-at-least-32-chars
-   FRONTEND_ORIGIN=http://localhost:5157
-   PORT=4000
-   COOKIE_SECURE=false
-   COOKIE_SAMESITE=lax
-   TRUST_PROXY=0
-   BCRYPT_COST=10
-   ADMIN_USERNAME=admin
-   ADMIN_PASSWORD=SetYourAdminPasswordHere123!
-   SEED_SAMPLE_TEAMS=false
-   ```
+   *(Ensure `MONGO_URI` points to your local MongoDB instance, e.g. `mongodb://127.0.0.1:27017/cypherclash`, and set a unique `SESSION_SECRET` and `ADMIN_PASSWORD`)*
 
 ### Step 3: Install Dependencies
 ```bash
-# Install frontend dependencies
+# Install root (frontend) dependencies
 npm install
 
-# Install backend dependencies
+# Install server (backend) dependencies
 cd server
 npm install
 cd ..
 ```
 
-### Step 4: Seed Database (Optional)
-To initialize the default administrator account and sample teams:
+### Step 4: Seed Initial Admin & Local Test Teams (Optional)
 ```bash
 cd server
 npm run seed
 cd ..
 ```
+*Creates default admin credentials and local test accounts (`CC-001`, `CC-002`, `CC-003`).*
 
-### Step 5: Start Development Servers
+### Step 5: Start Servers
 Run the backend and frontend in separate terminal windows:
 
 - **Terminal 1 (Backend API)**:
@@ -197,75 +102,57 @@ Run the backend and frontend in separate terminal windows:
   cd server
   npm run dev
   ```
-  *Backend will listen at `http://localhost:4000`.*
+  *Server starts on `http://localhost:4000`.*
 
 - **Terminal 2 (Frontend Client)**:
   ```bash
-  npm run dev -- --port 5157
+  npm run dev
   ```
-  *Frontend will run at `http://localhost:5157`.*
+  *Frontend starts on `http://localhost:5173`.*
 
 ---
 
-## 7. Login & Navigation Workflows
+## 3. Two-Player & Round 3 Testing Guide
 
-### Admin Portal
-- **URL**: `http://localhost:5157/admin/login`
-- **Credentials**: Formulated in `server/.env` (`ADMIN_USERNAME` and `ADMIN_PASSWORD`).
-- **Features**:
-  - Start, pause, resume, and end tournament rounds.
-  - Create teams with custom initial progression points (Round 1–4).
-  - Open **Manage Progress** on any team to advance rounds, waive requirements, or safely revert exceptions.
-  - Clear login lockouts and reset passwords.
-  - Adjust team scores with auditable reasons.
+### Testing Dual-Control Mini-Games (Maze & Runner)
+1. Log in to the Team Dashboard at `http://localhost:5173/login`.
+2. Ensure Round 1 is active (start via Admin Portal at `http://localhost:5173/admin/login` if needed).
+3. Open Dual-Control Maze or Cyber Runner.
+4. **Co-op Testing Options**:
+   - **Same Machine**: Use `W`/`S` (Player 1) and `A`/`D` (Player 2) simultaneously on the shared keyboard.
+   - **Two Browser Windows**: Open a second browser tab or window, select Player 2 role, and test real-time WebSocket synchronization across windows.
+   - **Simulate Partner**: Click "Sync Device / Pair Now ⚡" or use the partner toggle in the lobby.
 
-### Team Portal
-- **URL**: `http://localhost:5157/login`
-- **Credentials**: Team ID (`CC-###`) and password generated upon team creation.
-- **Features**:
-  - Live round countdown and status indicators.
-  - Play Circuit Sync (Round 1) and Operation Shadow Beacon (Round 2).
-  - Live round score breakdown (distinguishing earned points from waived rounds).
-  - Live team presence indicator.
-- **Leaderboard**: `http://localhost:5157/leaderboard` (accessible from dashboard).
+### Testing Round 3 Collaborative Case
+1. Ensure Round 3 is active and the team is eligible.
+2. From the Team Dashboard, navigate to **Round 03 / Collaborative Case**.
+3. **Player 1**: Click **Claim Lead Detective**. Once claimed, click **Copy Invite Link**.
+4. **Player 2**: Open the copied link in a separate browser window or incognito session. Click **Join as Forensic Analyst**.
+5. Both players now share the live case board. Player 1 logs field evidence (`ev1`), Player 2 decrypts telemetry packets (`HELIX`), and either player drafts the accusation for the other to approve.
 
 ---
 
-## 8. Verification & Test Commands
+## 4. Test & Build Commands
 
-### Run Full Backend Test Suite
-From the `server/` directory:
+### Backend Test Suite
+All backend tests execute strictly against an isolated `_test` database:
 ```bash
+cd server
 npm test
 ```
-*Executes all 8 test suites (85 automated tests) covering authentication, session isolation, Circuit Sync replay, scoring ledger, investigation lifecycle, progression overrides, and rate limiting.*
+*Runs all unit and integration test suites covering authentication, session isolation, scoring ledger, game engines, and progression rules.*
 
-### Run Frontend Unit Tests
-From the repository root:
-```bash
-node --test src/circuitSchematicLayout.test.js
-```
-*Validates schematic layout algorithms, gate coordinate generation, and SVG viewport constraints.*
-
-### Run Frontend Production Build
-From the repository root:
+### Frontend Production Build
 ```bash
 npm run build
 ```
-*Compiles the production bundle via Vite into `dist/` with zero warnings.*
-
-### Check Whitespace & Formatting
-From the repository root:
-```bash
-git diff --check
-```
+*Compiles the production bundle via Vite into `dist/`.*
 
 ---
 
-## 9. Troubleshooting Tips
+## 5. Security & Architecture Details
 
-- **Session Expiry / 401 Unauthorized**: If cookies are cleared or a team is disabled, refresh the page to trigger session cleanup and redirect to login.
-- **Round Inactive / 409 Locked**: Games cannot start unless the corresponding round is marked `running` by the tournament administrator.
-- **Prerequisite Missing / 403 Forbidden**: Teams cannot enter Round 2 or Round 3 unless the preceding round was completed normally or administratively waived via the Admin Portal.
-- **MongoDB Test Database**: Backend tests use `MONGO_URI_TEST` (or derive `<db>_test`). Ensure MongoDB has permissions to create and drop test collections.
-- **Port Conflicts**: Ensure port `4000` (API) and `5157` / `5173` (Vite) are available. Adjust `FRONTEND_ORIGIN` in `server/.env` if using a custom port.
+- **Independent Session Roles**: Tournament administrators (`cc_admin.sid`) and teams (`cc_team.sid`) use isolated HTTP-only cookies, allowing admins and teams to operate concurrently in separate tabs of the same browser.
+- **Single Completion Guarantee**: Once a team completes a game and points are recorded, the game is permanently locked for that round attempt.
+- **Score Cap Enforcement**: All game engines and the authoritative server ledger clamp game scores to `Math.min(500, points)`.
+- **Append-Only Ledger**: Direct mutations to team score records are prohibited. All score updates flow through the immutable `ScoreEntry` ledger with audit logging.

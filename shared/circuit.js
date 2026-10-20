@@ -145,9 +145,9 @@ export function applyCircuitInput(game, input) {
   const correct = stage.outputs.filter((output) => nodes[output.node] === output.target).length;
   if (correct === stage.outputs.length) {
     const seconds = Math.max(0, (input.timestamp - game.stageStartedAt) / 1000);
-    const bonus = Math.max(0, Math.round(60 - seconds / 2));
-    const gained = Math.max(20, 100 + bonus - 20 * stage.wrong);
-    game.points += gained;
+    const bonus = Math.max(0, Math.round(30 - seconds / 2));
+    const gained = Math.max(20, Math.min(100, 70 + bonus - 15 * stage.wrong));
+    game.points = Math.min(500, game.points + gained);
     game.log.push({ stage: game.stageIndex + 1, gained, wrong: stage.wrong });
     game.stageIndex += 1;
     if (game.stageIndex >= STAGES.length) {

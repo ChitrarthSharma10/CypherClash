@@ -14,6 +14,7 @@ import leaderboardRoutes from './routes/leaderboard.js';
 import gameRoutes from './routes/games.js';
 import investigationRoutes from './routes/investigation.js';
 import round3Routes from './routes/round3.js';
+import round3InvestigationRoutes from './routes/round3Investigation.js';
 
 const noStore = (req, res, next) => {
   res.set('Cache-Control', 'no-store');
@@ -24,7 +25,7 @@ export function createApp() {
   const app = express();
   app.set('trust proxy', config.trustProxy);
   app.use(helmet());
-  app.use(cors({ origin: config.frontendOrigin, credentials: true }));
+  app.use(cors({ origin: config.frontendOrigins, credentials: true }));
   app.use(express.json({ limit: '20kb' }));
 
   app.get('/api/health', (req, res) => res.json({ ok: true }));
@@ -35,6 +36,7 @@ export function createApp() {
   app.use('/api/games', noStore, teamSessionMiddleware, gameRoutes);
   app.use('/api/rounds/2/investigation', noStore, teamSessionMiddleware, investigationRoutes);
   app.use('/api/rounds/3', noStore, teamSessionMiddleware, round3Routes);
+  app.use('/api/investigation', noStore, teamSessionMiddleware, round3InvestigationRoutes);
   app.use((req, res) => res.status(404).json({ error: 'Not found' }));
   app.use((error, req, res, next) => {
     if (res.headersSent) return next(error);

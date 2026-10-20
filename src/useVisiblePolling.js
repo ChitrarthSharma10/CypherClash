@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 
-const POLL_INTERVAL_MS = 25_000;
+const POLL_INTERVAL_MS = 5_000;
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
 
 export async function fetchApi(path) {
@@ -21,6 +21,7 @@ export function useVisiblePolling(loader) {
   const [error, setError] = useState('');
   const [updatedAt, setUpdatedAt] = useState(null);
   loaderRef.current = loader;
+  const pollRef = useRef(() => {});
 
   useEffect(() => {
     let interval;
@@ -44,6 +45,12 @@ export function useVisiblePolling(loader) {
         inFlight = false;
       }
     };
+    pollRef.current = poll;
+
+    const onCustomRefresh = () => {
+      void poll();
+    };
+    window.addEventListener('cypherclash:refresh-round', onCustomRefresh);
 
     const updateInterval = () => {
       window.clearInterval(interval);
@@ -60,10 +67,11 @@ export function useVisiblePolling(loader) {
       active = false;
       window.clearInterval(interval);
       document.removeEventListener('visibilitychange', updateInterval);
+      window.removeEventListener('cypherclash:refresh-round', onCustomRefresh);
     };
   }, []);
 
-  return { data, error, updatedAt };
+  return { data, error, updatedAt, refresh: () => pollRef.current?.() };
 }
 
 export function useVisibleClock() {

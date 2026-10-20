@@ -2,8 +2,7 @@ import { TeamProgression } from '../models/TeamProgression.js';
 import { ScoreEntry } from '../models/ScoreEntry.js';
 import { GameSession } from '../models/GameSession.js';
 import { logEvent } from '../utils/logging.js';
-
-const TOTAL_ROUNDS = 4;
+import { TOTAL_ROUNDS } from '../../../shared/rounds.js';
 
 /**
  * Returns or initializes a TeamProgression document.

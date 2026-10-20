@@ -5,6 +5,7 @@ import { Team } from '../models/Team.js';
 import { TeamProgression } from '../models/TeamProgression.js';
 import { GameSession } from '../models/GameSession.js';
 import { ScoreEntry } from '../models/ScoreEntry.js';
+import { RoundState } from '../models/RoundState.js';
 import { requireAdmin } from '../middleware/auth.js';
 import { validateBody } from '../middleware/validation.js';
 import { generatePassword, hashPassword } from '../utils/passwords.js';
@@ -29,6 +30,8 @@ import {
   setRoundStatus,
 } from '../services/progression.js';
 
+import { TOTAL_ROUNDS } from '../../../shared/rounds.js';
+
 const router = express.Router();
 router.use(requireAdmin);
 router.param('teamId', (req, res, next, teamId) => {
@@ -38,7 +41,7 @@ router.param('teamId', (req, res, next, teamId) => {
   return next();
 });
 router.param('n', (req, res, next, value) => {
-  if (!/^\d+$/.test(value) || Number(value) < 1) {
+  if (!/^\d+$/.test(value) || Number(value) < 1 || Number(value) > TOTAL_ROUNDS) {
     return res.status(400).json({ error: 'Invalid round number' });
   }
   req.roundNumber = Number(value);
@@ -48,7 +51,7 @@ router.param('n', (req, res, next, value) => {
 const createTeamSchema = z.object({
   name: z.string().trim().min(1).max(120),
   biasPoints: z.number().finite().min(-1000).max(100000).default(0),
-  initialProgression: z.number().int().min(1).max(4).default(1),
+  initialProgression: z.number().int().min(1).max(TOTAL_ROUNDS).default(1),
 }).strict();
 
 const updateTeamSchema = z.object({
@@ -62,19 +65,19 @@ const startRoundSchema = z.object({
   durationSec: z.number().int().min(1).max(86400),
 }).strict();
 const adjustmentSchema = z.object({
-  round: z.number().int().min(1),
+  round: z.number().int().min(1).max(TOTAL_ROUNDS),
   amount: z.number().int().min(-1000).max(1000),
   reason: z.string().trim().min(1).max(200),
 }).strict();
 
 const advanceProgressionSchema = z.object({
-  targetRound: z.number().int().min(1).max(4),
+  targetRound: z.number().int().min(1).max(TOTAL_ROUNDS),
   waivePrior: z.boolean().default(true),
   reason: z.string().trim().min(3).max(500),
 }).strict();
 
 const waiveProgressionSchema = z.object({
-  round: z.number().int().min(1).max(4),
+  round: z.number().int().min(1).max(TOTAL_ROUNDS),
   status: z.enum(['waived', 'pending', 'completed_normally']),
   reason: z.string().trim().min(3).max(500),
 }).strict();
@@ -190,6 +193,30 @@ router.post('/teams/:teamId/adjust', validateBody(adjustmentSchema), async (req,
 router.get('/scores', async (req, res, next) => {
   try {
     return res.json(await getAllTotals());
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.get('/investigation/final-results', async (req, res, next) => {
+  try {
+    const round = await RoundState.findOne({ round: 3 }).lean();
+    const cases = (round?.investigations || [])
+      .filter(({ finalResult }) => finalResult)
+      .sort(
+        (first, second) =>
+          new Date(first.finalResult.roundEndedAt) -
+            new Date(second.finalResult.roundEndedAt) ||
+          first.teamId.localeCompare(second.teamId),
+      );
+    return res.json(
+      cases.map(({ teamId, round: caseRound, attemptNo, finalResult }) => ({
+        teamId,
+        round: caseRound,
+        attemptNo,
+        ...finalResult,
+      })),
+    );
   } catch (error) {
     return next(error);
   }
