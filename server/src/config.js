@@ -34,7 +34,7 @@ if (!['lax', 'strict', 'none'].includes(sameSite)) {
 export const config = {
   mongoUri: process.env.MONGO_URI,
   sessionSecret: process.env.SESSION_SECRET,
-  frontendOrigin: process.env.FRONTEND_ORIGIN,
+  frontendOrigins: process.env.FRONTEND_ORIGIN.split(',').map((origin) => origin.trim()).filter(Boolean),
   port: Number(process.env.PORT || 4000),
   cookieSecure: process.env.COOKIE_SECURE === 'true',
   cookieSameSite: sameSite,

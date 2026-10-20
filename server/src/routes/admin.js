@@ -5,6 +5,7 @@ import { Team } from '../models/Team.js';
 import { TeamProgression } from '../models/TeamProgression.js';
 import { GameSession } from '../models/GameSession.js';
 import { ScoreEntry } from '../models/ScoreEntry.js';
+import { RoundState } from '../models/RoundState.js';
 import { requireAdmin } from '../middleware/auth.js';
 import { validateBody } from '../middleware/validation.js';
 import { generatePassword, hashPassword } from '../utils/passwords.js';
@@ -190,6 +191,30 @@ router.post('/teams/:teamId/adjust', validateBody(adjustmentSchema), async (req,
 router.get('/scores', async (req, res, next) => {
   try {
     return res.json(await getAllTotals());
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.get('/investigation/final-results', async (req, res, next) => {
+  try {
+    const round = await RoundState.findOne({ round: 3 }).lean();
+    const cases = (round?.investigations || [])
+      .filter(({ finalResult }) => finalResult)
+      .sort(
+        (first, second) =>
+          new Date(first.finalResult.roundEndedAt) -
+            new Date(second.finalResult.roundEndedAt) ||
+          first.teamId.localeCompare(second.teamId),
+      );
+    return res.json(
+      cases.map(({ teamId, round: caseRound, attemptNo, finalResult }) => ({
+        teamId,
+        round: caseRound,
+        attemptNo,
+        ...finalResult,
+      })),
+    );
   } catch (error) {
     return next(error);
   }
