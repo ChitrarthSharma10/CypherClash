@@ -26,7 +26,7 @@
   --cc-glow-red: 0 0 20px rgba(255, 255, 255, 0.2);
   --cc-glow-green: 0 0 20px rgba(255, 255, 255, 0.2);
 
-  background-color: #000000;
+  background-color: transparent;
   color: #ffffff;
   min-height: 100vh;
 }

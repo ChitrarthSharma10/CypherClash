@@ -15,7 +15,7 @@
   --cc-font-body: "Roboto Flex", sans-serif;
   --cc-font-mono: "Roboto Flex", monospace, sans-serif;
 
-  background-color: #000000;
+  background-color: transparent;
   color: #ffffff;
   min-height: 100vh;
 }

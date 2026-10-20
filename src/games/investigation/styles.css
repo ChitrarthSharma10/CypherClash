@@ -14,7 +14,7 @@
   --cc-red: #ef4444;
   --cc-yellow: #f59e0b;
 
-  background-color: #000000;
+  background-color: transparent;
   color: #ffffff;
   min-height: 100vh;
 }
