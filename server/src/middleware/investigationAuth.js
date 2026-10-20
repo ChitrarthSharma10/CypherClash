@@ -41,14 +41,33 @@ export async function requireInvestigationParticipant(req, res, next) {
     );
     if (!investigation)
       return res.status(409).json({ error: "Join the investigation first" });
-    const role =
-      req.session.role === "team" &&
-      investigation.detectiveSessionHash === currentSessionHash
-        ? "detective"
-        : req.session.role === "investigation" &&
-            investigation.analystSessionHash === currentSessionHash
-          ? "analyst"
-          : null;
+    const hasDetectiveSeat = investigation.detectiveSessionHash === currentSessionHash;
+    const hasAnalystSeat = investigation.analystSessionHash === currentSessionHash;
+    const requestedRole = req.headers["x-acting-role"] || req.query.role || req.body?.actingRole;
+
+    let role = null;
+    if (hasDetectiveSeat && hasAnalystSeat) {
+      if (requestedRole === "analyst" || requestedRole === "detective") {
+        role = requestedRole;
+      } else {
+        role = "detective";
+      }
+    } else if (hasDetectiveSeat && req.session.role === "team") {
+      role = "detective";
+      if (requestedRole && requestedRole !== "detective") {
+        return res
+          .status(403)
+          .json({ error: "Session is not authorized for requested role" });
+      }
+    } else if (hasAnalystSeat && req.session.role === "investigation") {
+      role = "analyst";
+      if (requestedRole && requestedRole !== "analyst") {
+        return res
+          .status(403)
+          .json({ error: "Session is not authorized for requested role" });
+      }
+    }
+
     if (!role)
       return res
         .status(403)
@@ -57,6 +76,7 @@ export async function requireInvestigationParticipant(req, res, next) {
     req.investigation = investigation;
     req.investigationRole = role;
     req.investigationRound = round;
+    req.investigationHasBothSeats = hasDetectiveSeat && hasAnalystSeat;
     return next();
   } catch (error) {
     return next(error);

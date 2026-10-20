@@ -162,6 +162,119 @@ router.post(
   },
 );
 
+// Same-screen mode: authenticated team session holds both seats simultaneously.
+router.post(
+  "/join/same-screen",
+  requireTeam,
+  validateBody(emptySchema),
+  async (req, res, next) => {
+    try {
+      const round = await runningRound3();
+      if (!round)
+        return res
+          .status(409)
+          .json({ error: "Round 3 is not running", code: "ROUND_NOT_RUNNING" });
+      const attemptNo = round.attemptNo ?? 1;
+      const now = new Date();
+      const currentSessionHash = hashSession(req.sessionID);
+
+      const existing = round.investigations?.find(
+        (entry) => entry.teamId === req.team.teamId && entry.attemptNo === attemptNo,
+      );
+
+      let doc;
+      if (!existing) {
+        doc = await claimRound3Investigation(attemptNo, {
+          teamId: req.team.teamId,
+          round: 3,
+          attemptNo,
+          detectiveJoinedAt: now,
+          detectiveSessionHash: currentSessionHash,
+          analystJoinedAt: now,
+          analystSessionHash: currentSessionHash,
+          clues: [],
+          decrypted: false,
+          decryptedAt: null,
+          activity: [
+            {
+              type: "role_joined",
+              message: "Lead Detective joined the case",
+              role: "detective",
+              at: now,
+            },
+            {
+              type: "role_joined",
+              message: "Forensic Analyst joined the case",
+              role: "analyst",
+              at: now,
+            },
+          ],
+          accusation: null,
+        });
+      } else if (
+        existing.detectiveSessionHash === currentSessionHash &&
+        existing.analystJoinedAt == null
+      ) {
+        doc = await updateRound3Investigation(
+          attemptNo,
+          {
+            _id: existing._id,
+            teamId: req.team.teamId,
+            attemptNo,
+            detectiveSessionHash: currentSessionHash,
+            analystJoinedAt: null,
+            finalResult: { $exists: false },
+          },
+          {
+            $set: {
+              "investigations.$.analystJoinedAt": now,
+              "investigations.$.analystSessionHash": currentSessionHash,
+            },
+            $unset: {
+              "investigations.$.inviteHash": 1,
+              "investigations.$.inviteExpiresAt": 1,
+            },
+            $push: {
+              "investigations.$.activity": {
+                type: "role_joined",
+                message: "Forensic Analyst joined the case",
+                role: "analyst",
+                at: now,
+              },
+            },
+          },
+        );
+      } else if (
+        existing.detectiveSessionHash === currentSessionHash &&
+        existing.analystSessionHash === currentSessionHash
+      ) {
+        doc = existing;
+      } else {
+        return res
+          .status(409)
+          .json({ error: "Station seats are already claimed by another session" });
+      }
+
+      if (!doc) {
+        return res
+          .status(409)
+          .json({ error: "Unable to claim stations for same-screen mode" });
+      }
+
+      req.session.investigationSeats = ["detective", "analyst"];
+      await saveSession(req);
+
+      return res.status(200).json({
+        ok: true,
+        detectiveState: publicState(doc, "detective"),
+        analystState: publicState(doc, "analyst"),
+      });
+    } catch (error) {
+      return next(error);
+    }
+  },
+);
+
 // Analyst claims the invite on their own device; this does not invalidate the detective's team session.
 router.post(
   "/join/analyst",
@@ -261,6 +374,7 @@ router.get("/state", requireInvestigationParticipant, async (req, res) =>
     roundStatus: req.investigationRound.status,
     serverNow: new Date(),
     deadline: req.investigationRound.deadline,
+    hasBothSeats: Boolean(req.investigationHasBothSeats),
   }),
 );
 
