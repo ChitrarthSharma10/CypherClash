@@ -19,6 +19,7 @@ function RunnerMonitor({
   handleStartSprint,
   handleRestart,
   handleConnect,
+  onBack,
 }) {
   const feedContainerRef = useRef(null);
   const [restartAlert, setRestartAlert] = useState(null);
@@ -107,15 +108,47 @@ function RunnerMonitor({
         )}
 
         {gameState?.status === 'READY' && !isWaiting && (
-          <div className="launch-sprint-overlay" style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', zIndex: 9 }}>
-            <h2 style={{ fontSize: '26px', fontWeight: 800, color: '#ffffff', margin: '0 0 16px 0' }}>CYBER HIGHWAY SPRINT READY</h2>
-            <button
-              className="product-btn product-btn--primary"
-              onClick={handleStartSprint}
-              style={{ padding: '12px 32px', fontSize: '16px', fontWeight: 800, background: '#d4f04a', color: '#000' }}
-            >
-              LAUNCH RUNNER (3s COUNTDOWN) ▶
-            </button>
+          <div className="launch-sprint-overlay" style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(8px)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', zIndex: 12 }}>
+            <div style={{ background: '#121217', border: '1px solid rgba(0, 200, 233, 0.4)', borderRadius: '24px', padding: '36px 48px', textAlign: 'center', boxShadow: '0 20px 60px rgba(0,0,0,0.85), 0 0 35px rgba(0, 200, 233, 0.25)', maxWidth: '480px' }}>
+              <p className="product-eyebrow" style={{ color: '#00c8e9', letterSpacing: '0.12em', margin: '0 0 8px 0', fontSize: '11px', fontWeight: 800 }}>
+                ROUND 01 / GAME 02
+              </p>
+              <h2 style={{ fontSize: '26px', fontWeight: 800, color: '#ffffff', margin: '0 0 12px 0' }}>CYBER RUNNER</h2>
+              <p style={{ color: 'rgba(255,255,255,0.75)', fontSize: '13px', margin: '0 0 24px 0', lineHeight: 1.6 }}>
+                Player 1: Jump (S / ↓) & Slide (W / ↑)<br />
+                Player 2: Steer Left (D / →) & Right (A / ←)
+              </p>
+              <button
+                className="product-btn product-btn--primary"
+                onClick={handleStartSprint}
+                style={{ padding: '14px 32px', fontSize: '15px', fontWeight: 800, background: '#00c8e9', color: '#000', border: 'none', borderRadius: '12px', cursor: 'pointer', boxShadow: '0 0 20px rgba(0, 200, 233, 0.4)' }}
+              >
+                START SPRINT (3s TIMER) ▶
+              </button>
+            </div>
+          </div>
+        )}
+
+        {gameState?.status === 'COUNTDOWN' && (
+          <div className="countdown-overlay" style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(10px)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', zIndex: 15 }}>
+            <div style={{ textAlign: 'center' }}>
+              <p className="product-eyebrow" style={{ color: '#00c8e9', letterSpacing: '0.2em', fontSize: '14px', fontWeight: 800, marginBottom: '14px' }}>
+                GET READY
+              </p>
+              <div style={{
+                fontSize: '110px',
+                fontWeight: 900,
+                color: gameState?.countdownDisplay === 'GO!' ? '#d4f04a' : '#ffffff',
+                textShadow: '0 0 40px rgba(0, 200, 233, 0.8)',
+                lineHeight: 1,
+                fontFamily: 'var(--font-mono, monospace)',
+              }}>
+                {gameState?.countdownDisplay || (gameState?.countdownSec ? Math.ceil(gameState.countdownSec) : '3')}
+              </div>
+              <p style={{ color: 'rgba(255,255,255,0.8)', fontSize: '13px', marginTop: '16px', fontWeight: 600 }}>
+                Controls active immediately on GO!
+              </p>
+            </div>
           </div>
         )}
       </div>
@@ -355,20 +388,6 @@ export default function RunnerApp({
           >
             📋 Guide
           </button>
-          <button
-            className="product-btn"
-            style={{
-              fontSize: '12px',
-              padding: '6px 14px',
-              color: '#fff',
-              background: 'rgba(255,255,255,0.1)',
-              border: '1px solid rgba(255,255,255,0.2)',
-              cursor: 'pointer',
-            }}
-            onClick={handleConnect}
-          >
-            ⚡ Sync Partner
-          </button>
           {onLogout && (
             <button
               className="product-btn"
@@ -401,6 +420,7 @@ export default function RunnerApp({
           handleStartSprint={handleStartSprint}
           handleRestart={handleRestart}
           handleConnect={handleConnect}
+          onBack={onBack}
         />
       </div>
 

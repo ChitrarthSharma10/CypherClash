@@ -662,16 +662,18 @@ function DualControlMazeScreen({ onBack, onLogout }) {
   if (mazeCompleted) {
     const recordedScore = screenData.score?.games?.['maze'] ?? screenData.score?.games?.['1_maze'];
     return (
-      <div className="product-page" style={{ textAlign: 'center', padding: '60px 20px', maxWidth: '600px', margin: '40px auto', background: 'rgba(10, 16, 28, 0.95)', border: '1px solid rgba(0, 200, 233, 0.3)', borderRadius: '20px', boxShadow: '0 0 40px rgba(0, 200, 233, 0.15)' }}>
-        <div style={{ fontSize: '48px', marginBottom: '16px' }}>🏆</div>
-        <h2 style={{ color: '#fff', fontSize: '26px', marginBottom: '12px', fontWeight: 800 }}>Game Already Completed</h2>
-        <p style={{ color: 'rgba(255,255,255,0.75)', fontSize: '14px', lineHeight: 1.6, marginBottom: '24px' }}>
-          Your team has completed Dual-Control Maze with a score of <strong style={{ color: '#00c8e9' }}>{recordedScore} PTS</strong> recorded on the tournament leaderboard. Each game can only be played once per team.
-        </p>
-        <button className="product-btn product-btn--primary" onClick={onBack}>
-          Return to Dashboard
-        </button>
-      </div>
+      <main className="product-page cc-circuit-page">
+        <div className="product-heading cc-circuit-heading">
+          <div><p className="product-eyebrow">ROUND 01 / TEAM PUZZLE</p><h1>Dual-Control Maze</h1><p className="product-subtitle">Two players · One shared avatar</p></div>
+          <button className="product-btn product-btn--light" onClick={onBack}>Back to dashboard</button>
+        </div>
+        <section className="product-panel cc-circuit-finished">
+          <p className="product-eyebrow">GAME COMPLETE</p>
+          <h2>Vault exit reached.</h2>
+          <strong>{recordedScore} POINTS</strong>
+          <button className="product-btn product-btn--light" onClick={onBack}>Return to dashboard</button>
+        </section>
+      </main>
     );
   }
 
@@ -701,16 +703,18 @@ function CyberRunnerScreen({ onBack, onLogout }) {
   if (runnerCompleted) {
     const recordedScore = screenData.score?.games?.['runner'] ?? screenData.score?.games?.['1_runner'];
     return (
-      <div className="product-page" style={{ textAlign: 'center', padding: '60px 20px', maxWidth: '600px', margin: '40px auto', background: 'rgba(10, 16, 28, 0.95)', border: '1px solid rgba(255, 42, 68, 0.3)', borderRadius: '20px', boxShadow: '0 0 40px rgba(255, 42, 68, 0.15)' }}>
-        <div style={{ fontSize: '48px', marginBottom: '16px' }}>🏆</div>
-        <h2 style={{ color: '#fff', fontSize: '26px', marginBottom: '12px', fontWeight: 800 }}>Game Already Completed</h2>
-        <p style={{ color: 'rgba(255,255,255,0.75)', fontSize: '14px', lineHeight: 1.6, marginBottom: '24px' }}>
-          Your team has completed Cyber Runner with a score of <strong style={{ color: '#ff2a44' }}>{recordedScore} PTS</strong> recorded on the tournament leaderboard. Each game can only be played once per team.
-        </p>
-        <button className="product-btn product-btn--primary" onClick={onBack}>
-          Return to Dashboard
-        </button>
-      </div>
+      <main className="product-page cc-circuit-page">
+        <div className="product-heading cc-circuit-heading">
+          <div><p className="product-eyebrow">ROUND 01 / REFLEX SPRINT</p><h1>Cyber Runner</h1><p className="product-subtitle">Two players · Obstacle sprint</p></div>
+          <button className="product-btn product-btn--light" onClick={onBack}>Back to dashboard</button>
+        </div>
+        <section className="product-panel cc-circuit-finished">
+          <p className="product-eyebrow">GAME COMPLETE</p>
+          <h2>Finish line crossed.</h2>
+          <strong>{recordedScore} POINTS</strong>
+          <button className="product-btn product-btn--light" onClick={onBack}>Return to dashboard</button>
+        </section>
+      </main>
     );
   }
 

@@ -533,11 +533,17 @@ export class RunnerGameEngine {
               });
             } else {
               this.collisionsCount++;
-              this.penalties += GAME_CONFIG.SCORING.COLLISION_PENALTY;
-              this.score = Math.max(0, this.score - GAME_CONFIG.SCORING.COLLISION_PENALTY);
+              this.penalties = 0;
+              this.score = 0;
+              this.totalCalculatedScore = 0;
+              this.goldBarsCollected = 0;
+              this.coinsCollected = 0;
+              this.vaultsCollected = 0;
+              this.checkpointsPassed = 0;
+              this.agilityBonuses = 0;
               this.stunRemainingSec = 1.0;
 
-              // RESET RUNNER TO BEGINNING (0.0M) WHILE TIME CONTINUES
+              // RESET RUNNER TO BEGINNING (0.0M) AND RESET ALL ACCUMULATED POINTS
               this.distanceMeters = 0.0;
               this.currentLane = 0;
               this.targetLane = 0;
@@ -546,12 +552,14 @@ export class RunnerGameEngine {
               this.jumpY = 0;
               this.speed = GAME_CONFIG.BASE_SPEED;
               this.speedTier = 1;
-              this.respawnNotice = '⚠️ COLLISION! RESTARTED AT 0.0M · TIME CONTINUES';
+              this.respawnNotice = '⚠️ COLLISION! ALL POINTS RESET · RESTARTED AT 0.0M';
 
-              // Reset track obstacles so they can be dodged again from 0.0m
+              // Reset track items, coins, powerups, and obstacles so runner restarts from the beginning
               this.obstacles.forEach((o) => { o.hit = false; o.cleared = false; });
+              this.coins.forEach((c) => { c.collected = false; });
+              this.powerUps.forEach((p) => { p.collected = false; });
+              this.checkpoints.forEach((cp) => { cp.cleared = false; });
 
-              // Retain collected state: coins and items already claimed remain removed from track so users cannot claim them again
               this.activePowerUps.magnetTimer = 0;
               this.activePowerUps.doubleGoldTimer = 0;
               this.activePowerUps.shieldTimer = 0;

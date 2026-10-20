@@ -17,6 +17,7 @@ function MazeMonitor({
   sendInput,
   handleRestart,
   handleConnect,
+  onBack,
 }) {
   const isP1 = playerId === 'P1';
   const partnerRole = isP1 ? 'Participant 2 (Horizontal)' : 'Participant 1 (Vertical)';
@@ -421,20 +422,6 @@ export default function MazeApp({
           >
             📋 Guide
           </button>
-          <button
-            className="product-btn"
-            style={{
-              fontSize: '12px',
-              padding: '6px 14px',
-              color: '#fff',
-              background: 'rgba(255,255,255,0.1)',
-              border: '1px solid rgba(255,255,255,0.2)',
-              cursor: 'pointer',
-            }}
-            onClick={handleConnect}
-          >
-            ⚡ Sync Partner
-          </button>
           {onLogout && (
             <button
               className="product-btn"
@@ -465,6 +452,7 @@ export default function MazeApp({
           sendInput={sendInput}
           handleRestart={handleRestart}
           handleConnect={handleConnect}
+          onBack={onBack}
         />
       </div>
 

@@ -4,64 +4,71 @@ import confetti from 'canvas-confetti';
 export default function ResultsModal({ result, onRestart, onBack }) {
   useEffect(() => {
     if (result?.completed) {
-      confetti({
-        particleCount: 120,
-        spread: 75,
-        origin: { y: 0.6 },
-        colors: ['#ff2a44', '#ffffff', '#ffd700'],
-      });
+      try {
+        confetti({
+          particleCount: 120,
+          spread: 75,
+          origin: { y: 0.6 },
+          colors: ['#00c8e9', '#ffffff', '#ffd700'],
+        });
+      } catch (e) {
+        // ignore
+      }
     }
   }, [result]);
 
   if (!result) return null;
 
-  const { completed, score, durationMs, rawStats, breakdown } = result;
-  const durationSec = rawStats?.finishTimeSec ?? Math.round(durationMs / 1000);
+  const score = Math.max(0, Math.min(500, Math.round(result.score ?? result.finalScore ?? 0)));
+
+  const handleReturn = () => {
+    if (typeof onBack === 'function') {
+      onBack();
+    } else {
+      window.location.href = '/dashboard';
+    }
+  };
 
   return (
-    <div className="modal-backdrop">
-      <div className="results-modal" style={{ background: '#0d1015', border: '1px solid rgba(255, 255, 255, 0.3)' }}>
-        <h2 style={{ color: '#ffffff', fontWeight: 700 }}>{completed ? 'FINISH LINE CROSSED' : 'RUN TERMINATED'}</h2>
-
-        <div className="score-highlight" style={{ color: '#ffffff', fontWeight: 700 }}>
-          {score} <span style={{ fontSize: '20px', color: '#ffffff' }}>PTS</span>
-        </div>
-
-        <div className="results-table" style={{ color: '#ffffff' }}>
-          <div className="result-row">
-            <span>Course Completed:</span>
-            <strong>{rawStats?.distanceTraveled ?? 0}m / {rawStats?.courseLengthMeters ?? 4200}m</strong>
-          </div>
-          <div className="result-row">
-            <span>Finish Time:</span>
-            <strong style={{ color: '#ffffff' }}>{durationSec}s (~{(durationSec / 60).toFixed(1)} min)</strong>
-          </div>
-          <div className="result-row" style={{ color: '#ffffff' }}>
-            <span>Time Score Bonus (25,000 / {durationSec}s):</span>
-            <strong style={{ color: '#ffffff', fontWeight: 700 }}>+{breakdown?.timePoints ?? 0} PTS</strong>
-          </div>
-          <div className="result-row">
-            <span>Gold Pickups:</span>
-            <strong>+{breakdown?.coinPoints ?? 0} PTS</strong>
-          </div>
-          <div className="result-row">
-            <span>Sector Gates ({rawStats?.checkpointsCleared ?? 0}/{rawStats?.totalCheckpoints ?? 8}):</span>
-            <strong>+{breakdown?.checkpointPoints ?? 0} PTS</strong>
-          </div>
-          <div className="result-row" style={{ color: '#ffffff' }}>
-            <span>Collisions ({rawStats?.collisions ?? 0}):</span>
-            <strong style={{ color: '#ffffff', fontWeight: 700 }}>{breakdown?.collisionPenalties ?? 0} PTS</strong>
-          </div>
-        </div>
-
+    <div
+      className="modal-backdrop"
+      style={{
+        position: 'fixed',
+        inset: 0,
+        zIndex: 99999,
+        background: 'rgba(5, 8, 14, 0.88)',
+        backdropFilter: 'blur(16px)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '24px',
+      }}
+    >
+      <section
+        className="product-panel cc-circuit-finished"
+        style={{
+          maxWidth: '560px',
+          width: '100%',
+          border: '1px solid rgba(255, 255, 255, 0.25)',
+          borderRadius: '24px',
+          boxShadow: '0 30px 80px rgba(0, 0, 0, 0.9), 0 0 40px rgba(0, 200, 233, 0.25)',
+          padding: '48px 32px',
+        }}
+      >
+        <p className="product-eyebrow">GAME COMPLETE</p>
+        <h2>{result.completed ? 'Finish line crossed.' : 'Run completed.'}</h2>
+        <strong>{score} POINTS</strong>
+        <p style={{ color: 'rgba(255,255,255,0.75)', fontSize: '14px', lineHeight: 1.6, margin: '6px 0 20px' }}>
+          Your score has been verified and recorded on the tournament leaderboard.
+        </p>
         <button
-          className="play-game-big-btn"
-          style={{ width: '100%', marginTop: '16px', background: '#00c8e9', color: '#000000', fontWeight: 800, border: 'none', padding: '14px', borderRadius: '10px', cursor: 'pointer' }}
-          onClick={onBack || onRestart}
+          className="product-btn product-btn--light"
+          onClick={handleReturn}
+          style={{ width: '100%', padding: '14px 24px', fontSize: '15px', fontWeight: 800, cursor: 'pointer' }}
         >
-          {completed ? 'RETURN TO DASHBOARD (SCORE RECORDED)' : 'RETURN TO DASHBOARD'}
+          Return to dashboard
         </button>
-      </div>
+      </section>
     </div>
   );
 }
