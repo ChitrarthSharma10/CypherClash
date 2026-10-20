@@ -48,5 +48,5 @@ export const config = {
   adminUsername: process.env.ADMIN_USERNAME,
   adminPassword: process.env.ADMIN_PASSWORD,
   seedSampleTeams: process.env.SEED_SAMPLE_TEAMS === 'true',
-  investigationLead3GithubUrl: (process.env.INVESTIGATION_LEAD3_GITHUB_URL || '').trim(),
+  investigationLead3GithubUrl: (process.env.INVESTIGATION_LEAD3_GITHUB_URL || 'https://github.com/DDuggad/CyberHint').trim(),
 };
