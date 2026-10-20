@@ -15,6 +15,7 @@ import RunnerApp from './games/runner/RunnerApp.jsx';
 import InvestigationApp from './games/investigation/InvestigationApp.jsx';
 import { TOTAL_ROUNDS, ROUND_NUMBERS, ROUND_METADATA } from '../shared/rounds.js';
 import { getSocketConnection } from './games/gameSocketClient.js';
+import TimeLeftBanner from './components/TimeLeftBanner.jsx';
 
 const rounds = [
   { number: '01', title: 'Mini Game Arena', subtitle: 'The Warmup & Screening', time: '30 min', mode: 'BROWSER MINI-GAMES', desc: 'Build speed and digital intuition with quick decisions, patterns, and packet sorting.', focus: 'Speed + instinct' },
@@ -754,6 +755,7 @@ function DualControlMazeScreen({ onBack, onLogout }) {
     const recordedScore = screenData.score?.games?.['maze'] ?? screenData.score?.games?.['1_maze'];
     return (
       <main className="product-page cc-circuit-page">
+        <TimeLeftBanner round={screenData.team?.currentRound} serverNow={screenData.team?.serverNow} />
         <div className="product-heading cc-circuit-heading">
           <div><p className="product-eyebrow">ROUND 01 / TEAM PUZZLE</p><h1>Dual-Control Maze</h1><p className="product-subtitle">Two players · One shared avatar</p></div>
           <button className="product-btn product-btn--light" onClick={onBack}>Back to dashboard</button>
@@ -768,11 +770,18 @@ function DualControlMazeScreen({ onBack, onLogout }) {
     );
   }
 
-  return <MazeApp
-    teamId={screenData.team.teamId}
-    onBack={onBack}
-    onLogout={onLogout}
-  />;
+  return (
+    <>
+      <TimeLeftBanner round={screenData.team?.currentRound} serverNow={screenData.team?.serverNow} />
+      <MazeApp
+        teamId={screenData.team.teamId}
+        round={screenData.team?.currentRound}
+        serverNow={screenData.team?.serverNow}
+        onBack={onBack}
+        onLogout={onLogout}
+      />
+    </>
+  );
 }
 
 function CyberRunnerScreen({ onBack, onLogout }) {
@@ -795,6 +804,7 @@ function CyberRunnerScreen({ onBack, onLogout }) {
     const recordedScore = screenData.score?.games?.['runner'] ?? screenData.score?.games?.['1_runner'];
     return (
       <main className="product-page cc-circuit-page">
+        <TimeLeftBanner round={screenData.team?.currentRound} serverNow={screenData.team?.serverNow} />
         <div className="product-heading cc-circuit-heading">
           <div><p className="product-eyebrow">ROUND 01 / REFLEX SPRINT</p><h1>Cyber Runner</h1><p className="product-subtitle">Two players · Obstacle sprint</p></div>
           <button className="product-btn product-btn--light" onClick={onBack}>Back to dashboard</button>
@@ -809,11 +819,18 @@ function CyberRunnerScreen({ onBack, onLogout }) {
     );
   }
 
-  return <RunnerApp
-    teamId={screenData.team.teamId}
-    onBack={onBack}
-    onLogout={onLogout}
-  />;
+  return (
+    <>
+      <TimeLeftBanner round={screenData.team?.currentRound} serverNow={screenData.team?.serverNow} />
+      <RunnerApp
+        teamId={screenData.team.teamId}
+        round={screenData.team?.currentRound}
+        serverNow={screenData.team?.serverNow}
+        onBack={onBack}
+        onLogout={onLogout}
+      />
+    </>
+  );
 }
 
 function InvestigationScreen({ onBack, onLogout }) {
@@ -828,6 +845,8 @@ function InvestigationScreen({ onBack, onLogout }) {
   return <InvestigationApp
     teamId={teamData.teamId}
     apiUrl={API_URL}
+    round={teamData.currentRound}
+    serverNow={teamData.serverNow}
     onBack={onBack}
     onLogout={onLogout}
   />;
@@ -921,7 +940,7 @@ function CircuitSyncGame({ onBack, onLogout }) {
 
   const recordInput = (type, idx) => {
     if (!game || !circuitState || circuitState.done || finishState.loading || finishState.points !== null) return;
-    if (round?.status !== 'running') {
+    if (round?.status !== 'running' || (currentRoundRemaining !== null && currentRoundRemaining <= 0)) {
       setInputMessage('Inputs are disabled while the round is paused or ended.');
       return;
     }
@@ -975,7 +994,8 @@ function CircuitSyncGame({ onBack, onLogout }) {
           ? new Date(round.pausedAt).getTime()
           : now + serverOffsetRef.current
       ));
-  const canAct = round?.status === 'running' && !finishState.loading && finishState.points === null;
+  const isRoundEnded = round?.status === 'ended' || (currentRoundRemaining !== null && currentRoundRemaining <= 0);
+  const canAct = round?.status === 'running' && !isRoundEnded && !finishState.loading && finishState.points === null;
 
   if (startState.loading) return <LoadingState label="Preparing Circuit Sync…" />;
   if (startState.error) {
@@ -991,18 +1011,20 @@ function CircuitSyncGame({ onBack, onLogout }) {
     return <ErrorState message={replayError || 'Circuit Sync state is unavailable'} onRetry={() => window.location.reload()} />;
   }
 
-  return <main className="product-page cc-circuit-page">
-    <div className="product-heading cc-circuit-heading">
-      <div><p className="product-eyebrow">ROUND 01 / TEAM CIRCUIT PUZZLE</p><h1>Circuit Sync</h1><p className="product-subtitle">One shared screen. Think together, then enter the switch pattern.</p></div>
-      <button className="product-btn product-btn--light" onClick={onBack}>Back to dashboard</button>
-    </div>
-    <div className="cc-poll-status" aria-live="polite">
-      <span>{formatUpdatedAgo(updatedAt, now)}</span>
-      <span>Round time {formatDuration(currentRoundRemaining)}</span>
-      {pollingError && <strong role="status">Offline — unable to refresh round status. {pollingError}</strong>}
-    </div>
-    {round?.status === 'paused' && <p className="product-message is-error" role="status">Round paused — the puzzle is frozen until play resumes.</p>}
-    {round?.status === 'ended' && <p className="product-message is-error" role="status">The round has ended. Your unsubmitted run cannot be scored.</p>}
+  return (
+    <>
+      <TimeLeftBanner round={round} serverNow={teamData?.serverNow} />
+      <main className="product-page cc-circuit-page">
+        <div className="product-heading cc-circuit-heading">
+          <div><p className="product-eyebrow">ROUND 01 / TEAM CIRCUIT PUZZLE</p><h1>Circuit Sync</h1><p className="product-subtitle">One shared screen. Think together, then enter the switch pattern.</p></div>
+          <button className="product-btn product-btn--light" onClick={onBack}>Back to dashboard</button>
+        </div>
+        <div className="cc-poll-status" aria-live="polite">
+          <span>{formatUpdatedAgo(updatedAt, now)}</span>
+          {pollingError && <strong role="status">Offline — unable to refresh round status. {pollingError}</strong>}
+        </div>
+        {round?.status === 'paused' && <p className="product-message is-error" role="status">Round paused — the puzzle is frozen until play resumes.</p>}
+        {isRoundEnded && <p className="product-message is-error" role="status">The round has ended. Your unsubmitted run cannot be scored.</p>}
     {circuitState.done ? <section className="product-panel cc-circuit-finished">
       <p className="product-eyebrow">{finishState.points === null ? 'VERIFYING RUN' : 'GAME COMPLETE'}</p>
       <h2>{finishState.points === null ? 'Checking your circuit log…' : 'Team signal restored.'}</h2>
@@ -1061,7 +1083,7 @@ function CircuitSyncGame({ onBack, onLogout }) {
       {inputMessage && <p className="product-message is-error" role="status">{inputMessage}</p>}
       {finishState.error && <FormMessage error={finishState.error} />}
     </section>}
-  </main>;
+  </main></>);
 }
 
 function CircuitDiagram({ state }) {
@@ -1237,30 +1259,31 @@ function InvestigationGame({ onBack, onLogout }) {
   if (loading && !state) return <LoadingState label="Preparing investigation environment…" />;
   if (error && !state) return <ErrorState message={error} onRetry={loadState} />;
 
-  const isRoundTwoRunning = round?.round === 2 && round?.status === 'running';
+  const isRoundTwoEnded = round?.round === 2 && (round?.status === 'ended' || (currentRoundRemaining !== null && currentRoundRemaining <= 0));
+  const isRoundTwoRunning = round?.round === 2 && round?.status === 'running' && !isRoundTwoEnded;
   const isRoundTwoPaused = round?.round === 2 && round?.status === 'paused';
-  const isRoundTwoEnded = round?.round === 2 && round?.status === 'ended';
   const isLocked = !round || round.round !== 2 || round.status === 'not_started';
 
   return (
-    <main className="product-page cc-investigation-page">
-      <div className="product-heading cc-circuit-heading">
-        <div>
-          <p className="product-eyebrow">ROUND 02 / WEB UI HIJACKING</p>
-          <h1>Operation Shadow Beacon</h1>
-          <p className="product-subtitle">Trace the rogue campus relay, inspect hidden web elements, and neutralize the signal.</p>
+    <>
+      <TimeLeftBanner round={round} serverNow={teamData?.serverNow || state?.serverNow} />
+      <main className="product-page cc-investigation-page">
+        <div className="product-heading cc-circuit-heading">
+          <div>
+            <p className="product-eyebrow">ROUND 02 / WEB UI HIJACKING</p>
+            <h1>Operation Shadow Beacon</h1>
+            <p className="product-subtitle">Trace the rogue campus relay, inspect hidden web elements, and neutralize the signal.</p>
+          </div>
+          <button className="product-btn product-btn--light" onClick={onBack}>Back to dashboard</button>
         </div>
-        <button className="product-btn product-btn--light" onClick={onBack}>Back to dashboard</button>
-      </div>
 
-      <div className="cc-poll-status" aria-live="polite">
-        <span>{formatUpdatedAgo(updatedAt, now)}</span>
-        <span>Round time {formatDuration(currentRoundRemaining)}</span>
-        {pollingError && <strong role="status">Offline — unable to refresh round status. {pollingError}</strong>}
-      </div>
+        <div className="cc-poll-status" aria-live="polite">
+          <span>{formatUpdatedAgo(updatedAt, now)}</span>
+          {pollingError && <strong role="status">Offline — unable to refresh round status. {pollingError}</strong>}
+        </div>
 
-      {isRoundTwoPaused && <p className="product-message is-error" role="status">Round paused — the investigation is frozen until play resumes.</p>}
-      {isRoundTwoEnded && <p className="product-message is-error" role="status">Round 2 has ended. Submissions are no longer accepted.</p>}
+        {isRoundTwoPaused && <p className="product-message is-error" role="status">Round paused — the investigation is frozen until play resumes.</p>}
+        {isRoundTwoEnded && <p className="product-message is-error" role="status">Round 2 has ended. Submissions are no longer accepted.</p>}
       {isLocked && (
         <section className="product-panel state-panel">
           <p className="product-eyebrow">ROUND LOCKED</p>
@@ -1457,7 +1480,7 @@ function InvestigationGame({ onBack, onLogout }) {
           </div>
         </>
       )}
-    </main>
+    </main></>
   );
 }
 

@@ -3915,3 +3915,37 @@ body {
   margin: 6px 0 0;
   font-style: italic;
 }
+
+.cc-time-left-banner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  width: 100%;
+  padding: 8px 16px;
+  background: rgba(10, 22, 32, 0.95);
+  border-bottom: 1px solid rgba(0, 200, 233, 0.28);
+  color: #f5f5f7;
+  font-family: var(--font-mono, monospace);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  box-sizing: border-box;
+  z-index: 100;
+}
+.cc-time-left-banner__label {
+  color: #9fb8c2;
+  font-size: 11px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+.cc-time-left-banner__time {
+  font-size: 16px;
+  font-weight: 800;
+  color: #d4f04a;
+}
+.cc-time-left-banner.is-ended .cc-time-left-banner__time,
+.cc-time-left-banner.is-paused .cc-time-left-banner__time {
+  color: #ff4d5e;
+}
+

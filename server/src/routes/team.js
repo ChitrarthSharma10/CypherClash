@@ -66,6 +66,7 @@ router.get('/me', async (req, res, next) => {
       playerId: req.session.playerId || req.session.playerSlot || 'P1',
       currentRound: currentRound(),
       progression,
+      serverNow: new Date().toISOString(),
     });
   } catch (error) {
     return next(error);
