@@ -62,6 +62,8 @@ router.get('/me', async (req, res, next) => {
       biasPoints: team.biasPoints,
       online: isTeamOnline(team.teamId),
       lastSeenAt: team.lastSeenAt,
+      playerSlot: req.session.playerSlot || 'P1',
+      playerId: req.session.playerId || req.session.playerSlot || 'P1',
       currentRound: currentRound(),
       progression,
     });
@@ -74,6 +76,23 @@ router.get('/progression', async (req, res, next) => {
   try {
     const progression = await getEffectiveProgression(req.team.teamId);
     return res.json(progression);
+  } catch (error) {
+    return next(error);
+  }
+});
+
+const slotBodySchema = z.object({
+  playerSlot: z.enum(['P1', 'P2']),
+}).strict();
+
+router.post('/slot', validateBody(slotBodySchema), async (req, res, next) => {
+  try {
+    req.session.playerSlot = req.body.playerSlot;
+    req.session.playerId = req.body.playerSlot;
+    await new Promise((resolve, reject) => {
+      req.session.save((err) => (err ? reject(err) : resolve()));
+    });
+    return res.json({ ok: true, playerSlot: req.session.playerSlot, playerId: req.session.playerId });
   } catch (error) {
     return next(error);
   }
