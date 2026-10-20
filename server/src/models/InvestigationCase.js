@@ -99,6 +99,7 @@ export const investigationCaseSchema = new mongoose.Schema(
     clues: { type: [clueSchema], default: [] },
     decrypted: { type: Boolean, default: false },
     decryptedAt: { type: Date, default: null },
+    wrongAttempts: { type: Number, default: 0 },
     activity: { type: [activitySchema], default: [] },
     accusation: { type: accusationSchema, default: null },
     finalResult: { type: finalResultSchema, default: undefined },

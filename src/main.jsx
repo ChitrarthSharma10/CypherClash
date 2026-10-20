@@ -626,20 +626,10 @@ function DualControlMazeScreen({ onBack, onLogout }) {
   if (!teamData && !pollingError) return <LoadingState label="Loading Dual-Control Maze…" />;
   if (!teamData) return <ErrorState message={pollingError} onRetry={() => window.location.reload()} />;
 
-  const handleSlotChange = async (nextSlot) => {
-    try {
-      await apiRequest('/api/team/slot', { method: 'POST', body: JSON.stringify({ playerSlot: nextSlot }) });
-    } catch (e) {
-      console.warn('Slot update failed', e);
-    }
-  };
-
   return <MazeApp
     teamId={teamData.teamId}
-    playerSlot={teamData.playerSlot || 'P1'}
     onBack={onBack}
     onLogout={onLogout}
-    onSlotChange={handleSlotChange}
   />;
 }
 
@@ -652,20 +642,10 @@ function CyberRunnerScreen({ onBack, onLogout }) {
   if (!teamData && !pollingError) return <LoadingState label="Loading Cyber Runner…" />;
   if (!teamData) return <ErrorState message={pollingError} onRetry={() => window.location.reload()} />;
 
-  const handleSlotChange = async (nextSlot) => {
-    try {
-      await apiRequest('/api/team/slot', { method: 'POST', body: JSON.stringify({ playerSlot: nextSlot }) });
-    } catch (e) {
-      console.warn('Slot update failed', e);
-    }
-  };
-
   return <RunnerApp
     teamId={teamData.teamId}
-    playerSlot={teamData.playerSlot || 'P1'}
     onBack={onBack}
     onLogout={onLogout}
-    onSlotChange={handleSlotChange}
   />;
 }
 
@@ -678,20 +658,10 @@ function InvestigationScreen({ onBack, onLogout }) {
   if (!teamData && !pollingError) return <LoadingState label="Loading Cyber Investigation…" />;
   if (!teamData) return <ErrorState message={pollingError} onRetry={() => window.location.reload()} />;
 
-  const handleSlotChange = async (nextSlot) => {
-    try {
-      await apiRequest('/api/team/slot', { method: 'POST', body: JSON.stringify({ playerSlot: nextSlot }) });
-    } catch (e) {
-      console.warn('Slot update failed', e);
-    }
-  };
-
   return <InvestigationApp
     teamId={teamData.teamId}
-    playerSlot={teamData.playerSlot || 'P1'}
     onBack={onBack}
     onLogout={onLogout}
-    onSlotChange={handleSlotChange}
   />;
 }
 

@@ -381,11 +381,11 @@ async function updateState(round, changes, actorId, eventType, extraFilter) {
     throw error;
   }
   const savedState = states.get(round);
-  roundStateEvents.emit('change', snapshot(savedState));
-  const effectiveActorId = actorId || 'system';
+  roundStateEvents.emit("change", snapshot(savedState));
+  const effectiveActorId = actorId || "system";
   await logEvent({
     type: eventType,
-    actorType: effectiveActorId === 'system' ? 'system' : 'admin',
+    actorType: effectiveActorId === "system" ? "system" : "admin",
     actorId: effectiveActorId,
     details: { old: oldState, new: snapshot(savedState) },
   });

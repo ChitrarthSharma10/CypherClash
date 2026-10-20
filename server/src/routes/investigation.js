@@ -14,6 +14,7 @@ import {
   getRoundState,
   updateRound3Investigation,
 } from "../services/roundState.js";
+import { submitGameResult } from "../services/scoring.js";
 
 const router = express.Router();
 const emptySchema = z.object({}).strict();
@@ -326,8 +327,27 @@ router.post(
         return res
           .status(403)
           .json({ error: "Only the Forensic Analyst can decrypt the packet" });
-      if (req.body.token.trim().toUpperCase() !== "HELIX")
+      if (req.body.token.trim().toUpperCase() !== "HELIX") {
+        await updateRound3Investigation(
+          req.investigation.attemptNo,
+          {
+            teamId: req.team.teamId,
+            attemptNo: req.investigation.attemptNo,
+            finalResult: { $exists: false },
+          },
+          {
+            $inc: { "investigations.$.wrongAttempts": 1 },
+            $push: {
+              "investigations.$.activity": addActivityUpdate(
+                "decrypt_failed",
+                "Decryption token rejected",
+                "analyst",
+              ),
+            },
+          },
+        );
         return res.status(400).json({ error: "Token rejected" });
+      }
       const now = new Date();
       let doc = await updateRound3Investigation(
         req.investigation.attemptNo,
@@ -469,6 +489,26 @@ router.post(
         return res
           .status(409)
           .json({ error: "No accusation is awaiting approval for this role" });
+      const currentCase =
+        doc.investigations?.find(
+          (entry) =>
+            entry.teamId === req.team.teamId &&
+            entry.attemptNo === req.investigation.attemptNo,
+        ) || doc;
+      const isAgreed =
+        currentCase.accusation?.approvals?.includes("detective") &&
+        currentCase.accusation?.approvals?.includes("analyst");
+      if (isAgreed) {
+        try {
+          const wrongCount = currentCase.wrongAttempts || 0;
+          const points = Math.max(150, 500 - 15 * wrongCount);
+          await submitGameResult(req.team.teamId, "investigation", points);
+        } catch (scoringError) {
+          if (scoringError.code !== "RESULT_ALREADY_SUBMITTED") {
+            console.warn("[Round 3] Scoring notice:", scoringError.message);
+          }
+        }
+      }
       return res.json({ state: publicState(doc, req.investigationRole) });
     } catch (error) {
       return next(error);

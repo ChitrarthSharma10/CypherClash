@@ -20,8 +20,7 @@ function MazeMonitor({
 }) {
   const isP1 = playerId === 'P1';
   const partnerRole = isP1 ? 'Participant 2 (Horizontal)' : 'Participant 1 (Vertical)';
-  const partnerConnected = isP1 ? roomStatus.p2Connected : roomStatus.p1Connected;
-  const isWaiting = !roomStatus.p1Connected || !roomStatus.p2Connected;
+  const isWaiting = false;
 
   const activeTimersRef = useRef({});
   const pressStartRef = useRef({});
@@ -404,22 +403,6 @@ export default function MazeApp({
             }}>
               TEAM: {teamId}
             </span>
-            <button
-              onClick={toggleSlot}
-              title="Click to switch your player slot"
-              style={{
-                background: currentSlot === 'P1' ? '#00c8e9' : '#d4f04a',
-                color: '#000',
-                border: 0,
-                borderRadius: '4px',
-                padding: '4px 10px',
-                fontSize: '11px',
-                fontWeight: 800,
-                cursor: 'pointer',
-              }}
-            >
-              {currentSlot === 'P1' ? 'YOU: PLAYER 1 (VERTICAL)' : 'YOU: PLAYER 2 (HORIZONTAL)'} ⇄
-            </button>
           </div>
         </div>
 

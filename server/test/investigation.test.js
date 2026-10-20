@@ -361,6 +361,9 @@ test("evidence, decryption, accusation, and cross-role approvals are atomic", as
     accusation.map((response) => response.status).sort(),
     [201, 409],
   );
+  const winningAccusation = accusation[0].status === 201
+    ? { suspect: "Mara Chen", reasoning: "The access record connects the suspect to the archive breach." }
+    : { suspect: "Idris Khan", reasoning: "A competing accusation must not replace the original submission." };
   const submitterApproval = await post(
     "/api/investigation/accusation/approve",
     {},
@@ -409,9 +412,9 @@ test("evidence, decryption, accusation, and cross-role approvals are atomic", as
   assert.ok(savedCase.finalResult.decryption.succeededAt instanceof Date);
   assert.deepEqual(savedCase.finalResult.accusation, {
     submitted: true,
-    suspect: "Mara Chen",
+    suspect: winningAccusation.suspect,
     evidenceKey: "ev2",
-    reasoning: "The access record connects the suspect to the archive breach.",
+    reasoning: winningAccusation.reasoning,
     initiatedBy: "detective",
     initiatedAt: savedCase.finalResult.accusation.initiatedAt,
     approvals: { detective: true, analyst: true },

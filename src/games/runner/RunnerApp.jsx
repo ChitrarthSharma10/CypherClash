@@ -24,8 +24,7 @@ function RunnerMonitor({
   const [restartAlert, setRestartAlert] = useState(null);
   const prevCollisionsRef = useRef(gameState?.collisionsCount || 0);
 
-  const isP1 = playerId === 'P1';
-  const isWaiting = !roomStatus.p1Connected || !roomStatus.p2Connected;
+  const isWaiting = false;
 
   useEffect(() => {
     if (feedContainerRef.current) {
@@ -328,22 +327,6 @@ export default function RunnerApp({
             }}>
               TEAM: {teamId}
             </span>
-            <button
-              onClick={toggleSlot}
-              title="Click to switch your player slot"
-              style={{
-                background: currentSlot === 'P1' ? '#00c8e9' : '#d4f04a',
-                color: '#000',
-                border: 0,
-                borderRadius: '4px',
-                padding: '4px 10px',
-                fontSize: '11px',
-                fontWeight: 800,
-                cursor: 'pointer',
-              }}
-            >
-              {currentSlot === 'P1' ? 'YOU: PLAYER 1 (JUMP/SLIDE)' : 'YOU: PLAYER 2 (LANES)'} ⇄
-            </button>
           </div>
         </div>
 

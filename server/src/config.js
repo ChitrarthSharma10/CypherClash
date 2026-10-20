@@ -31,10 +31,15 @@ if (!['lax', 'strict', 'none'].includes(sameSite)) {
   throw new Error('COOKIE_SAMESITE must be lax, strict, or none');
 }
 
+const configuredOrigins = process.env.FRONTEND_ORIGIN.split(',').map((origin) => origin.trim()).filter(Boolean);
+const defaultOrigins = ['http://localhost:5173', 'http://localhost:5177', 'http://localhost:5157'];
+const frontendOrigins = Array.from(new Set([...configuredOrigins, ...defaultOrigins]));
+
 export const config = {
   mongoUri: process.env.MONGO_URI,
   sessionSecret: process.env.SESSION_SECRET,
-  frontendOrigins: process.env.FRONTEND_ORIGIN.split(',').map((origin) => origin.trim()).filter(Boolean),
+  frontendOrigins,
+  frontendOrigin: configuredOrigins[0] || 'http://localhost:5173',
   port: Number(process.env.PORT || 4000),
   cookieSecure: process.env.COOKIE_SECURE === 'true',
   cookieSameSite: sameSite,

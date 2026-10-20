@@ -155,7 +155,6 @@ router.post(
       return res.json({
         role: 'team',
         team: { teamId: team.teamId, name: team.name },
-        playerSlot: req.session.playerSlot,
       });
     } catch (error) {
       return next(error);
