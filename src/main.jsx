@@ -12,10 +12,9 @@ import {
 } from './components/CardHeaderIcons.tsx';
 
 const rounds = [
-  { number: '01', title: 'Mini Games Round', subtitle: 'The Warmup & Screening', time: '30 min', mode: 'BROWSER MINI-GAMES', desc: 'Build speed and digital intuition with quick decisions, patterns, and packet sorting.', focus: 'Speed + instinct' },
-  { number: '02', title: 'Inspect Element Sleuth', subtitle: 'Web UI Hijacking', time: '45 min', mode: 'MOCK LOCAL WEBSITE', desc: 'Use DevTools on a safe mock site to reveal comments, unhide fields, and edit DOM attributes.', focus: 'Web curiosity' },
-  { number: '03', title: 'Digital Detective', subtitle: 'OSINT & Data Extraction', time: '45 min', mode: 'DATA DOSSIER', desc: 'Analyze raw logs, image metadata, audio clues, and a supplied dossier to solve a mystery.', focus: 'Evidence reading' },
-  { number: '04', title: 'Prompt Injection / AI Jailbreak', subtitle: 'Grand Finale', time: '45 min', mode: 'VAULT GUARD AI', desc: 'Use creative natural-language prompts and strategy against an AI Digital Vault Guard.', focus: 'Creative strategy' },
+  { number: '01', title: 'Mini Game Arena', subtitle: 'The Warmup & Screening', time: '30 min', mode: 'BROWSER MINI-GAMES', desc: 'Build speed and digital intuition with quick decisions, patterns, and packet sorting.', focus: 'Speed + instinct' },
+  { number: '02', title: 'Find the Hidden Clue', subtitle: 'Web UI & Incident Trace', time: '45 min', mode: 'DOM INVESTIGATION', desc: 'Inspect source comments, examine hidden attributes, and decode credentials concealed across campus relay systems.', focus: 'Web inspection' },
+  { number: '03', title: 'Two Player Collaborative Investigation', subtitle: 'Grand Finale', time: '45 min', mode: 'CO-OP INVESTIGATION', desc: 'Work across paired roles, cross-correlate fragmented forensic evidence, and solve the investigation under pressure.', focus: 'Teamwork + analysis' },
 ];
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
@@ -78,7 +77,6 @@ function App() {
 }
 
 function Landing() {
-  const [practice, setPractice] = useState(null);
   return <main>
     <section className="cc-hero" id="event-brief">
       <p className="cc-hero__presenter">OsCode Presents</p>
@@ -91,7 +89,7 @@ function Landing() {
     </section>
     <section className="cc-rounds" id="rounds">
       <dl className="cc-facts">
-        <div className="cc-fact"><dt>Format</dt><dd>4-round tournament</dd></div>
+        <div className="cc-fact"><dt>Format</dt><dd>3-round tournament</dd></div>
         <div className="cc-fact"><dt>Team format</dt><dd>2 players · 1 shared screen</dd></div>
         <div className="cc-fact"><dt>Entry level</dt><dd>Zero prerequisites</dd></div>
         <div className="cc-fact"><dt>When / Where</dt><dd>To be announced</dd></div>
@@ -104,16 +102,14 @@ function Landing() {
               {index === 0 && <GameControllerIcon size={24} title="Mini games" />}
               {index === 1 && <CodeInspectionIcon size={24} title="Code inspection" />}
               {index === 2 && <DossierSearchIcon size={24} title="Dossier search" />}
-              {index === 3 && <UnlockedTerminalIcon size={24} title="Unlocked terminal" />}
             </span>
           </div>
           <div className="cc-card__body">
-            <p className="cc-card__eyebrow">{round.mode} / {round.time} {index === 3 && <span className="cc-card__tag">Finale</span>}</p>
+            <p className="cc-card__eyebrow">{round.mode} / {round.time} {index === 2 && <span className="cc-card__tag">Finale</span>}</p>
             <h3 className="cc-card__name">{round.title}</h3>
             <div className="cc-card__more"><div>
               <p className="cc-card__desc">{round.desc}</p>
               <p className="cc-card__skill"><span>Skill focus</span>{round.focus}</p>
-              {index === 0 && <a className="cc-card__btn" href="#practice" onClick={(event) => { event.preventDefault(); setPractice('Phish or Legit?'); }}>Try a practice sample <span aria-hidden="true">↗</span></a>}
             </div></div>
           </div>
         </article>)}
@@ -157,12 +153,12 @@ function Landing() {
         <div className="cc-rank__row cc-rank__row--head" role="row">
           <span role="columnheader">#</span><span role="columnheader">Team</span>
           <span role="columnheader">R1</span><span role="columnheader">R2</span>
-          <span role="columnheader">R3</span><span role="columnheader">R4</span>
+          <span role="columnheader">R3</span>
           <span role="columnheader">Total</span>
         </div>
         <div className="cc-rank__row" role="row">
           <span role="cell">4</span><span role="cell" className="cc-rank__team">Null Pointers</span>
-          <span role="cell">—</span><span role="cell">—</span><span role="cell">—</span><span role="cell">—</span>
+          <span role="cell">—</span><span role="cell">—</span><span role="cell">—</span>
           <span role="cell" className="cc-rank__total">—</span>
         </div>
       </div>
@@ -170,7 +166,6 @@ function Landing() {
       <a className="cc-btn cc-btn--ghost cc-board__cta" href="/login">Login <span aria-hidden="true">↗</span></a>
     </section>
     <footer><span>CYPHERCLASH / 2026</span><span>Made for curious beginners.</span></footer>
-    {practice && <Practice onClose={() => setPractice(null)} />}
   </main>;
 }
 

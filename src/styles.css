@@ -477,9 +477,9 @@ body, .app-shell, .page-shell { background: transparent; }
 .cc-rounds__title span { color: var(--blue-light); }
 .cc-fan { display: flex; justify-content: center; align-items: flex-end; min-height: 540px; padding: 56px 0 30px; }
 .cc-card { --r: 0deg; --y: 0px; --z: 1; position: relative; z-index: var(--z); flex: none; width: 300px; height: 430px; margin: 0 -34px; padding: 24px; border-radius: 26px; overflow: hidden; display: flex; flex-direction: column; justify-content: space-between; text-align: left; color: var(--fg); background: var(--bg-card); box-shadow: 0 24px 50px rgba(0,0,0,.55); transform-origin: 50% 100%; transform: translateY(var(--y)) rotate(var(--r)); transition: transform .35s cubic-bezier(.2,.8,.2,1), box-shadow .35s; }
-.cc-card--1 { --r: -9deg; --y: 34px; --z: 1; --fg: #04121a; --bg-card: linear-gradient(160deg, #18d6f5, #1d7fe8); }
-.cc-card--2 { --r: -3deg; --y: 6px; --z: 2; --fg: #0a1a05; --bg-card: linear-gradient(160deg, #e4f76a, #9ad33a); }
-.cc-card--3 { --r: 3deg; --y: 6px; --z: 3; --fg: #fff; --bg-card: linear-gradient(160deg, #1a8fd0, #143f93); }
+.cc-card--1 { --r: -6deg; --y: 18px; --z: 1; --fg: #04121a; --bg-card: linear-gradient(160deg, #18d6f5, #1d7fe8); }
+.cc-card--2 { --r: 0deg; --y: 0px; --z: 2; --fg: #0a1a05; --bg-card: linear-gradient(160deg, #e4f76a, #9ad33a); }
+.cc-card--3 { --r: 6deg; --y: 18px; --z: 3; --fg: #fff; --bg-card: linear-gradient(160deg, #1a8fd0, #143f93); }
 .cc-card--4 { --r: 9deg; --y: 34px; --z: 4; --fg: #fff; --bg-card: linear-gradient(160deg, #173a8f, #0a1a4d); box-shadow: 0 0 0 2px var(--spark), 0 24px 50px rgba(0,0,0,.55), 0 0 36px rgba(212,240,74,.25); }
 .cc-card--4 {
   background-color: #ffc21c;
@@ -701,7 +701,7 @@ body, .app-shell, .page-shell { background: transparent; }
 .cc-card--2 { --fg: #fff; --bg-card: linear-gradient(160deg, #e63950, #b0142f); }
 .cc-card--2 {
   background-color: #ef4f4f;
-  background-image: url('/assets/inspect-element.png');
+  background-image: url('/assets/find-the-hidden-clue.png');
   background-position: center;
   background-size: cover;
   background-repeat: no-repeat;
@@ -709,7 +709,7 @@ body, .app-shell, .page-shell { background: transparent; }
 .cc-card--3 { --fg: #04121a; --bg-card: linear-gradient(160deg, #4fd6f8, #1596e6); }
 .cc-card--3 {
   background-color: #39afe8;
-  background-image: url('/assets/digital-detective.png');
+  background-image: url('/assets/collaborative-investigation.png');
   background-position: center;
   background-size: cover;
   background-repeat: no-repeat;
@@ -1167,7 +1167,7 @@ body {
 }
 .cc-rank__row {
   display: grid;
-  grid-template-columns: 44px 1fr repeat(4, 54px) 76px;
+  grid-template-columns: 44px 1fr repeat(3, 54px) 76px;
   align-items: center;
   padding: 14px 20px;
   color: #a3a3ad;
