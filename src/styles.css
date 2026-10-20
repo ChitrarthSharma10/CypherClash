@@ -2693,3 +2693,102 @@ body {
   margin: 6px 0 0;
   font-style: italic;
 }
+
+/* === INTERACTIVE NEURAL NETWORK BACKGROUND === */
+.cc-hero-net {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0.9;
+}
+
+/* Practice Sample Modal */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(3, 10, 15, 0.82);
+  backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 999;
+  padding: 20px;
+}
+.modal {
+  position: relative;
+  background: #091722;
+  border: 1px solid rgba(0, 200, 235, 0.35);
+  box-shadow: 0 0 50px rgba(0, 200, 235, 0.2);
+  border-radius: 20px;
+  max-width: 540px;
+  width: 100%;
+  padding: 32px;
+  color: #e5f4f8;
+}
+.modal .close {
+  position: absolute;
+  top: 16px;
+  right: 18px;
+  background: none;
+  border: none;
+  color: #8ca3a9;
+  font-size: 26px;
+  cursor: pointer;
+}
+.modal .close:hover {
+  color: #fff;
+}
+.modal .eyebrow {
+  font: 500 11px/1 var(--font-mono, monospace);
+  color: #00c8e9;
+  letter-spacing: 0.1em;
+  margin-bottom: 8px;
+}
+.modal h2 {
+  margin: 0 0 10px;
+  font-size: 24px;
+}
+.message-card {
+  margin: 20px 0;
+  padding: 16px;
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 13px;
+}
+.choice-row {
+  display: flex;
+  gap: 12px;
+  margin-top: 20px;
+}
+.choice-row button {
+  flex: 1;
+  padding: 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(0, 200, 235, 0.4);
+  background: rgba(0, 200, 235, 0.1);
+  color: #fff;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.choice-row button:hover {
+  background: #00c8e9;
+  color: #04121a;
+}
+.feedback {
+  margin-top: 16px;
+  padding: 12px;
+  border-radius: 8px;
+  background: rgba(212, 240, 74, 0.12);
+  border: 1px solid rgba(212, 240, 74, 0.35);
+  color: #d4f04a;
+  font-size: 13px;
+}
+
