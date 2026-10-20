@@ -9,7 +9,7 @@ export const GAME_CONFIG = {
   TICK_RATE_HZ: 20,                // 20 updates per second (50ms interval)
   SPEED: 2.2,                      // Deliberate explorer speed: 132+ step 4-door maze lasts 3-4 min
   HUNTER_SPEED_MULTIPLIER: 1.4,    // Hunter speed = 1.4x the player's normal speed
-  HUNTER_START_DISTANCE: 45,       // Hunter starts 45 maze cells behind the player (tuned so maze is beatable by a good pair)
+  HUNTER_START_DISTANCE: 3,        // Hunter starts 3 maze cells behind the player, activating chase immediately once player moves into corridor
   CHARACTER_RADIUS: 0.35,          // Collision radius (cell is 1.0 x 1.0) ensures clean buffer to walls
   COLLISION_COOLDOWN_MS: 800,      // Minimum time between collision penalties
   BARRIER_OPEN_DURATION_MS: 4800,  // Co-op window

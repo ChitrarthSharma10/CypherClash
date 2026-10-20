@@ -459,8 +459,10 @@ export class MazeGameEngine {
 
     // If hunter is not yet active, activate once player is at least HUNTER_START_DISTANCE cells away
     if (!this.hunter.active) {
+      const threshold = GAME_CONFIG.HUNTER_START_DISTANCE ?? 3;
       const distFromStart = this.getPathDistance(startCol, startRow, charCol, charRow);
-      if (distFromStart >= (GAME_CONFIG.HUNTER_START_DISTANCE || 45)) {
+      const directDist = Math.hypot(this.character.x - this.layout.start.x, this.character.y - this.layout.start.y);
+      if (distFromStart >= threshold || directDist >= threshold) {
         this.hunter.active = true;
         this.addEvent('HUNTER_ALERT', 'Warning: Hunter detected behind! Keep moving.');
       }
