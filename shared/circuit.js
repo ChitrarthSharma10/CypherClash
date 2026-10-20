@@ -51,7 +51,10 @@ const STAGES = Object.freeze([
       Object.freeze({ op: 'XOR', a: 3, b: 4 }),
       Object.freeze({ op: 'OR', a: 7, b: 8 }),
     ]),
-    outputs: Object.freeze([Object.freeze({ node: 9, target: true })]),
+    outputs: Object.freeze([
+      Object.freeze({ node: 9, target: true }),
+      Object.freeze({ node: 6, target: false }),
+    ]),
   }),
   Object.freeze({
     title: 'Trap circuit',
@@ -59,7 +62,7 @@ const STAGES = Object.freeze([
     gates: Object.freeze([
       Object.freeze({ op: 'XOR', a: 0, b: 1 }),
       Object.freeze({ op: 'AND', a: 2, b: 3 }),
-      Object.freeze({ op: 'NAND', a: 6, b: 7 }),
+      Object.freeze({ op: 'AND', a: 6, b: 7 }),
       Object.freeze({ op: 'XNOR', a: 4, b: 5 }),
       Object.freeze({ op: 'AND', a: 8, b: 9 }),
     ]),

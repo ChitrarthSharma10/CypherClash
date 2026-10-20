@@ -101,6 +101,7 @@ function scheduleRebuild() {
 
 export function invalidateLeaderboard() {
   generation += 1;
+  updatedAt = null;
   scheduleRebuild();
 }
 

@@ -13,4 +13,6 @@ const teamSchema = new mongoose.Schema(
   { timestamps: { createdAt: true, updatedAt: false } },
 );
 
+teamSchema.index({ name: 1 }, { unique: true, collation: { locale: 'en', strength: 2 } });
+
 export const Team = mongoose.model('Team', teamSchema);
