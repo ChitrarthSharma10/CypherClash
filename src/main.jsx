@@ -61,7 +61,10 @@ function App() {
         <a className="cc-top__logo" href="#event-brief">
           <img src="/club-logo.jpg" alt="OsCode club logo" />
         </a>
-        <a className="cc-top__cta" href="/login" onClick={(event) => { event.preventDefault(); navigate('/login'); }}>Login <span aria-hidden="true">↗</span></a>
+        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+          <a className="cc-top__cta" href="/login" onClick={(event) => { event.preventDefault(); navigate('/login'); }}>Login <span aria-hidden="true">↗</span></a>
+          <a className="cc-top__cta" href="/admin/login" style={{ background: 'rgba(255,255,255,0.08)', borderColor: 'rgba(255,255,255,0.2)' }} onClick={(event) => { event.preventDefault(); navigate('/admin/login'); }}>Admin <span aria-hidden="true">↗</span></a>
+        </div>
       </header>}
       <div className="page-shell">
         {path === '/' && <Landing />}
@@ -205,7 +208,7 @@ function AuthFeedback({ error, success }) {
 }
 
 function Login({ onSuccess }) {
-  const [form, setForm] = useState({ teamId: '', password: '', playerSlot: 'P1' });
+  const [form, setForm] = useState({ teamId: '', password: '' });
   const [state, setState] = useState({ loading: false, error: '', success: '' });
   const [showPassword, setShowPassword] = useState(false);
 
@@ -222,7 +225,7 @@ function Login({ onSuccess }) {
   };
 
   return <AuthShell eyebrow="PARTICIPANT PORTAL / SECURE ACCESS" title="Team login">
-    <p className="product-intro">Use the credentials issued to your team. Two players can log in simultaneously from separate devices.</p>
+    <p className="product-intro">Use the credentials issued to your team to access your dashboard.</p>
     <form className="product-form cc-login-form" onSubmit={submit} aria-busy={state.loading}>
       <Field label="TEAM ID"><input required maxLength={20} value={form.teamId} onChange={(event) => setForm({ ...form, teamId: event.target.value.toUpperCase() })} placeholder="CC-001" autoComplete="username" /></Field>
       <div className="cc-password-field">
@@ -232,29 +235,13 @@ function Login({ onSuccess }) {
           <button type="button" className="cc-password-toggle" aria-label={showPassword ? 'Hide password' : 'Show password'} aria-pressed={showPassword} onClick={() => setShowPassword(!showPassword)}>{showPassword ? 'Hide' : 'Show'}</button>
         </div>
       </div>
-      <div style={{ margin: '14px 0 18px' }}>
-        <label className="cc-auth-label" style={{ display: 'block', marginBottom: '8px' }}>DEVICE SLOT (2 PLAYERS PER TEAM)</label>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-          <button
-            type="button"
-            className={`product-btn ${form.playerSlot === 'P1' ? 'product-btn--primary' : 'product-btn--light'}`}
-            style={{ padding: '8px 12px', fontSize: '12px', fontWeight: 700 }}
-            onClick={() => setForm({ ...form, playerSlot: 'P1' })}
-          >
-            Player 1 {form.playerSlot === 'P1' ? '✓' : ''}
-          </button>
-          <button
-            type="button"
-            className={`product-btn ${form.playerSlot === 'P2' ? 'product-btn--primary' : 'product-btn--light'}`}
-            style={{ padding: '8px 12px', fontSize: '12px', fontWeight: 700 }}
-            onClick={() => setForm({ ...form, playerSlot: 'P2' })}
-          >
-            Player 2 {form.playerSlot === 'P2' ? '✓' : ''}
-          </button>
-        </div>
-      </div>
       <AuthFeedback error={state.error} success={state.success} />
       <button className="product-btn product-btn--primary" disabled={state.loading}>{state.loading ? 'Signing in…' : 'Enter dashboard'} <span aria-hidden="true">↗</span></button>
+      <div style={{ marginTop: '16px', textAlign: 'center' }}>
+        <a href="/admin/login" onClick={(e) => { e.preventDefault(); navigate('/admin/login'); }} style={{ color: '#22c1f1', fontSize: '13px', textDecoration: 'none' }}>
+          Event Staff? Sign in to Admin Control Center →
+        </a>
+      </div>
     </form>
   </AuthShell>;
 }
@@ -288,6 +275,11 @@ function AdminLogin({ onSuccess }) {
       </div>
       <AuthFeedback error={state.error} success={state.success} />
       <button className="product-btn product-btn--primary" disabled={state.loading}>{state.loading ? 'Signing in…' : 'Open control center'} <span aria-hidden="true">↗</span></button>
+      <div style={{ marginTop: '16px', textAlign: 'center' }}>
+        <a href="/login" onClick={(e) => { e.preventDefault(); navigate('/login'); }} style={{ color: '#22c1f1', fontSize: '13px', textDecoration: 'none' }}>
+          Team Participant? Sign in to Team Dashboard →
+        </a>
+      </div>
     </form>
   </AuthShell>;
 }
@@ -410,7 +402,7 @@ function Dashboard({ onLogout }) {
     <section className="cc-play-section">
       <div className="cc-play-heading">
         <div><p className="product-eyebrow">ROUND 01 / MINI GAMES</p><h2>Round 1 Games</h2></div>
-        <span>Two players · Cross-device coop</span>
+        <span>One shared screen</span>
       </div>
       <div className="cc-play-grid">
         <article className="cc-play-card cc-play-card--violet">
@@ -430,9 +422,9 @@ function Dashboard({ onLogout }) {
           </button>
         </article>
         <article className="cc-play-card cc-play-card--coral">
-          <div className="cc-play-card__top"><span>02 / CO-OP</span><span className={`cc-game-status cc-game-status--${roundOneRunning ? 'available' : 'locked'}`}>{roundOneRunning ? 'Available' : 'Locked'}</span></div>
+          <div className="cc-play-card__top"><span>02 / NAVIGATION</span><span className={`cc-game-status cc-game-status--${roundOneRunning ? 'available' : 'locked'}`}>{roundOneRunning ? 'Available' : 'Locked'}</span></div>
           <h3>Dual-Control Maze</h3>
-          <p>Player 1 steers Vertical (Up/Down) while Player 2 steers Horizontal (Left/Right).</p>
+          <p>Navigate the maze grid using arrow keys or WASD, collect energy crystals, and hit checkpoints.</p>
           <button className="cc-play-card__button" disabled={!roundOneRunning} onClick={() => navigate('/dashboard/maze')}>
             Play Dual-Control Maze <span aria-hidden="true">↗</span>
           </button>
@@ -440,7 +432,7 @@ function Dashboard({ onLogout }) {
         <article className="cc-play-card cc-play-card--sky">
           <div className="cc-play-card__top"><span>03 / REFLEX</span><span className={`cc-game-status cc-game-status--${roundOneRunning ? 'available' : 'locked'}`}>{roundOneRunning ? 'Available' : 'Locked'}</span></div>
           <h3>Cyber Runner</h3>
-          <p>Player 1 jumps/slides while Player 2 switches lanes to dodge obstacles.</p>
+          <p>Switch lanes, jump over obstacles, slide, and grab data coins across the cyber grid.</p>
           <button className="cc-play-card__button" disabled={!roundOneRunning} onClick={() => navigate('/dashboard/runner')}>
             Play Cyber Runner <span aria-hidden="true">↗</span>
           </button>
