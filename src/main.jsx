@@ -95,11 +95,154 @@ function App() {
   );
 }
 
+function getInitials(name = '') {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return 'CC';
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[1][0]).toUpperCase();
+}
+
+function LandingScoreboard() {
+  const { data: board, error, updatedAt } = useVisiblePolling(() => apiRequest('/api/leaderboard'));
+  const now = useVisibleClock();
+
+  const rows = board?.rows || [];
+  const topThree = rows.slice(0, 3);
+  const remainingRows = rows.slice(3, 10);
+
+  // Podium slots: Rank 2 (Left), Rank 1 (Center), Rank 3 (Right)
+  const first = topThree[0];
+  const second = topThree[1];
+  const third = topThree[2];
+
+  return (
+    <section className="cc-board" id="scoreboard">
+      <p className="cc-board__eyebrow">
+        Live Scoreboard
+        {updatedAt && <span className="cc-board__sample" style={{ color: '#22c1f1', borderColor: 'rgba(34, 193, 241, 0.3)' }}>{formatUpdatedAgo(updatedAt, now)}</span>}
+      </p>
+      <h2 className="cc-board__title">Live tournament leaderboard. Scores update automatically.</h2>
+
+      {error && !board && (
+        <p className="cc-poll-offline" role="status" style={{ justifyContent: 'center', margin: '20px auto', maxWidth: '400px' }}>
+          Unable to load live standings.
+        </p>
+      )}
+
+      {rows.length === 0 ? (
+        <div className="cc-rank" role="table" aria-label="Live standings" style={{ margin: '36px auto 0' }}>
+          <div className="cc-rank__row cc-rank__row--head" role="row">
+            <span role="columnheader">#</span><span role="columnheader">Team</span>
+            <span role="columnheader">R1</span><span role="columnheader">R2</span>
+            <span role="columnheader">R3</span>
+            <span role="columnheader">Total</span>
+          </div>
+          <div className="cc-rank__row" role="row">
+            <span role="cell">—</span>
+            <span role="cell" className="cc-rank__team">Waiting for tournament scores…</span>
+            <span role="cell">—</span><span role="cell">—</span><span role="cell">—</span>
+            <span role="cell" className="cc-rank__total">—</span>
+          </div>
+        </div>
+      ) : (
+        <>
+          <div className="cc-podium is-in" aria-label="Top three teams">
+            {/* Rank 2 */}
+            <div className="cc-pod cc-pod--2">
+              {second ? (
+                <div className="cc-pod__who">
+                  <span className="cc-pod__avatar" aria-hidden="true">{getInitials(second.name)}</span>
+                  <span className="cc-pod__name" title={second.name}>{second.name}</span>
+                  <span className="cc-pod__pts">{second.total} pts</span>
+                </div>
+              ) : (
+                <div className="cc-pod__who" style={{ opacity: 0.4 }}>
+                  <span className="cc-pod__avatar" aria-hidden="true">—</span>
+                  <span className="cc-pod__name">TBD</span>
+                  <span className="cc-pod__pts">— pts</span>
+                </div>
+              )}
+              <div className="cc-pod__block"><span>2</span></div>
+            </div>
+
+            {/* Rank 1 */}
+            <div className="cc-pod cc-pod--1">
+              <svg className="cc-pod__trophy" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                <path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6" />
+                <path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18" />
+                <path d="M4 22h16" />
+                <path d="M10 14.66V17c0 .55-.47.98-1.97 1.21C7.85 18.75 7 20.24 7 22" />
+                <path d="M14 14.66V17c0 .55.47.98 1.97 1.21C16.15 18.75 17 20.24 17 22" />
+                <path d="M18 2H6v7a6 6 0 0 0 12 0V2Z" />
+              </svg>
+              {first ? (
+                <div className="cc-pod__who">
+                  <span className="cc-pod__avatar" aria-hidden="true">{getInitials(first.name)}</span>
+                  <span className="cc-pod__name" title={first.name}>{first.name}</span>
+                  <span className="cc-pod__pts">{first.total} pts</span>
+                </div>
+              ) : (
+                <div className="cc-pod__who" style={{ opacity: 0.4 }}>
+                  <span className="cc-pod__avatar" aria-hidden="true">—</span>
+                  <span className="cc-pod__name">TBD</span>
+                  <span className="cc-pod__pts">— pts</span>
+                </div>
+              )}
+              <div className="cc-pod__block"><span>1</span></div>
+            </div>
+
+            {/* Rank 3 */}
+            <div className="cc-pod cc-pod--3">
+              {third ? (
+                <div className="cc-pod__who">
+                  <span className="cc-pod__avatar" aria-hidden="true">{getInitials(third.name)}</span>
+                  <span className="cc-pod__name" title={third.name}>{third.name}</span>
+                  <span className="cc-pod__pts">{third.total} pts</span>
+                </div>
+              ) : (
+                <div className="cc-pod__who" style={{ opacity: 0.4 }}>
+                  <span className="cc-pod__avatar" aria-hidden="true">—</span>
+                  <span className="cc-pod__name">TBD</span>
+                  <span className="cc-pod__pts">— pts</span>
+                </div>
+              )}
+              <div className="cc-pod__block"><span>3</span></div>
+            </div>
+          </div>
+
+          {remainingRows.length > 0 && (
+            <div className="cc-rank" role="table" aria-label="Leaderboard from rank 4">
+              <div className="cc-rank__row cc-rank__row--head" role="row">
+                <span role="columnheader">#</span><span role="columnheader">Team</span>
+                <span role="columnheader">R1</span><span role="columnheader">R2</span>
+                <span role="columnheader">R3</span>
+                <span role="columnheader">Total</span>
+              </div>
+              {remainingRows.map((row, index) => (
+                <div className="cc-rank__row" role="row" key={`${row.name}-${index + 4}`}>
+                  <span role="cell">{row.rank}</span>
+                  <span role="cell" className="cc-rank__team">{row.name}</span>
+                  <span role="cell">{row.r1 === null ? '–' : row.r1}</span>
+                  <span role="cell">{row.r2 === null ? '–' : row.r2}</span>
+                  <span role="cell">{row.r3 === null ? '–' : row.r3}</span>
+                  <span role="cell" className="cc-rank__total">{row.total}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </>
+      )}
+
+      <a className="cc-btn cc-btn--ghost cc-board__cta" href="/login">Login <span aria-hidden="true">↗</span></a>
+    </section>
+  );
+}
+
 function Landing() {
   return <main>
     <section className="cc-hero" id="event-brief">
       <p className="cc-hero__presenter">OsCode Presents</p>
-      <h1 className="cc-hero__title"><span className="cc-hero__w1">Cypher</span><span className="cc-hero__w2">Clash</span></h1>
+      <h1 className="cc-hero__title"><span className="cc-hero__w1">Cyber</span><span className="cc-hero__w2">Clash</span></h1>
       <p className="cc-hero__tag">Because writing secure code was too much work.</p>
       <div className="cc-hero__actions">
         <a className="cc-btn cc-btn--solid" href="/login">Login <span aria-hidden="true">↗</span></a>
@@ -134,57 +277,8 @@ function Landing() {
         </article>)}
       </div>
     </section>
-    <section className="cc-board" id="scoreboard">
-      <p className="cc-board__eyebrow">Scoreboard <span className="cc-board__sample">Sample data</span></p>
-      <h2 className="cc-board__title">Live leaderboard preview. Final scores will appear when the event starts.</h2>
-
-      <div className="cc-podium" aria-label="Top three teams">
-        <div className="cc-pod cc-pod--2">
-          <div className="cc-pod__who">
-            <span className="cc-pod__avatar" aria-hidden="true">CA</span>
-            <span className="cc-pod__name">Ctrl Alt Elite</span>
-            <span className="cc-pod__pts">25 pts</span>
-          </div>
-          <div className="cc-pod__block"><span>2</span></div>
-        </div>
-
-        <div className="cc-pod cc-pod--1">
-          <svg className="cc-pod__trophy" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6" /><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18" /><path d="M4 22h16" /><path d="M10 14.66V17c0 .55-.47.98-1.97 1.21C7.85 18.75 7 20.24 7 22" /><path d="M14 14.66V17c0 .55.47.98 1.97 1.21C16.15 18.75 17 20.24 17 22" /><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z" /></svg>
-          <div className="cc-pod__who">
-            <span className="cc-pod__avatar" aria-hidden="true">PP</span>
-            <span className="cc-pod__name">Packet Picnic</span>
-            <span className="cc-pod__pts">75 pts</span>
-          </div>
-          <div className="cc-pod__block"><span>1</span></div>
-        </div>
-
-        <div className="cc-pod cc-pod--3">
-          <div className="cc-pod__who">
-            <span className="cc-pod__avatar" aria-hidden="true">BB</span>
-            <span className="cc-pod__name">Byte Bandits</span>
-            <span className="cc-pod__pts">— pts</span>
-          </div>
-          <div className="cc-pod__block"><span>3</span></div>
-        </div>
-      </div>
-
-      <div className="cc-rank" role="table" aria-label="Leaderboard from rank 4">
-        <div className="cc-rank__row cc-rank__row--head" role="row">
-          <span role="columnheader">#</span><span role="columnheader">Team</span>
-          <span role="columnheader">R1</span><span role="columnheader">R2</span>
-          <span role="columnheader">R3</span>
-          <span role="columnheader">Total</span>
-        </div>
-        <div className="cc-rank__row" role="row">
-          <span role="cell">4</span><span role="cell" className="cc-rank__team">Null Pointers</span>
-          <span role="cell">—</span><span role="cell">—</span><span role="cell">—</span>
-          <span role="cell" className="cc-rank__total">—</span>
-        </div>
-      </div>
-
-      <a className="cc-btn cc-btn--ghost cc-board__cta" href="/login">Login <span aria-hidden="true">↗</span></a>
-    </section>
-    <footer><span>CYPHERCLASH / 2026</span><span>Made for curious beginners.</span></footer>
+    <LandingScoreboard />
+    <footer><span>CYBER CLASH / 2026</span><span>Made for curious beginners.</span></footer>
   </main>;
 }
 
@@ -342,7 +436,7 @@ function Dashboard({ onLogout }) {
   const r2Waived = progression.waivedRounds?.includes(2) || progression.rounds?.[2]?.status === 'waived';
   const r3Waived = progression.waivedRounds?.includes(3) || progression.rounds?.[3]?.status === 'waived';
   const r2PrereqMet = (progression.effectiveEligibleRound || 1) >= 2;
-  const r3PrereqMet = (progression.effectiveEligibleRound || 1) >= 3;
+  const r3PrereqMet = true; // Round 3 has no Round 2 completion prerequisite
   const roundOneRunning = round?.round === 1 && round.status === 'running';
   const roundTwoRunning = round?.round === 2 && round.status === 'running';
   const roundThreeRunning = round?.round === 3 && round.status === 'running';
@@ -513,18 +607,15 @@ function Dashboard({ onLogout }) {
           </div>
           <h3>Cyber Incident Investigation</h3>
           <p>Analyze email dumps, authentication audit logs, netflow traces, and synthesize evidence on the shared case board.</p>
-          {!r3PrereqMet && (
-            <p className="cc-play-card__note">Prerequisite required: Round 02 must be completed or waived by administrator.</p>
-          )}
           {r3Waived && !roundThreeCompleted && (
             <p className="cc-play-card__note">Round 3 requirement was administratively waived for your team.</p>
           )}
           <button
             className="cc-play-card__button"
-            disabled={(!roundThreeRunning && !roundThreeCompleted && !r3Waived) || !r3PrereqMet}
+            disabled={!roundThreeRunning && !roundThreeCompleted && !r3Waived}
             onClick={() => navigate('/dashboard/round3')}
           >
-            {roundThreeCompleted ? 'Review Investigation' : !r3PrereqMet ? 'Prerequisite Required' : 'Enter Investigation Workspace'} <span aria-hidden="true">↗</span>
+            {roundThreeCompleted ? 'Review Investigation' : 'Enter Investigation Workspace'} <span aria-hidden="true">↗</span>
           </button>
         </article>
       </div>
@@ -736,6 +827,7 @@ function InvestigationScreen({ onBack, onLogout }) {
 
   return <InvestigationApp
     teamId={teamData.teamId}
+    apiUrl={API_URL}
     onBack={onBack}
     onLogout={onLogout}
   />;
@@ -930,6 +1022,15 @@ function CircuitSyncGame({ onBack, onLogout }) {
       <div className="cc-circuit-puzzle">
         <section>
           <h2>Trace the circuit</h2>
+          <div className="cc-circuit-guidelines">
+            <strong>📋 Guidelines</strong>
+            <ul>
+              <li>Identify which switches need to be ON to satisfy all output lamps.</li>
+              <li>Press a number key (1–6) or click a switch button to toggle it.</li>
+              <li>Press <kbd>Enter</kbd> or click <strong>Test circuit</strong> to submit your answer.</li>
+              <li><strong>Only the optimal solution is accepted</strong> — you must use the minimum number of switches turned ON. A correct but non-optimal pattern will count as a mistake.</li>
+            </ul>
+          </div>
           <p className="cc-circuit-stage-title">{circuitState.title}</p>
           <CircuitDiagram state={circuitState} />
         </section>
@@ -948,7 +1049,11 @@ function CircuitSyncGame({ onBack, onLogout }) {
               key={index}
             ><span className="cc-circuit-switch__track"><i /></span><span>S{index + 1}<small>{active ? 'ON' : 'OFF'} · KEY {index + 1}</small></span></button>)}
           </div>
-          {circuitState.lastFeedback && <p className="cc-circuit-feedback" role="status">{circuitState.lastFeedback.correct} of {circuitState.lastFeedback.of} lamps matched. Check the gate chain and try again.</p>}
+          {circuitState.lastFeedback && (
+            circuitState.lastFeedback.isSuboptimal
+              ? <p className="cc-circuit-feedback cc-circuit-feedback--suboptimal" role="status">Circuit is correct, but could be solved with less number of switches turned ON. Try using fewer ON switches.</p>
+              : <p className="cc-circuit-feedback" role="status">{circuitState.lastFeedback.correct} of {circuitState.lastFeedback.of} lamps matched. Check the gate chain and try again.</p>
+          )}
           {circuitState.lockedMs > 0 && <p className="cc-circuit-feedback">Next submission in {Math.ceil(circuitState.lockedMs / 1000)}s.</p>}
           <button className="product-btn product-btn--primary" disabled={!canAct || circuitState.lockedMs > 0} onClick={() => recordInput('submit')}>Test circuit <span>· Press Enter</span></button>
         </section>
@@ -2835,7 +2940,7 @@ function ManageProgressModal({ team, onClose, onRefresh }) {
                 {ROUND_NUMBERS.map((rNum) => {
                   const rStatus = progression?.rounds?.[rNum];
                   const gRound = globalRounds.find((gr) => gr.round === rNum);
-                  const isEligible = (progression?.effectiveEligibleRound || 1) >= rNum;
+                  const isEligible = rNum === 3 || (progression?.effectiveEligibleRound || 1) >= rNum;
                   return (
                     <div key={rNum} className={`cc-prog-round-card cc-prog-round-card--${rStatus?.status || 'pending'}`}>
                       <div className="cc-prog-round-card__header">

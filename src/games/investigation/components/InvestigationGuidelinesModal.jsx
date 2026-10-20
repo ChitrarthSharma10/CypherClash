@@ -1,275 +1,194 @@
 import React from 'react';
 
-// Pixel-accurate vector icons for Round 3: Digital Detective Investigation
-function EvidenceTileIcon() {
-  return (
-    <svg width="56" height="56" viewBox="0 0 64 64" fill="none">
-      <defs>
-        <linearGradient id="folderGrad" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0%" stopColor="#38BDF8" />
-          <stop offset="100%" stopColor="#0284C7" />
-        </linearGradient>
-      </defs>
-      <rect x="10" y="18" width="44" height="34" rx="4" fill="#0F172A" stroke="url(#folderGrad)" strokeWidth="2" />
-      <path d="M10 24L24 24L28 20L42 20L44 24H54" stroke="#38BDF8" strokeWidth="1.5" />
-      <rect x="16" y="28" width="18" height="3" rx="1.5" fill="#38BDF8" opacity="0.8" />
-      <rect x="16" y="34" width="28" height="2" rx="1" fill="#94A3B8" opacity="0.6" />
-      <rect x="16" y="39" width="22" height="2" rx="1" fill="#94A3B8" opacity="0.6" />
-      <circle cx="44" cy="38" r="5" fill="#EF4444" opacity="0.85" />
-      <text x="41.5" y="41" fill="#FFFFFF" fontSize="7" fontWeight="bold">!</text>
-    </svg>
-  );
-}
-
-function YarnPinIcon() {
-  return (
-    <svg width="56" height="56" viewBox="0 0 64 64" fill="none">
-      {/* Red Yarn Thread */}
-      <path d="M18 20 Q 32 40 46 24" stroke="#EF4444" strokeWidth="3" strokeDasharray="3 3" />
-      {/* Pin 1 */}
-      <circle cx="18" cy="20" r="7" fill="#EF4444" />
-      <circle cx="16" cy="18" r="2.5" fill="#FFFFFF" opacity="0.8" />
-      <line x1="18" y1="27" x2="18" y2="36" stroke="#94A3B8" strokeWidth="2.5" strokeLinecap="round" />
-      {/* Pin 2 */}
-      <circle cx="46" cy="24" r="7" fill="#EF4444" />
-      <circle cx="44" cy="22" r="2.5" fill="#FFFFFF" opacity="0.8" />
-      <line x1="46" y1="31" x2="46" y2="40" stroke="#94A3B8" strokeWidth="2.5" strokeLinecap="round" />
-      {/* Central Link Node */}
-      <circle cx="32" cy="31" r="4" fill="#38BDF8" />
-      <circle cx="32" cy="31" r="7" stroke="#38BDF8" strokeWidth="1.5" strokeDasharray="2 2" />
-    </svg>
-  );
-}
-
-function DecipherKeyIcon() {
-  return (
-    <svg width="56" height="56" viewBox="0 0 64 64" fill="none">
-      <defs>
-        <linearGradient id="keyGrad" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0%" stopColor="#FEF08A" />
-          <stop offset="50%" stopColor="#FACC15" />
-          <stop offset="100%" stopColor="#CA8A04" />
-        </linearGradient>
-      </defs>
-      <circle cx="24" cy="26" r="12" stroke="url(#keyGrad)" strokeWidth="3.5" fill="#1C1917" />
-      <circle cx="24" cy="26" r="5" stroke="url(#keyGrad)" strokeWidth="2" />
-      <path d="M34 30 L52 48" stroke="url(#keyGrad)" strokeWidth="4" strokeLinecap="round" />
-      <path d="M44 40 L48 36" stroke="url(#keyGrad)" strokeWidth="3.5" strokeLinecap="round" />
-      <path d="M48 44 L52 40" stroke="url(#keyGrad)" strokeWidth="3.5" strokeLinecap="round" />
-      <polygon points="16,14 18,10 20,14 24,15 20,17 18,21 16,17 12,15" fill="#FFFFFF" opacity="0.9" />
-    </svg>
-  );
-}
-
-function HintBeaconIcon() {
-  return (
-    <svg width="56" height="56" viewBox="0 0 64 64" fill="none">
-      <defs>
-        <linearGradient id="bulbGrad" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="#FDE047" />
-          <stop offset="100%" stopColor="#EAB308" />
-        </linearGradient>
-      </defs>
-      {/* Light Rays */}
-      <line x1="32" y1="8" x2="32" y2="13" stroke="#FACC15" strokeWidth="2.5" strokeLinecap="round" />
-      <line x1="16" y1="16" x2="20" y2="20" stroke="#FACC15" strokeWidth="2.5" strokeLinecap="round" />
-      <line x1="48" y1="16" x2="44" y2="20" stroke="#FACC15" strokeWidth="2.5" strokeLinecap="round" />
-      {/* Bulb Glass */}
-      <path d="M22 28 C22 21 26 17 32 17 C38 17 42 21 42 28 C42 33 39 36 38 40 L26 40 C25 36 22 33 22 28 Z" fill="url(#bulbGrad)" opacity="0.9" />
-      {/* Base & Screw */}
-      <rect x="27" y="42" width="10" height="3" rx="1.5" fill="#94A3B8" />
-      <rect x="28" y="46" width="8" height="3" rx="1.5" fill="#64748B" />
-      <circle cx="32" cy="51" r="2" fill="#475569" />
-    </svg>
-  );
-}
-
-function SecurityLockoutIcon() {
-  return (
-    <svg width="56" height="56" viewBox="0 0 64 64" fill="none">
-      {/* Shackle */}
-      <path d="M22 26 V18 C22 12.5 26.5 8 32 8 C37.5 8 42 12.5 42 18 V26" stroke="#EF4444" strokeWidth="3.5" strokeLinecap="round" />
-      {/* Body */}
-      <rect x="16" y="25" width="32" height="28" rx="5" fill="#1E1B4B" stroke="#EF4444" strokeWidth="2.5" />
-      {/* Keyhole */}
-      <circle cx="32" cy="37" r="3.5" fill="#EF4444" />
-      <polygon points="30.5,37 33.5,37 33,45 31,45" fill="#EF4444" />
-      {/* Warning cross lines */}
-      <line x1="20" y1="49" x2="44" y2="49" stroke="#EF4444" strokeWidth="2" strokeDasharray="2 2" />
-    </svg>
-  );
-}
-
-function FinalVerdictIcon() {
-  return (
-    <svg width="56" height="56" viewBox="0 0 64 64" fill="none">
-      <defs>
-        <linearGradient id="shieldGrad" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0%" stopColor="#10B981" />
-          <stop offset="100%" stopColor="#047857" />
-        </linearGradient>
-      </defs>
-      {/* Crest Shield */}
-      <path d="M32 8 L48 15 V32 C48 42 41 51 32 55 C23 51 16 42 16 32 V15 L32 8 Z" fill="url(#shieldGrad)" stroke="#34D399" strokeWidth="2" />
-      {/* Inner Golden Star */}
-      <polygon points="32,20 35,27 42,28 37,33 38,40 32,36 26,40 27,33 22,28 29,27" fill="#FEF08A" />
-      <circle cx="32" cy="31" r="3" fill="#D97706" />
-    </svg>
-  );
-}
-
-function CoOpKeyboardIcon() {
-  return (
-    <svg width="56" height="56" viewBox="0 0 64 64" fill="none">
-      {/* Key W */}
-      <rect x="24" y="8" width="16" height="15" rx="3" fill="#1E293B" stroke="#38BDF8" strokeWidth="1.5" />
-      <text x="29" y="19" fill="#38BDF8" fontSize="10" fontWeight="bold">W</text>
-      {/* Key A */}
-      <rect x="6" y="26" width="16" height="15" rx="3" fill="#1E293B" stroke="#38BDF8" strokeWidth="1.5" />
-      <text x="11.5" y="37" fill="#38BDF8" fontSize="10" fontWeight="bold">A</text>
-      {/* Key S */}
-      <rect x="24" y="26" width="16" height="15" rx="3" fill="#1E293B" stroke="#38BDF8" strokeWidth="1.5" />
-      <text x="29.5" y="37" fill="#38BDF8" fontSize="10" fontWeight="bold">S</text>
-      {/* Key D */}
-      <rect x="42" y="26" width="16" height="15" rx="3" fill="#1E293B" stroke="#38BDF8" strokeWidth="1.5" />
-      <text x="47.5" y="37" fill="#38BDF8" fontSize="10" fontWeight="bold">D</text>
-      {/* Action Bar / Space */}
-      <rect x="14" y="45" width="36" height="11" rx="3" fill="#0F172A" stroke="#FACC15" strokeWidth="1.5" />
-      <text x="22" y="53" fill="#FACC15" fontSize="8" fontWeight="bold">SELECT</text>
-    </svg>
-  );
-}
-
-export default function InvestigationGuidelinesModal({ isOpen, onClose }) {
+export default function InvestigationGuidelinesModal({ isOpen = true, onClose }) {
   if (!isOpen) return null;
 
-  const guidelines = [
-    {
-      icon: <CoOpKeyboardIcon />,
-      name: 'Co-Op Inverted Controls',
-      category: 'Unified Single-Screen Navigation',
-      effect: 'Inverted Keys: A/← = Move Right | D/→ = Move Left | S/↓ = Move Up | W/↑ = Move Down | Space/Enter = Select',
-      badgeType: 'badge-player',
-      badgeText: 'CONTROLS',
-    },
-    {
-      icon: <EvidenceTileIcon />,
-      name: 'Evidence Cards',
-      category: 'Dossier Files & Incident Records',
-      effect: 'Click or navigate with keyboard to inspect raw logs, email headers, timestamps, and audio wiretaps',
-      badgeType: 'badge-neutral',
-      badgeText: 'EVIDENCE',
-    },
-    {
-      icon: <YarnPinIcon />,
-      name: 'Yarn Board Link',
-      category: 'Pin 2 Evidence Cards',
-      effect: 'Connect the 2 matching evidence cards on the board to unlock that stage’s clue question',
-      badgeType: 'badge-add',
-      badgeText: 'UNLOCKS CLUE',
-    },
-    {
-      icon: <DecipherKeyIcon />,
-      name: 'Stage Clue Solver',
-      category: 'Cryptographic Deduction',
-      effect: 'Correctly decipher the clue answer to earn points and obtain the stage token',
-      badgeType: 'badge-bonus',
-      badgeText: '+250 PTS',
-    },
-    {
-      icon: <HintBeaconIcon />,
-      name: 'Intel Hint Beacon',
-      category: 'Analyst Assistance',
-      effect: 'Reveals clarifying investigation hint when stuck, but deducts penalty points',
-      badgeType: 'badge-reduce',
-      badgeText: '-100 PTS',
-    },
-    {
-      icon: <SecurityLockoutIcon />,
-      name: '3-Strike Deduction Lock',
-      category: 'Security Penalty',
-      effect: '3 incorrect clue submissions trigger a 30-second system deduction lockout cooldown',
-      badgeType: 'badge-reduce',
-      badgeText: '⚠️ 30S COOLDOWN',
-    },
-    {
-      icon: <FinalVerdictIcon />,
-      name: 'Composite Master Verdict',
-      category: 'Stage 5 Final Resolution',
-      effect: 'Assemble the 4 clue keys into the composite key and confirm the perpetrator suspect',
-      badgeType: 'badge-bonus',
-      badgeText: '+500 PTS BONUS',
-    },
+  const scoringTable = [
+    { wrong: '0 wrong answers', score: '500 PTS', desc: 'Flawless execution' },
+    { wrong: '2 wrong answers', score: '470 PTS', desc: '-30 pts deducted' },
+    { wrong: '4 wrong answers', score: '440 PTS', desc: '-60 pts deducted' },
+    { wrong: '10 wrong answers', score: '350 PTS', desc: '-150 pts deducted' },
+    { wrong: '24+ wrong answers', score: '150 PTS', desc: 'Guaranteed minimum floor' },
   ];
 
   return (
-    <div className="guidelines-overlay" onClick={onClose}>
-      <div className="guidelines-modal" onClick={(e) => e.stopPropagation()}>
+    <div className="guidelines-overlay" onClick={onClose} style={{ zIndex: 1000 }}>
+      <div
+        className="guidelines-modal"
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          maxWidth: '740px',
+          background: '#091520',
+          border: '1px solid rgba(0, 200, 233, 0.4)',
+          borderRadius: '12px',
+          boxShadow: '0 24px 60px rgba(0, 0, 0, 0.8), 0 0 40px rgba(0, 200, 233, 0.1)',
+          padding: '24px',
+          color: '#e6f4f8',
+        }}
+      >
         {/* Header */}
-        <div className="guidelines-header">
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <span style={{ fontSize: '20px' }}>📋</span>
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            borderBottom: '1px solid rgba(255, 255, 255, 0.1)',
+            paddingBottom: '16px',
+            marginBottom: '20px',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <span style={{ fontSize: '28px' }}>🛡️</span>
             <div>
-              <h2
-                style={{
-                  margin: 0,
-                  fontSize: '17px',
-                  fontWeight: 700,
-                  color: '#ffffff',
-                  letterSpacing: '0.04em',
-                  fontFamily: 'inherit',
-                  textTransform: 'uppercase',
-                }}
-              >
-                Investigation Symbols & Point Rules
+              <span style={{ color: '#00c8e9', fontSize: '11px', fontWeight: 800, letterSpacing: '1px' }}>
+                ROUND 03 / TOURNAMENT RULES
+              </span>
+              <h2 style={{ margin: '2px 0 0', fontSize: '20px', fontWeight: 800, color: '#ffffff' }}>
+                Digital Detective: Scoring & Operation Rules
               </h2>
-              <p style={{ margin: '2px 0 0', fontSize: '11px', color: 'rgba(255, 255, 255, 0.55)', fontWeight: 400 }}>
-                Review investigation symbols, scoring effects, and inverted co-op controls
-              </p>
             </div>
           </div>
-
-          <button className="guidelines-close-btn" onClick={onClose} title="Close">
-            ✕
+          <button
+            onClick={onClose}
+            style={{
+              background: 'transparent',
+              border: '1px solid rgba(255, 255, 255, 0.2)',
+              color: '#ffffff',
+              borderRadius: '6px',
+              padding: '6px 12px',
+              cursor: 'pointer',
+              fontSize: '14px',
+              fontWeight: 700,
+            }}
+          >
+            ✕ Close
           </button>
         </div>
 
-        {/* 2-Column Minimal Grid */}
-        <div className="guidelines-grid">
-          {guidelines.map((item, index) => (
-            <div key={index} className="guideline-card">
-              <div className="guideline-icon-box">{item.icon}</div>
-              <div className="guideline-info">
-                <div
-                  style={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    marginBottom: '2px',
-                  }}
-                >
-                  <span style={{ fontWeight: 700, fontSize: '14px', color: '#ffffff' }}>
-                    {item.name}
-                  </span>
-                  <span className={`point-badge ${item.badgeType}`}>
-                    {item.badgeText}
-                  </span>
-                </div>
-                <div style={{ fontSize: '11px', color: 'rgba(255, 255, 255, 0.5)', fontWeight: 500 }}>
-                  {item.category}
-                </div>
-                <div style={{ fontSize: '11px', color: 'rgba(255, 255, 255, 0.8)', marginTop: '4px', lineHeight: 1.35 }}>
-                  • {item.effect}
-                </div>
-              </div>
-            </div>
-          ))}
+        {/* 4 Stat Cards */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px', marginBottom: '20px' }}>
+          <div style={{ background: 'rgba(0, 200, 233, 0.06)', border: '1px solid rgba(0, 200, 233, 0.25)', borderRadius: '8px', padding: '12px', textAlign: 'center' }}>
+            <div style={{ fontSize: '11px', color: '#00c8e9', fontWeight: 700, textTransform: 'uppercase' }}>Maximum Score</div>
+            <div style={{ fontSize: '26px', fontWeight: 900, color: '#2ecc71', margin: '4px 0' }}>500</div>
+            <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.5)' }}>All 4 clues completed</div>
+          </div>
+
+          <div style={{ background: 'rgba(255, 77, 94, 0.06)', border: '1px solid rgba(255, 77, 94, 0.25)', borderRadius: '8px', padding: '12px', textAlign: 'center' }}>
+            <div style={{ fontSize: '11px', color: '#ff4d5e', fontWeight: 700, textTransform: 'uppercase' }}>Wrong Submission</div>
+            <div style={{ fontSize: '26px', fontWeight: 900, color: '#ff4d5e', margin: '4px 0' }}>-15</div>
+            <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.5)' }}>Per incorrect submission</div>
+          </div>
+
+          <div style={{ background: 'rgba(212, 240, 74, 0.06)', border: '1px solid rgba(212, 240, 74, 0.25)', borderRadius: '8px', padding: '12px', textAlign: 'center' }}>
+            <div style={{ fontSize: '11px', color: '#d4f04a', fontWeight: 700, textTransform: 'uppercase' }}>Min. Completion</div>
+            <div style={{ fontSize: '26px', fontWeight: 900, color: '#d4f04a', margin: '4px 0' }}>150</div>
+            <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.5)' }}>Floor for completed round</div>
+          </div>
+
+          <div style={{ background: 'rgba(255, 255, 255, 0.04)', border: '1px solid rgba(255, 255, 255, 0.15)', borderRadius: '8px', padding: '12px', textAlign: 'center' }}>
+            <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.7)', fontWeight: 700, textTransform: 'uppercase' }}>Round Duration</div>
+            <div style={{ fontSize: '26px', fontWeight: 900, color: '#ffffff', margin: '4px 0' }}>45 <span style={{ fontSize: '13px' }}>min</span></div>
+            <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.5)' }}>2700 seconds cap</div>
+          </div>
         </div>
 
-        {/* Footer */}
-        <div className="guidelines-footer">
-          <button className="guidelines-ready-btn" onClick={onClose}>
-            ✓ Understood & Ready to Investigate
+        {/* Scoring Formula Box */}
+        <div
+          style={{
+            background: 'rgba(0, 0, 0, 0.4)',
+            border: '1px solid rgba(0, 200, 233, 0.3)',
+            borderRadius: '8px',
+            padding: '16px 20px',
+            marginBottom: '20px',
+            textAlign: 'center',
+          }}
+        >
+          <div style={{ fontSize: '11px', fontWeight: 700, color: '#00c8e9', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '6px' }}>
+            Official Scoring Formula
+          </div>
+          <div style={{ fontSize: '24px', fontWeight: 900, color: '#ffffff', fontFamily: 'monospace' }}>
+            Score = max(150, 500 − 15W)
+          </div>
+          <p style={{ margin: '8px 0 0', fontSize: '13px', color: 'rgba(255, 255, 255, 0.75)', lineHeight: 1.5 }}>
+            यहाँ <strong>W</strong> का मतलब <em>wrong submissions</em> (incorrect decryption attempts or false accusations) की संख्या है। यह score तभी मिलेगा जब <strong>सभी 4 clues</strong> successfully complete हों और दोनों roles accusation approve करें।
+          </p>
+        </div>
+
+        {/* Two-Column Section: Roles & Score Progression Table */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1.1fr 1fr', gap: '16px', marginBottom: '20px' }}>
+          {/* Cooperative Roles */}
+          <div style={{ background: 'rgba(255, 255, 255, 0.03)', border: '1px solid rgba(255, 255, 255, 0.08)', borderRadius: '8px', padding: '16px' }}>
+            <h4 style={{ margin: '0 0 10px', fontSize: '13px', color: '#00c8e9', fontWeight: 800, textTransform: 'uppercase' }}>
+              Cooperative Roles
+            </h4>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', fontSize: '13px' }}>
+              <div style={{ borderLeft: '3px solid #00c8e9', paddingLeft: '10px' }}>
+                <strong style={{ color: '#ffffff', display: 'block' }}>Lead Detective (Field Operations)</strong>
+                <span style={{ color: 'rgba(255,255,255,0.7)', fontSize: '12px' }}>
+                  Claims room, shares private invite link, and adds physical security logs (`EV-001`, `EV-002`, `EV-003`).
+                </span>
+              </div>
+              <div style={{ borderLeft: '3px solid #d4f04a', paddingLeft: '10px' }}>
+                <strong style={{ color: '#ffffff', display: 'block' }}>Forensic Analyst (Network Telemetry)</strong>
+                <span style={{ color: 'rgba(255,255,255,0.7)', fontSize: '12px' }}>
+                  Joins via private link and decrypts cryptographic packet payloads (`EV-004`).
+                </span>
+              </div>
+              <div style={{ borderLeft: '3px solid #f39c12', paddingLeft: '10px' }}>
+                <strong style={{ color: '#ffffff', display: 'block' }}>Dual-Indictment Approval</strong>
+                <span style={{ color: 'rgba(255,255,255,0.7)', fontSize: '12px' }}>
+                  Either player can file an accusation citing evidence; the other player must review and approve it to finalize the case.
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Performance Table */}
+          <div style={{ background: 'rgba(255, 255, 255, 0.03)', border: '1px solid rgba(255, 255, 255, 0.08)', borderRadius: '8px', padding: '16px' }}>
+            <h4 style={{ margin: '0 0 10px', fontSize: '13px', color: '#00c8e9', fontWeight: 800, textTransform: 'uppercase' }}>
+              Score Progression Reference
+            </h4>
+            <table style={{ width: '100%', fontSize: '12px', borderCollapse: 'collapse' }}>
+              <thead>
+                <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.1)', textAlign: 'left', color: 'rgba(255,255,255,0.5)' }}>
+                  <th style={{ padding: '4px 0' }}>Team Performance</th>
+                  <th style={{ padding: '4px 0', textAlign: 'right' }}>Final Score</th>
+                </tr>
+              </thead>
+              <tbody>
+                {scoringTable.map((row, idx) => (
+                  <tr key={idx} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                    <td style={{ padding: '6px 0', color: 'rgba(255,255,255,0.85)' }}>
+                      {row.wrong}
+                      <span style={{ display: 'block', fontSize: '10px', color: 'rgba(255,255,255,0.4)' }}>{row.desc}</span>
+                    </td>
+                    <td style={{ padding: '6px 0', textAlign: 'right', fontWeight: 700, color: idx === 0 ? '#2ecc71' : idx === scoringTable.length - 1 ? '#d4f04a' : '#00c8e9' }}>
+                      {row.score}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* Footer Action */}
+        <div style={{ textAlign: 'center' }}>
+          <button
+            onClick={onClose}
+            className="product-btn"
+            style={{
+              background: '#00c8e9',
+              color: '#050d14',
+              border: 0,
+              padding: '10px 32px',
+              fontWeight: 800,
+              borderRadius: '4px',
+              cursor: 'pointer',
+              fontSize: '13px',
+            }}
+          >
+            I Understand — Proceed to Case
           </button>
         </div>
       </div>

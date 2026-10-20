@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import './styles.css';
 import ConstellationCanvas from './components/ConstellationCanvas.jsx';
 import InvestigationGuidelinesModal from './components/InvestigationGuidelinesModal.jsx';
+import ResultsModal from './components/ResultsModal.jsx';
 
 const EVIDENCE_ITEMS = {
   ev1: {
@@ -75,9 +76,11 @@ const SUSPECTS = [
 
 export default function InvestigationApp({
   teamId = 'CC-001',
+  apiUrl,
   onBack,
   onLogout,
 }) {
+  const apiBase = apiUrl || import.meta.env.VITE_API_URL || 'http://localhost:4000';
   const [role, setRole] = useState(null); // 'detective' | 'analyst' | null
   const [caseState, setCaseState] = useState(null);
   const [deadline, setDeadline] = useState(null);
@@ -94,6 +97,7 @@ export default function InvestigationApp({
   const [decryptToken, setDecryptToken] = useState('');
   const [toastMessage, setToastMessage] = useState(null);
   const [showGuidelines, setShowGuidelines] = useState(true);
+  const [showResultsModal, setShowResultsModal] = useState(false);
   const [loading, setLoading] = useState(true);
   const [errorNotice, setErrorNotice] = useState(null);
   const [remainingTime, setRemainingTime] = useState('—:—');
@@ -111,24 +115,36 @@ export default function InvestigationApp({
     toastTimerRef.current = setTimeout(() => setToastMessage(null), 3200);
   }, []);
 
+  const parseJsonResponse = async (res) => {
+    const contentType = res.headers.get('content-type') || '';
+    if (contentType.includes('application/json')) {
+      return await res.json();
+    }
+    const text = await res.text();
+    try {
+      return JSON.parse(text);
+    } catch {
+      return { error: text?.slice(0, 120) || `Server returned ${res.status}` };
+    }
+  };
+
   // Fetch Case State Helper
   const fetchState = useCallback(async () => {
     try {
-      const res = await fetch('/api/investigation/state', { credentials: 'include' });
+      const res = await fetch(`${apiBase}/api/investigation/state`, { credentials: 'include' });
       if (res.status === 401 || res.status === 403) {
         // Not joined yet
         setLoading(false);
         return null;
       }
+      const data = await parseJsonResponse(res);
       if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
         if (data.code === 'ROUND_NOT_STARTED' || data.code === 'ROUND_NOT_RUNNING') {
           setErrorNotice(data.error || 'Round 3 is not currently active');
         }
         setLoading(false);
         return null;
       }
-      const data = await res.json();
       setCaseState(data.state);
       setRole(data.state?.role || null);
       if (data.deadline) setDeadline(new Date(data.deadline).getTime());
@@ -139,7 +155,7 @@ export default function InvestigationApp({
       setLoading(false);
       return null;
     }
-  }, []);
+  }, [apiBase]);
 
   // Initial Load & Continuous Polling
   useEffect(() => {
@@ -171,13 +187,13 @@ export default function InvestigationApp({
   const handleJoinDetective = async () => {
     try {
       setLoading(true);
-      const res = await fetch('/api/investigation/join', {
+      const res = await fetch(`${apiBase}/api/investigation/join`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
         body: JSON.stringify({}),
       });
-      const data = await res.json();
+      const data = await parseJsonResponse(res);
       if (!res.ok) throw new Error(data.error || 'Failed to claim Lead Detective');
       setCaseState(data.state);
       setRole('detective');
@@ -205,13 +221,13 @@ export default function InvestigationApp({
     }
     try {
       setLoading(true);
-      const res = await fetch('/api/investigation/join/analyst', {
+      const res = await fetch(`${apiBase}/api/investigation/join/analyst`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
         body: JSON.stringify({ invite: code }),
       });
-      const data = await res.json();
+      const data = await parseJsonResponse(res);
       if (!res.ok) throw new Error(data.error || 'Invalid or expired invitation');
       setCaseState(data.state);
       setRole('analyst');
@@ -227,13 +243,13 @@ export default function InvestigationApp({
   // Add Evidence Clue
   const handleAddEvidence = async (key) => {
     try {
-      const res = await fetch('/api/investigation/evidence', {
+      const res = await fetch(`${apiBase}/api/investigation/evidence`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
         body: JSON.stringify({ key }),
       });
-      const data = await res.json();
+      const data = await parseJsonResponse(res);
       if (!res.ok) throw new Error(data.error || 'Failed to add evidence');
       setCaseState(data.state);
       showToast(`${EVIDENCE_ITEMS[key]?.id || key} committed to shared ledger!`, 'success');
@@ -248,13 +264,13 @@ export default function InvestigationApp({
     const token = decryptToken.trim();
     if (!token) return;
     try {
-      const res = await fetch('/api/investigation/decrypt', {
+      const res = await fetch(`${apiBase}/api/investigation/decrypt`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
         body: JSON.stringify({ token }),
       });
-      const data = await res.json();
+      const data = await parseJsonResponse(res);
       if (!res.ok) throw new Error(data.error || 'Decryption failed: Token rejected');
       setCaseState(data.state);
       setDecryptToken('');
@@ -272,7 +288,7 @@ export default function InvestigationApp({
       return;
     }
     try {
-      const res = await fetch('/api/investigation/accusation', {
+      const res = await fetch(`${apiBase}/api/investigation/accusation`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -282,7 +298,7 @@ export default function InvestigationApp({
           reasoning: accusedReasoning.trim(),
         }),
       });
-      const data = await res.json();
+      const data = await parseJsonResponse(res);
       if (!res.ok) throw new Error(data.error || 'Failed to submit accusation');
       setCaseState(data.state);
       showToast('Formal accusation filed! Awaiting partner approval.', 'success');
@@ -294,15 +310,16 @@ export default function InvestigationApp({
   // Approve Accusation
   const handleApproveAccusation = async () => {
     try {
-      const res = await fetch('/api/investigation/accusation/approve', {
+      const res = await fetch(`${apiBase}/api/investigation/accusation/approve`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
         body: JSON.stringify({}),
       });
-      const data = await res.json();
+      const data = await parseJsonResponse(res);
       if (!res.ok) throw new Error(data.error || 'Approval failed');
       setCaseState(data.state);
+      setShowResultsModal(true);
       showToast('Accusation approved by both specialists! Case resolved and scored.', 'success');
     } catch (err) {
       showToast(err.message, 'error');
@@ -471,28 +488,34 @@ export default function InvestigationApp({
         {role && caseState && (
           <>
             {/* Top Stat Ribbon & Analyst Invitation Bar */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px' }}>
-              <div style={{ background: '#0a1620', border: '1px solid rgba(0,200,233,0.2)', padding: '14px 18px', borderRadius: '8px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '14px' }}>
+              <div style={{ background: '#0a1620', border: '1px solid rgba(0,200,233,0.2)', padding: '14px 16px', borderRadius: '8px' }}>
                 <span style={{ fontSize: '10px', color: '#9fb8c2', fontWeight: 700 }}>EVIDENCE COMMITTED</span>
-                <strong style={{ fontSize: '22px', display: 'block', color: '#00c8e9', marginTop: '4px' }}>
+                <strong style={{ fontSize: '20px', display: 'block', color: '#00c8e9', marginTop: '4px' }}>
                   {clues.length} / 4
                 </strong>
               </div>
-              <div style={{ background: '#0a1620', border: '1px solid rgba(0,200,233,0.2)', padding: '14px 18px', borderRadius: '8px' }}>
+              <div style={{ background: '#0a1620', border: '1px solid rgba(0,200,233,0.2)', padding: '14px 16px', borderRadius: '8px' }}>
                 <span style={{ fontSize: '10px', color: '#9fb8c2', fontWeight: 700 }}>NETWORK DECRYPTION</span>
-                <strong style={{ fontSize: '22px', display: 'block', color: caseState.decrypted ? '#d4f04a' : '#ff4d5e', marginTop: '4px' }}>
+                <strong style={{ fontSize: '20px', display: 'block', color: caseState.decrypted ? '#d4f04a' : '#ff4d5e', marginTop: '4px' }}>
                   {caseState.decrypted ? 'DECRYPTED ✓' : 'LOCKED ✗'}
                 </strong>
               </div>
-              <div style={{ background: '#0a1620', border: '1px solid rgba(0,200,233,0.2)', padding: '14px 18px', borderRadius: '8px' }}>
-                <span style={{ fontSize: '10px', color: '#9fb8c2', fontWeight: 700 }}>CASE CONFIDENCE</span>
-                <strong style={{ fontSize: '22px', display: 'block', color: '#d4f04a', marginTop: '4px' }}>
-                  {confidencePercent}%
+              <div style={{ background: '#0a1620', border: '1px solid rgba(0,200,233,0.2)', padding: '14px 16px', borderRadius: '8px' }}>
+                <span style={{ fontSize: '10px', color: '#9fb8c2', fontWeight: 700 }}>WRONG ATTEMPTS (W)</span>
+                <strong style={{ fontSize: '20px', display: 'block', color: (caseState.wrongAttempts || 0) > 0 ? '#ff4d5e' : '#2ecc71', marginTop: '4px' }}>
+                  {caseState.wrongAttempts || 0} <span style={{ fontSize: '11px', color: '#9fb8c2' }}>(-{(caseState.wrongAttempts || 0) * 15} pts)</span>
                 </strong>
               </div>
-              <div style={{ background: '#0a1620', border: '1px solid rgba(0,200,233,0.2)', padding: '14px 18px', borderRadius: '8px' }}>
+              <div style={{ background: '#0a1620', border: '1px solid rgba(0,200,233,0.2)', padding: '14px 16px', borderRadius: '8px' }}>
+                <span style={{ fontSize: '10px', color: '#9fb8c2', fontWeight: 700 }}>ROUND 03 SCORE</span>
+                <strong style={{ fontSize: '20px', display: 'block', color: isAgreed ? '#2ecc71' : '#00c8e9', marginTop: '4px' }}>
+                  {caseState.score || Math.max(150, 500 - (caseState.wrongAttempts || 0) * 15)} PTS
+                </strong>
+              </div>
+              <div style={{ background: '#0a1620', border: '1px solid rgba(0,200,233,0.2)', padding: '14px 16px', borderRadius: '8px' }}>
                 <span style={{ fontSize: '10px', color: '#9fb8c2', fontWeight: 700 }}>ACCUSATION STATUS</span>
-                <strong style={{ fontSize: '16px', display: 'block', color: isAgreed ? '#d4f04a' : isPendingApproval ? '#00c8e9' : '#9fb8c2', marginTop: '8px' }}>
+                <strong style={{ fontSize: '15px', display: 'block', color: isAgreed ? '#d4f04a' : isPendingApproval ? '#00c8e9' : '#9fb8c2', marginTop: '8px' }}>
                   {isAgreed ? 'CASE CLOSED ✓' : isPendingApproval ? 'PENDING APPROVAL ⏳' : 'UNRESOLVED'}
                 </strong>
               </div>
@@ -745,14 +768,51 @@ export default function InvestigationApp({
 
                 {/* If already agreed */}
                 {isAgreed ? (
-                  <div style={{ background: 'rgba(212, 240, 74, 0.1)', border: '1px solid #d4f04a', borderRadius: '8px', padding: '24px', textAlign: 'center' }}>
-                    <span style={{ fontSize: '32px' }}>🏆</span>
-                    <h4 style={{ fontSize: '22px', margin: '12px 0 6px', color: '#d4f04a' }}>Case Solved & Verified</h4>
-                    <p style={{ color: '#e6f4f8', fontSize: '14px', maxWidth: '540px', margin: '0 auto 16px', lineHeight: 1.6 }}>
-                      Both Lead Detective and Forensic Analyst agreed on the formal accusation against <strong>{caseState.accusation.suspect}</strong> supported by <strong>{EVIDENCE_ITEMS[caseState.accusation.evidenceKey]?.id}</strong>.
+                  <div style={{ background: 'rgba(212, 240, 74, 0.08)', border: '1px solid #d4f04a', borderRadius: '12px', padding: '28px', textAlign: 'center' }}>
+                    <span style={{ fontSize: '40px' }}>🏆</span>
+                    <h4 style={{ fontSize: '24px', margin: '12px 0 6px', color: '#d4f04a', fontWeight: 800 }}>Case Solved & Verified</h4>
+                    <p style={{ color: '#e6f4f8', fontSize: '14px', maxWidth: '580px', margin: '0 auto 18px', lineHeight: 1.6 }}>
+                      Both Lead Detective and Forensic Analyst reached mutual agreement on the formal indictment against <strong>{caseState.accusation.suspect}</strong> supported by <strong>{EVIDENCE_ITEMS[caseState.accusation.evidenceKey]?.id}</strong>.
                     </p>
-                    <div style={{ display: 'inline-block', background: '#050d14', border: '1px solid #d4f04a', padding: '8px 20px', borderRadius: '4px', fontSize: '13px', fontWeight: 800, color: '#d4f04a' }}>
-                      TOURNAMENT SCORE COMMITTED TO LEADERBOARD
+
+                    {/* Official Score Box */}
+                    <div style={{
+                      background: 'rgba(5, 13, 20, 0.95)',
+                      border: '1px solid rgba(0, 200, 233, 0.4)',
+                      borderRadius: '10px',
+                      padding: '20px 24px',
+                      maxWidth: '460px',
+                      margin: '0 auto 20px',
+                      boxShadow: '0 8px 30px rgba(0, 0, 0, 0.5)',
+                    }}>
+                      <div style={{ fontSize: '11px', fontWeight: 700, color: '#00c8e9', textTransform: 'uppercase', letterSpacing: '1px' }}>
+                        Official Round 3 Tournament Score
+                      </div>
+                      <div style={{ fontSize: '46px', fontWeight: 900, color: '#ffffff', margin: '4px 0' }}>
+                        {caseState.score || Math.max(150, 500 - (caseState.wrongAttempts || 0) * 15)} <span style={{ fontSize: '20px', color: '#00c8e9' }}>PTS</span>
+                      </div>
+                      <div style={{ fontSize: '12px', color: 'rgba(255,255,255,0.7)', borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: '10px', marginTop: '10px' }}>
+                        Formula: <code>max(150, 500 - 15W)</code> • <strong>{caseState.wrongAttempts || 0}</strong> wrong attempt{caseState.wrongAttempts === 1 ? '' : 's'} (-{(caseState.wrongAttempts || 0) * 15} pts)
+                      </div>
+                    </div>
+
+                    <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
+                      <button
+                        onClick={() => setShowResultsModal(true)}
+                        className="product-btn"
+                        style={{ background: '#00c8e9', color: '#050d14', border: 0, fontWeight: 800, padding: '10px 24px', fontSize: '13px', cursor: 'pointer', borderRadius: '4px' }}
+                      >
+                        View Official Scorecard 📊
+                      </button>
+                      {onBack && (
+                        <button
+                          onClick={onBack}
+                          className="product-btn"
+                          style={{ background: 'transparent', border: '1px solid rgba(255,255,255,0.3)', color: '#fff', fontWeight: 700, padding: '10px 20px', fontSize: '13px', cursor: 'pointer', borderRadius: '4px' }}
+                        >
+                          Return to Dashboard →
+                        </button>
+                      )}
                     </div>
                   </div>
                 ) : isPendingApproval ? (
@@ -864,6 +924,23 @@ export default function InvestigationApp({
         isOpen={showGuidelines}
         onClose={() => setShowGuidelines(false)}
       />
+
+      {/* Results Modal */}
+      {showResultsModal && (
+        <ResultsModal
+          result={{
+            completed: isAgreed,
+            score: caseState?.score || Math.max(150, 500 - (caseState?.wrongAttempts || 0) * 15),
+            durationMs: deadline ? Math.max(0, 2700000 - Math.max(0, deadline - Date.now())) : 0,
+            wrongAttempts: caseState?.wrongAttempts || 0,
+            cluesCount: clues.length,
+            suspect: caseState?.accusation?.suspect,
+            teamId,
+          }}
+          onClose={() => setShowResultsModal(false)}
+          onBack={onBack}
+        />
+      )}
     </div>
   );
 }

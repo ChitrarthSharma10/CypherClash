@@ -71,6 +71,27 @@ export const CIRCUIT_MAX_WRONG = 3;
 export const CIRCUIT_LOCK_MS = 3000;
 export const CIRCUIT_MIN_INPUT_INTERVAL_MS = 80;
 
+/** Returns the minimum number of switches that must be ON for a correct solution in this stage. */
+function getMinOnSwitches(blueprint) {
+  const { switchCount, gates, outputs } = blueprint;
+  let minOn = Infinity;
+  const total = 1 << switchCount; // 2^switchCount
+  for (let mask = 0; mask < total; mask++) {
+    const switches = Array.from({ length: switchCount }, (_, i) => Boolean(mask & (1 << i)));
+    const nodes = [...switches];
+    for (const gate of gates) {
+      const operation = OPERATIONS[gate.op];
+      nodes.push(operation(nodes[gate.a], gate.b === undefined ? undefined : nodes[gate.b]));
+    }
+    const allCorrect = outputs.every((output) => nodes[output.node] === output.target);
+    if (allCorrect) {
+      const onCount = switches.filter(Boolean).length;
+      if (onCount < minOn) minOn = onCount;
+    }
+  }
+  return minOn === Infinity ? null : minOn; // null means no solution exists
+}
+
 function evaluate(gates, inputs) {
   const nodes = [...inputs];
   for (const gate of gates) {
@@ -144,6 +165,20 @@ export function applyCircuitInput(game, input) {
   const nodes = evaluate(stage.gates, stage.switches);
   const correct = stage.outputs.filter((output) => nodes[output.node] === output.target).length;
   if (correct === stage.outputs.length) {
+    // Check optimality: only accept the solution with the minimum number of ON switches.
+    const currentOnCount = stage.switches.filter(Boolean).length;
+    const minOn = getMinOnSwitches(STAGES[game.stageIndex]);
+    if (minOn !== null && currentOnCount > minOn) {
+      // Correct but not optimal — penalise and inform the player.
+      stage.wrong += 1;
+      stage.lockedUntil = input.timestamp + CIRCUIT_LOCK_MS;
+      stage.lastFeedback = { correct, of: stage.outputs.length, isSuboptimal: true };
+      if (stage.wrong >= CIRCUIT_MAX_WRONG) {
+        game.stage = buildStage(game.stageIndex, CIRCUIT_MAX_WRONG);
+        game.stage.lockedUntil = input.timestamp + CIRCUIT_LOCK_MS;
+      }
+      return;
+    }
     const seconds = Math.max(0, (input.timestamp - game.stageStartedAt) / 1000);
     const bonus = Math.max(0, Math.round(30 - seconds / 2));
     const gained = Math.max(20, Math.min(100, 70 + bonus - 15 * stage.wrong));

@@ -276,11 +276,14 @@ async function saveState(state, expected, extraFilter = {}) {
       .filter(([, value]) => value === undefined)
       .map(([key]) => [key, 1]),
   );
+  const expectedAttempt = expected?.attemptNo ?? 1;
   const filter = expected
     ? {
         round: state.round,
         status: expected.status,
-        attemptNo: expected.attemptNo ?? 1,
+        ...(expectedAttempt === 1
+          ? { $or: [{ attemptNo: 1 }, { attemptNo: { $exists: false } }] }
+          : { attemptNo: expectedAttempt }),
         ...extraFilter,
       }
     : { round: state.round, ...extraFilter };
@@ -305,6 +308,10 @@ async function saveState(state, expected, extraFilter = {}) {
 
 export async function initializeRoundStates() {
   await migrateLegacyInvestigationCases();
+  await RoundState.updateMany(
+    { attemptNo: { $exists: false } },
+    { $set: { attemptNo: 1 } },
+  );
   states.clear();
   const roundFilter = {
     $or: [

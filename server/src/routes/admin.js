@@ -102,6 +102,8 @@ function serviceErrorStatus(error) {
     'ROUND_NOT_PAUSED',
     'ROUND_NOT_ACTIVE',
     'NO_COMPLETION_EVIDENCE',
+    'ROUND_STATE_CHANGED',
+    'MULTIPLE_ACTIVE_ROUNDS',
   ].includes(error.code)) return 409;
   if ([
     'INVALID_ADJUSTMENT',

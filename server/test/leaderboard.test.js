@@ -138,7 +138,10 @@ test('leaderboard helpers exclude Bias Points from totals', () => {
 
 test('REST leaderboard has an allowlisted public shape and tied round-only ranks', async () => {
   const unauthenticated = await fetch(`${baseUrl}/api/leaderboard`);
-  assert.equal(unauthenticated.status, 401);
+  assert.equal(unauthenticated.status, 200);
+  const unauthPayload = await unauthenticated.json();
+  assert.equal(unauthPayload.youIndex, null);
+  assert.ok(Array.isArray(unauthPayload.rows));
 
   const adminCookie = await login('/api/auth/admin/login', {
     username: adminUsername,

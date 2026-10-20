@@ -45,5 +45,5 @@ startRoundStateMonitor();
 const httpServer = createServer(createApp());
 setupSocketIO(httpServer);
 httpServer.listen(config.port, () => {
-  console.log(`CypherClash API listening on port ${config.port}`);
+  console.log(`Cyber Clash API listening on port ${config.port}`);
 });
