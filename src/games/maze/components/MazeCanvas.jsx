@@ -683,10 +683,11 @@ function createTorchBrazierMesh() {
 /**
  * Main 3D Maze Canvas Component
  */
-export default function MazeCanvas({ state, playerId }) {
+export default function MazeCanvas({ state, gameState, playerId }) {
   const mountRef = useRef(null);
-  const stateRef = useRef(state);
-  stateRef.current = state;
+  const currentGameState = state || gameState;
+  const stateRef = useRef(currentGameState);
+  stateRef.current = currentGameState;
 
   useEffect(() => {
     const container = mountRef.current;

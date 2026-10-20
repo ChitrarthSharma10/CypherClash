@@ -24,7 +24,7 @@ const suffix = `${Date.now() % 1_000_000_000}${process.pid % 10000}`;
 const teamA = `CC-93${suffix}`;
 const teamB = `CC-94${suffix}`;
 const password = "GameSessionTestPassword123";
-const round = Date.now() * 10 + (process.pid % 10);
+const round = 1;
 let server;
 let baseUrl;
 
@@ -80,7 +80,7 @@ before(async () => {
 beforeEach(async () => {
   await GameSession.deleteMany({ teamId: { $in: [teamA, teamB] } });
   await ScoreEntry.deleteMany({ teamId: { $in: [teamA, teamB] } });
-  await RoundState.deleteMany({ round });
+  await RoundState.deleteMany({});
   await EventLog.deleteMany({
     actorId: { $in: [teamA, teamB, "game-service"] },
   });
@@ -144,7 +144,7 @@ test("game start requires a running round", async () => {
 });
 
 test("Circuit Sync can only start during Round 1", async () => {
-  await startRound(round, 300, "game-test-admin");
+  await startRound(2, 300, "game-test-admin");
   const cookie = await teamCookie(teamA);
   const response = await startGame(cookie, "circuit");
   assert.equal(response.status, 409);

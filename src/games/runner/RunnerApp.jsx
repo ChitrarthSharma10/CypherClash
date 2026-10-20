@@ -66,6 +66,7 @@ function RunnerMonitor({
 
       <div className="canvas-frame-outer" style={{ position: 'relative', width: '100%', display: 'flex', justifyContent: 'center' }}>
         <RunnerCanvas
+          state={gameState}
           gameState={gameState}
           playerId={playerId}
           onAction={handleAction}
@@ -205,7 +206,7 @@ export default function RunnerApp({
   const [result, setResult] = useState(null);
   const [rejectedNotice, setRejectedNotice] = useState(null);
   const [telemetryLogs, setTelemetryLogs] = useState([]);
-  const [showGuidelines, setShowGuidelines] = useState(false);
+  const [showGuidelines, setShowGuidelines] = useState(true);
 
   const socketClientRef = useRef(null);
 
@@ -281,6 +282,13 @@ export default function RunnerApp({
       if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' '].includes(e.key)) {
         e.preventDefault();
       }
+      if (e.repeat) return;
+
+      if (gameState?.status === 'READY' && (e.key === ' ' || e.key === 'Enter')) {
+        handleStartSprint();
+        return;
+      }
+
       const key = e.key.toLowerCase();
       if (key === 'a' || key === 'arrowleft') {
         handleAction('P2', 'RIGHT');
@@ -295,7 +303,7 @@ export default function RunnerApp({
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [handleAction]);
+  }, [handleAction, gameState?.status]);
 
   return (
     <div className="runner-game-wrapper runner-app-wrapper">

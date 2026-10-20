@@ -83,11 +83,17 @@ export default function InvestigationApp({
   const [deadline, setDeadline] = useState(null);
   const [roundStatus, setRoundStatus] = useState('running');
   const [activeTab, setActiveTab] = useState('overview'); // 'overview' | 'evidence' | 'forensics' | 'suspects' | 'accusation'
-  const [analystInviteCode, setAnalystInviteCode] = useState('');
+  const [analystInviteCode, setAnalystInviteCode] = useState(() => {
+    try {
+      return sessionStorage.getItem(`analyst_invite_${teamId}`) || '';
+    } catch {
+      return '';
+    }
+  });
   const [inviteInput, setInviteInput] = useState('');
   const [decryptToken, setDecryptToken] = useState('');
   const [toastMessage, setToastMessage] = useState(null);
-  const [showGuidelines, setShowGuidelines] = useState(false);
+  const [showGuidelines, setShowGuidelines] = useState(true);
   const [loading, setLoading] = useState(true);
   const [errorNotice, setErrorNotice] = useState(null);
   const [remainingTime, setRemainingTime] = useState('—:—');
@@ -175,7 +181,12 @@ export default function InvestigationApp({
       if (!res.ok) throw new Error(data.error || 'Failed to claim Lead Detective');
       setCaseState(data.state);
       setRole('detective');
-      if (data.analystInvite) setAnalystInviteCode(data.analystInvite);
+      if (data.analystInvite) {
+        setAnalystInviteCode(data.analystInvite);
+        try {
+          sessionStorage.setItem(`analyst_invite_${teamId}`, data.analystInvite);
+        } catch {}
+      }
       showToast('Lead Detective station claimed! Share the invite with your analyst.', 'success');
       await fetchState();
     } catch (err) {

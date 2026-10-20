@@ -1,6 +1,7 @@
 import { RunnerGameEngine } from './runner_engine/gameEngine.js';
 import { submitGameResult } from '../services/scoring.js';
 import { logEvent } from '../utils/logging.js';
+import { getRoundState, onRoundStateChange } from '../services/roundState.js';
 
 class MemoryRunnerRepository {
   constructor() {
@@ -22,6 +23,53 @@ class MemoryRunnerRepository {
 
 const repository = new MemoryRunnerRepository();
 const activeEngines = new Map(); // keyed by teamId
+
+export function isRound1Running() {
+  const r1 = getRoundState(1);
+  return Boolean(r1 && r1.status === 'running' && r1.deadline && new Date(r1.deadline).getTime() > Date.now());
+}
+
+export function setupRunnerRoundListener(io) {
+  onRoundStateChange((state) => {
+    if (state.round !== 1) return;
+    if (state.status === 'paused') {
+      for (const [teamId, engine] of activeEngines.entries()) {
+        engine.adminAction('pause');
+        io.to(teamId).emit('runner:room_status', {
+          p1Connected: engine.players.P1.connected,
+          p2Connected: engine.players.P2.connected,
+          status: 'PAUSED',
+          message: 'Round 1 is paused by administrator',
+        });
+        io.to(teamId).emit('runner:game_tick', engine.getStatePayload());
+      }
+    } else if (state.status === 'running') {
+      for (const [teamId, engine] of activeEngines.entries()) {
+        if (engine.status === 'PAUSED') {
+          engine.adminAction('resume');
+          io.to(teamId).emit('runner:room_status', {
+            p1Connected: engine.players.P1.connected,
+            p2Connected: engine.players.P2.connected,
+            status: engine.status,
+          });
+          io.to(teamId).emit('runner:game_tick', engine.getStatePayload());
+        }
+      }
+    } else if (state.status === 'ended') {
+      for (const [teamId, engine] of activeEngines.entries()) {
+        engine.adminAction('end');
+        io.to(teamId).emit('runner:room_status', {
+          p1Connected: engine.players.P1.connected,
+          p2Connected: engine.players.P2.connected,
+          status: 'ENDED',
+          message: 'Round 1 has ended',
+        });
+        io.to(teamId).emit('runner:game_tick', engine.getStatePayload());
+      }
+      activeEngines.clear();
+    }
+  });
+}
 
 export function getOrCreateRunnerEngine(io, teamId, sessionId = `runner_${teamId}`) {
   if (activeEngines.has(teamId)) {
@@ -64,6 +112,17 @@ export function registerRunnerHandlers(io, socket) {
       return;
     }
 
+    if (!isRound1Running()) {
+      socket.emit('runner:error_message', { message: 'Round 1 is not running' });
+      socket.emit('runner:room_status', {
+        p1Connected: false,
+        p2Connected: false,
+        status: 'LOCKED',
+        message: 'Round 1 is not running',
+      });
+      return;
+    }
+
     const normPlayerId = (playerId === 'P2' || playerId === '2' || String(playerId).toLowerCase().includes('2')) ? 'P2' : 'P1';
     socket.data.runnerTeamId = teamId;
     socket.data.runnerPlayerId = normPlayerId;
@@ -94,33 +153,54 @@ export function registerRunnerHandlers(io, socket) {
   socket.on('runner:play_game', ({ teamId }) => {
     const tId = teamId || socket.data.runnerTeamId;
     if (!tId) return;
-    const engine = activeEngines.get(tId);
+
+    if (!isRound1Running()) {
+      socket.emit('runner:error_message', { message: 'Round 1 is not running' });
+      return;
+    }
+
+    let engine = activeEngines.get(tId);
+    if (!engine) engine = getOrCreateRunnerEngine(io, tId, sessionId);
     if (!engine) return;
     engine.startGame();
   });
 
-  socket.on('runner:reset_game', ({ teamId }) => {
+  socket.on('runner:reset_game', ({ teamId, sessionId }) => {
     const tId = teamId || socket.data.runnerTeamId;
     if (!tId) return;
-    const engine = activeEngines.get(tId);
+    let engine = activeEngines.get(tId);
+    if (!engine) engine = getOrCreateRunnerEngine(io, tId, sessionId);
     if (!engine) return;
     engine.adminAction('reset');
   });
 
-  socket.on('runner:restart_game', ({ teamId }) => {
+  socket.on('runner:restart_game', ({ teamId, sessionId }) => {
     const tId = teamId || socket.data.runnerTeamId;
     if (!tId) return;
-    const engine = activeEngines.get(tId);
+
+    if (!isRound1Running()) {
+      socket.emit('runner:error_message', { message: 'Round 1 is not running' });
+      return;
+    }
+
+    let engine = activeEngines.get(tId);
+    if (!engine) engine = getOrCreateRunnerEngine(io, tId, sessionId);
     if (!engine) return;
     engine.startGame();
   });
 
-  socket.on('runner:player_input', ({ teamId, action, direction, playerId }) => {
+  socket.on('runner:player_input', ({ teamId, sessionId, action, direction, playerId }) => {
     const tId = teamId || socket.data.runnerTeamId;
     const pId = playerId || socket.data.runnerPlayerId;
     if (!tId || !pId) return;
 
-    const engine = activeEngines.get(tId);
+    if (!isRound1Running()) {
+      socket.emit('runner:input_rejected', { reason: 'Round 1 is not running' });
+      return;
+    }
+
+    let engine = activeEngines.get(tId);
+    if (!engine) engine = getOrCreateRunnerEngine(io, tId, sessionId);
     if (!engine) return;
 
     let resolvedAction = action;

@@ -26,8 +26,18 @@ export function createMazeSocketClient({
 }) {
   const socket = getSocketConnection();
 
-  socket.on('connect', () => {
+  const joinRoom = () => {
     socket.emit('maze:join_room', { teamId, sessionId, playerId, mazeId });
+  };
+
+  if (socket.connected) {
+    joinRoom();
+  }
+  socket.on('connect', joinRoom);
+  socket.on('round:update', (roundState) => {
+    if (roundState && roundState.round === 1 && roundState.status === 'running') {
+      joinRoom();
+    }
   });
 
   if (onTick) socket.on('maze:game_tick', onTick);
@@ -66,8 +76,18 @@ export function createRunnerSocketClient({
 }) {
   const socket = getSocketConnection();
 
-  socket.on('connect', () => {
+  const joinRoom = () => {
     socket.emit('runner:join_room', { teamId, sessionId, playerId, isRefresh: true });
+  };
+
+  if (socket.connected) {
+    joinRoom();
+  }
+  socket.on('connect', joinRoom);
+  socket.on('round:update', (roundState) => {
+    if (roundState && roundState.round === 1 && roundState.status === 'running') {
+      joinRoom();
+    }
   });
 
   if (onTick) socket.on('runner:game_tick', onTick);

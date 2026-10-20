@@ -109,6 +109,7 @@ function MazeMonitor({
 
       <div className="canvas-frame-outer" style={{ position: 'relative', width: '100%', display: 'flex', justifyContent: 'center' }}>
         <MazeCanvas
+          state={gameState}
           gameState={gameState}
           playerId={playerId}
           onSendInput={sendInput}
@@ -257,7 +258,7 @@ export default function MazeApp({
   const [roomStatus, setRoomStatus] = useState({ p1Connected: false, p2Connected: false });
   const [result, setResult] = useState(null);
   const [rejectedNotice, setRejectedNotice] = useState(null);
-  const [showGuidelines, setShowGuidelines] = useState(false);
+  const [showGuidelines, setShowGuidelines] = useState(true);
 
   const socketClientRef = useRef(null);
 

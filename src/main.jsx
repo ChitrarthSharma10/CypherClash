@@ -13,6 +13,8 @@ import {
 import MazeApp from './games/maze/MazeApp.jsx';
 import RunnerApp from './games/runner/RunnerApp.jsx';
 import InvestigationApp from './games/investigation/InvestigationApp.jsx';
+import { TOTAL_ROUNDS, ROUND_NUMBERS, ROUND_METADATA } from '../shared/rounds.js';
+import { getSocketConnection } from './games/gameSocketClient.js';
 
 const rounds = [
   { number: '01', title: 'Mini Game Arena', subtitle: 'The Warmup & Screening', time: '30 min', mode: 'BROWSER MINI-GAMES', desc: 'Build speed and digital intuition with quick decisions, patterns, and packet sorting.', focus: 'Speed + instinct' },
@@ -276,7 +278,7 @@ function Status({ online, label }) {
 }
 
 function Dashboard({ onLogout }) {
-  const { data, error, updatedAt } = useVisiblePolling(async () => {
+  const { data, error, updatedAt, refresh } = useVisiblePolling(async () => {
     const [team, score] = await Promise.all([
       apiRequest('/api/team/me'),
       apiRequest('/api/team/score'),
@@ -288,6 +290,16 @@ function Dashboard({ onLogout }) {
   useEffect(() => {
     if (error === 'Authentication required') onLogout();
   }, [error, onLogout]);
+
+  useEffect(() => {
+    const socket = getSocketConnection();
+    socket.on('round:update', () => {
+      if (typeof refresh === 'function') refresh();
+    });
+    return () => {
+      socket.disconnect();
+    };
+  }, [refresh]);
 
   const retry = () => window.location.reload();
 
@@ -317,11 +329,15 @@ function Dashboard({ onLogout }) {
   const progression = data.team.progression || { effectiveEligibleRound: 1, waivedRounds: [], rounds: {} };
   const r1Waived = progression.waivedRounds?.includes(1) || progression.rounds?.[1]?.status === 'waived';
   const r2Waived = progression.waivedRounds?.includes(2) || progression.rounds?.[2]?.status === 'waived';
+  const r3Waived = progression.waivedRounds?.includes(3) || progression.rounds?.[3]?.status === 'waived';
   const r2PrereqMet = (progression.effectiveEligibleRound || 1) >= 2;
+  const r3PrereqMet = (progression.effectiveEligibleRound || 1) >= 3;
   const roundOneRunning = round?.round === 1 && round.status === 'running';
   const roundTwoRunning = round?.round === 2 && round.status === 'running';
+  const roundThreeRunning = round?.round === 3 && round.status === 'running';
   const circuitCompleted = Object.hasOwn(scores, '1');
   const investigationCompleted = Object.hasOwn(scores, '2');
+  const roundThreeCompleted = Object.hasOwn(scores, '3');
   return <main className="product-page dashboard-page cc-dashboard">
     <header className="cc-dashboard-header">
       <div>
@@ -365,7 +381,7 @@ function Dashboard({ onLogout }) {
         <h2>Round breakdown</h2>
         <strong className="cc-score-card__total">{data.score?.total ?? 0}<span> total points</span></strong>
         <div className="cc-score-card__rounds">
-          {[1, 2, 3].map((roundNumber) => {
+          {ROUND_NUMBERS.map((roundNumber) => {
             const roundKey = String(roundNumber);
             const hasScore = Object.hasOwn(scores, roundKey);
             const isWaived = progression.waivedRounds?.includes(roundNumber) || progression.rounds?.[roundNumber]?.status === 'waived';
@@ -389,14 +405,14 @@ function Dashboard({ onLogout }) {
     <section className="cc-play-section">
       <div className="cc-play-heading">
         <div><p className="product-eyebrow">ROUND 01 / MINI GAMES</p><h2>Play together</h2></div>
-        <span>One shared screen</span>
+        <span>Two-player cooperative (P1 / P2)</span>
       </div>
       <div className="cc-play-grid">
         <article className="cc-play-card cc-play-card--violet">
           <div className="cc-play-card__top">
             <span>01 / LOGIC</span>
             <span className={`cc-game-status cc-game-status--${circuitCompleted ? 'completed' : r1Waived ? 'completed' : roundOneRunning ? 'available' : 'locked'}`}>
-              {circuitCompleted ? 'Completed' : r1Waived ? 'Waived (0 pts)' : roundOneRunning ? 'Available' : 'Locked'}
+              {circuitCompleted ? 'COMPLETED' : r1Waived ? 'WAIVED' : roundOneRunning ? 'LIVE' : 'LOCKED'}
             </span>
           </div>
           <h3>Circuit Sync</h3>
@@ -409,7 +425,7 @@ function Dashboard({ onLogout }) {
           </button>
         </article>
         <article className="cc-play-card cc-play-card--coral">
-          <div className="cc-play-card__top"><span>02 / CO-OP</span><span className={`cc-game-status cc-game-status--${roundOneRunning ? 'available' : 'locked'}`}>{roundOneRunning ? 'Available' : 'Locked'}</span></div>
+          <div className="cc-play-card__top"><span>02 / CO-OP</span><span className={`cc-game-status cc-game-status--${roundOneRunning ? 'available' : 'locked'}`}>{roundOneRunning ? 'LIVE' : 'LOCKED'}</span></div>
           <h3>Dual-Control Maze</h3>
           <p>Coordinate two controls to navigate one shared maze.</p>
           <button className="cc-play-card__button" disabled={!roundOneRunning} onClick={() => navigate('/dashboard/maze')}>
@@ -417,7 +433,7 @@ function Dashboard({ onLogout }) {
           </button>
         </article>
         <article className="cc-play-card cc-play-card--sky">
-          <div className="cc-play-card__top"><span>03 / REFLEX</span><span className={`cc-game-status cc-game-status--${roundOneRunning ? 'available' : 'locked'}`}>{roundOneRunning ? 'Available' : 'Locked'}</span></div>
+          <div className="cc-play-card__top"><span>03 / REFLEX</span><span className={`cc-game-status cc-game-status--${roundOneRunning ? 'available' : 'locked'}`}>{roundOneRunning ? 'LIVE' : 'LOCKED'}</span></div>
           <h3>Cyber Runner</h3>
           <p>Work in sync to dodge obstacles and collect points.</p>
           <button className="cc-play-card__button" disabled={!roundOneRunning} onClick={() => navigate('/dashboard/runner')}>
@@ -436,7 +452,7 @@ function Dashboard({ onLogout }) {
           <div className="cc-play-card__top">
             <span>02 / INVESTIGATION</span>
             <span className={`cc-game-status cc-game-status--${investigationCompleted ? 'completed' : r2Waived ? 'completed' : !r2PrereqMet ? 'locked' : roundTwoRunning ? 'available' : 'locked'}`}>
-              {investigationCompleted ? 'Completed' : r2Waived ? 'Waived (0 pts)' : !r2PrereqMet ? 'Prereq Required' : roundTwoRunning ? 'Available' : 'Locked'}
+              {investigationCompleted ? 'COMPLETED' : r2Waived ? 'WAIVED' : !r2PrereqMet ? 'PREREQ REQUIRED' : roundTwoRunning ? 'LIVE' : 'LOCKED'}
             </span>
           </div>
           <h3>Operation Shadow Beacon</h3>
@@ -458,31 +474,38 @@ function Dashboard({ onLogout }) {
       </div>
     </section>
 
-    <section className="cc-play-section" style={{ marginTop: '30px' }}>
+    <section className="cc-play-section">
       <div className="cc-play-heading">
         <div><p className="product-eyebrow">ROUND 03 / DIGITAL DETECTIVE</p><h2>Collaborative Case</h2></div>
         <span>Lead Detective & Forensic Analyst</span>
       </div>
       <div className="cc-play-grid">
-        <article className="cc-play-card cc-play-card--violet" style={{ gridColumn: '1 / -1' }}>
+        <article className="cc-play-card cc-play-card--violet">
           <div className="cc-play-card__top">
             <span>01 / OSINT & SIEM</span>
-            <span className={`cc-game-status cc-game-status--${round?.round === 3 && round?.status === 'running' ? 'available' : 'locked'}`}>
-              {round?.round === 3 && round?.status === 'running' ? 'Available' : 'Locked'}
+            <span className={`cc-game-status cc-game-status--${roundThreeCompleted ? 'completed' : roundThreeRunning ? 'available' : 'locked'}`}>
+              {roundThreeCompleted ? 'COMPLETED' : roundThreeRunning ? 'LIVE' : 'LOCKED'}
             </span>
           </div>
           <h3>Cyber Incident Investigation</h3>
           <p>Analyze email dumps, authentication audit logs, netflow traces, and synthesize evidence on the shared case board.</p>
+          {!r3PrereqMet && (
+            <p className="cc-play-card__note">Prerequisite required: Round 02 must be completed or waived by administrator.</p>
+          )}
+          {r3Waived && !roundThreeCompleted && (
+            <p className="cc-play-card__note">Round 3 requirement was administratively waived for your team.</p>
+          )}
           <button
             className="cc-play-card__button"
-            disabled={round?.round !== 3 || round?.status !== 'running'}
+            disabled={(!roundThreeRunning && !roundThreeCompleted && !r3Waived) || !r3PrereqMet}
             onClick={() => navigate('/dashboard/round3')}
           >
-            Enter Investigation Workspace <span aria-hidden="true">↗</span>
+            {roundThreeCompleted ? 'Review Investigation' : !r3PrereqMet ? 'Prerequisite Required' : 'Enter Investigation Workspace'} <span aria-hidden="true">↗</span>
           </button>
         </article>
       </div>
     </section>
+
 
     <section className="cc-presence-card">
       <div><p className="product-eyebrow">TEAM PRESENCE</p><h2>Signal crew</h2></div>
@@ -1557,7 +1580,7 @@ function ManageProgressModal({ team, onClose, onRefresh }) {
               </p>
 
               <div className="cc-prog-rounds-grid">
-                {[1, 2, 3, 4].map((rNum) => {
+                {ROUND_NUMBERS.map((rNum) => {
                   const rStatus = progression?.rounds?.[rNum];
                   const gRound = globalRounds.find((gr) => gr.round === rNum);
                   const isEligible = (progression?.effectiveEligibleRound || 1) >= rNum;
@@ -1645,9 +1668,8 @@ function ManageProgressModal({ team, onClose, onRefresh }) {
               <div className="cc-prog-form-group">
                 <label className="cc-prog-label">TARGET ROUND ELIGIBILITY</label>
                 <select className="product-input" value={advanceRound} onChange={(e) => setAdvanceRound(Number(e.target.value))}>
-                  <option value={2}>Round 2 — Hidden Clue Investigation</option>
-                  <option value={3}>Round 3 — Senior Developer Challenge</option>
-                  <option value={4}>Round 4 — Final Tournament Championship</option>
+                  <option value={2}>Round 2 — Web UI Hijacking (Operation Shadow Beacon)</option>
+                  <option value={3}>Round 3 — Digital Detective (Cyber Incident Investigation)</option>
                 </select>
               </div>
 
@@ -1702,10 +1724,9 @@ function ManageProgressModal({ team, onClose, onRefresh }) {
               <div className="cc-prog-form-group">
                 <label className="cc-prog-label">SELECT ROUND</label>
                 <select className="product-input" value={waiveRoundNum} onChange={(e) => setWaiveRoundNum(Number(e.target.value))}>
-                  <option value={1}>Round 1 — Circuit Sync</option>
-                  <option value={2}>Round 2 — Hidden Clue Investigation</option>
-                  <option value={3}>Round 3 — Round 3 Challenge</option>
-                  <option value={4}>Round 4 — Championship</option>
+                  <option value={1}>Round 1 — Mini Games</option>
+                  <option value={2}>Round 2 — Web UI Hijacking</option>
+                  <option value={3}>Round 3 — Digital Detective</option>
                 </select>
               </div>
 
@@ -1876,7 +1897,7 @@ function AdminDashboard({ onLogout }) {
       refresh = undefined;
       if (document.visibilityState === 'visible') {
         void load({ includeLogs: true });
-        refresh = window.setInterval(() => void load({ includeLogs: true }), 25_000);
+        refresh = window.setInterval(() => void load({ includeLogs: true }), 10_000);
       }
     };
     document.addEventListener('visibilitychange', pollWhileVisible);
@@ -1886,6 +1907,16 @@ function AdminDashboard({ onLogout }) {
       document.removeEventListener('visibilitychange', pollWhileVisible);
     };
   }, []);
+
+  useEffect(() => {
+    const socket = getSocketConnection();
+    socket.on('round:update', () => {
+      void load({ includeLogs: false });
+    });
+    return () => {
+      socket.disconnect();
+    };
+  }, [load]);
 
   const runAction = async (action, success) => {
     try {
@@ -1906,9 +1937,10 @@ function AdminDashboard({ onLogout }) {
   );
 
   const startRound = (roundNumber, previousDurationSec, isRestart) => {
+    const meta = ROUND_METADATA[roundNumber];
     const rawDuration = window.prompt(
       'Round duration in seconds (1–86400):',
-      String(previousDurationSec || (roundNumber === 2 ? 2700 : 1800)),
+      String(previousDurationSec || meta?.defaultDurationSec || (roundNumber === 2 ? 2700 : 1800)),
     );
     if (rawDuration === null) return;
     const durationSec = Number(rawDuration);
@@ -1924,17 +1956,17 @@ function AdminDashboard({ onLogout }) {
   };
 
   const adjustScore = (team) => {
-    const round = window.prompt(`Round number for ${team.teamId}:`);
+    const round = window.prompt(`Round number for ${team.teamId} (1 to ${TOTAL_ROUNDS}):`);
     if (round === null) return;
     const amount = window.prompt('Adjustment amount (-1000 to 1000):');
     if (amount === null) return;
     const reason = window.prompt('Reason (required, max 200 characters):');
     if (reason === null) return;
     const adjustment = { round: Number(round), amount: Number(amount), reason: reason.trim() };
-    if (!Number.isInteger(adjustment.round) || adjustment.round < 1
+    if (!Number.isInteger(adjustment.round) || adjustment.round < 1 || adjustment.round > TOTAL_ROUNDS
       || !Number.isInteger(adjustment.amount) || adjustment.amount < -1000 || adjustment.amount > 1000
       || !adjustment.reason || adjustment.reason.length > 200) {
-      setState((current) => ({ ...current, error: 'Enter a valid round, adjustment amount, and reason.', success: '' }));
+      setState((current) => ({ ...current, error: `Enter a valid round (1–${TOTAL_ROUNDS}), adjustment amount, and reason.`, success: '' }));
       return;
     }
     if (!window.confirm(`Apply ${adjustment.amount} points to ${team.teamId} in round ${adjustment.round}?\nReason: ${adjustment.reason}`)) return;
@@ -2015,8 +2047,10 @@ function AdminDashboard({ onLogout }) {
   if (state.loading && !teams.length) return <LoadingState label="Loading admin control center…" />;
   if (state.error && !teams.length) return <ErrorState message={state.error} onRetry={load} />;
   const scoresByTeam = new Map(scores.map((score) => [score.teamId, score.total]));
-  const nextRoundNumber = rounds.reduce((next, round) => Math.max(next, round.round + 1), 1);
-  const displayedRounds = [...rounds, { round: nextRoundNumber, status: 'not_started', deadline: null, pausedAt: null }];
+  const roundsMap = new Map(rounds.map((round) => [round.round, round]));
+  const displayedRounds = ROUND_NUMBERS.map((rNum) => {
+    return roundsMap.get(rNum) || { round: rNum, status: 'not_started', deadline: null, pausedAt: null };
+  });
   return <main className="product-page admin-dashboard">
     <div className="product-heading"><div><p className="product-eyebrow">CONTROL CENTER / ADMIN</p><h1>Event operations</h1><p className="product-subtitle">Manage teams, rounds and audit activity.</p></div><button className="product-btn product-btn--light" onClick={logout}>Log out</button></div>
     <div className="cc-poll-status" aria-live="polite">
@@ -2028,6 +2062,10 @@ function AdminDashboard({ onLogout }) {
       <div className="product-section-heading"><p className="product-eyebrow">ROUND CONTROL</p><h2>Rounds</h2></div>
       <div className="cc-admin-round-grid">
         {displayedRounds.map((round) => {
+          const meta = ROUND_METADATA[round.round] || {
+            title: `Round ${round.round}`,
+            adminName: `Round ${round.round}`,
+          };
           const deadline = round.deadline ? new Date(round.deadline).getTime() : null;
           const pausedAt = round.pausedAt ? new Date(round.pausedAt).getTime() : null;
           const remainingMs = round.status === 'ended'
@@ -2036,7 +2074,15 @@ function AdminDashboard({ onLogout }) {
               ? null
               : Math.max(0, deadline - (round.status === 'paused' && pausedAt !== null ? pausedAt : clockNow));
           return <article className="product-panel cc-admin-round" key={round.round}>
-            <div className="cc-admin-round__heading"><span className="product-mono">ROUND {String(round.round).padStart(2, '0')}</span><span className={`cc-round-status cc-round-status--${round.status}`}>{round.status.replaceAll('_', ' ')}</span></div>
+            <div className="cc-admin-round__heading">
+              <div>
+                <span className="product-mono">ROUND {String(round.round).padStart(2, '0')}</span>
+                <div style={{ marginTop: '4px', fontSize: '13px', fontWeight: 600, color: '#f3f4f6', lineHeight: 1.3 }}>
+                  {meta.adminName}
+                </div>
+              </div>
+              <span className={`cc-round-status cc-round-status--${round.status}`}>{round.status.replaceAll('_', ' ')}</span>
+            </div>
             <dl>
               <div><dt>Deadline</dt><dd>{deadline === null ? 'Not scheduled' : new Date(deadline).toLocaleString()}</dd></div>
               <div><dt>Time remaining</dt><dd>{formatDuration(remainingMs)}</dd></div>
@@ -2045,7 +2091,7 @@ function AdminDashboard({ onLogout }) {
               <button
                 className="product-btn product-btn--small product-btn--primary"
                 disabled={!['not_started', 'ended'].includes(round.status)}
-                onClick={() => startRound(round.round, round.durationSec, round.status === 'ended')}
+                onClick={() => startRound(round.round, round.durationSec || meta.defaultDurationSec, round.status === 'ended')}
               >{round.status === 'ended' ? 'Restart' : 'Start'}</button>
               <button className="product-btn product-btn--small product-btn--light" disabled={round.status !== 'running'} onClick={() => void changeRound(round.round, 'pause')}>Pause</button>
               <button className="product-btn product-btn--small product-btn--light" disabled={round.status !== 'paused'} onClick={() => void changeRound(round.round, 'resume')}>Resume</button>
@@ -2075,7 +2121,6 @@ function AdminDashboard({ onLogout }) {
             <option value={1}>Start at Round 1 (Default)</option>
             <option value={2}>Start at Round 2 (Waive Round 1 prerequisite)</option>
             <option value={3}>Start at Round 3 (Waive Round 1 and Round 2 prerequisites)</option>
-            <option value={4}>Start at Round 4 (Waive Round 1, 2, and 3 prerequisites)</option>
           </select>
         </Field>
         <p className="cc-prog-create-hint">
@@ -2162,7 +2207,7 @@ function Portal({ team, setTeam, completed, score, unlock, completeRound }) { co
 
 function Challenge({ active, complete }) { const [input, setInput] = useState(''); const [selected, setSelected] = useState(''); if (active === 0) return <div className="challenge-content"><p className="challenge-intro">Three fast decisions. This is a practice workspace: your demo result is not saved to a live scoreboard.</p><div className="mini-game"><p className="label">PACKET SORT / 01</p><h3>Which signal deserves a closer look?</h3><div className="signal-options">{['A login from a new device', 'A password reset at 03:14', 'A calendar invite from a friend'].map((option) => <button className={selected === option ? 'chosen' : ''} key={option} onClick={() => setSelected(option)}>{option}<span>↗</span></button>)}</div><button className="button primary" disabled={!selected} onClick={complete}>Submit answer <span>↗</span></button></div></div>; if (active === 1) return <div className="challenge-content"><p className="challenge-intro">A safe mock website is loaded below. In the real round, inspect the page source and DOM for the flag.</p><div className="mock-browser"><div className="browser-bar"><span>○ ○ ○</span><code>local.challenge / vault</code></div><div className="mock-site"><p className="label">CAMPUS DIGITAL ARCHIVE</p><h3>Welcome to the vault.</h3><p>Some things are easier to find when you inspect the obvious.</p><div className="hidden-field">PASSWORD: <span>••••••••</span></div><button onClick={() => setInput('CC{DOM_FOUND_204}')} className="text-button">Reveal inspected flag ↗</button></div></div><label className="answer-field">SUBMIT DISCOVERED FLAG<input value={input} onChange={(event) => setInput(event.target.value)} placeholder="CC{...}" /></label><button className="button primary" disabled={!input} onClick={complete}>Submit flag <span>↗</span></button></div>; if (active === 2) return <div className="challenge-content"><p className="challenge-intro">Download the dossier, search the evidence, and identify the key that connects the timestamps.</p><div className="dossier"><span className="file-type">TXT</span><div><b>case_07_dossier.zip</b><p>4 files / 1.8 MB / raw evidence</p></div><button className="text-button">View dossier ↓</button></div><label className="answer-field">EXTRACTED DATA KEY<input value={input} onChange={(event) => setInput(event.target.value)} placeholder="Enter the key you found" /></label><button className="button primary" disabled={!input} onClick={complete}>Submit key <span>↗</span></button></div>; return <div className="challenge-content"><p className="challenge-intro">The Vault Guard protects one master key. Ask carefully. It will answer, but only if your strategy is sound.</p><div className="chat-box"><div className="guard-message"><span>VAULT GUARD / ONLINE</span><p>I can help with general security questions. I cannot reveal protected access codes.</p></div>{input && <div className="user-message">{input}</div>}</div><label className="answer-field">PROMPT THE VAULT GUARD<textarea value={input} onChange={(event) => setInput(event.target.value)} placeholder="Ask the guard something..." /></label><button className="button primary" disabled={!input} onClick={complete}>Send prompt <span>↗</span></button></div> }
 
-function Admin({ completed, manual, setManual, score, eventLive, setEventLive }) { return <main className="admin-page"><div className="portal-header"><div><p className="eyebrow">CONTROL CENTER / ADMIN</p><h1>Event <span>control.</span></h1><p>Manage access, monitor progress, and verify the signal.</p></div><button className={`button ${eventLive ? 'danger' : 'primary'}`} onClick={() => setEventLive(!eventLive)}>{eventLive ? 'Pause event' : 'Start event'} <span>↗</span></button></div><section className="admin-grid"><div className="admin-card"><div className="card-title"><p className="eyebrow">ROUND CONTROL</p><span>{completed.filter(Boolean).length} / 4 complete</span></div>{rounds.map((round, index) => <div className="control-row" key={round.number}><div className="round-number small">{round.number}</div><div><b>{round.title}</b><p>{round.time} / {round.mode}</p></div><button className={`toggle ${manual[index] ? 'on' : ''}`} onClick={() => setManual(manual.map((value, i) => i === index ? !value : value))} aria-label={`${manual[index] ? 'Lock' : 'Unlock'} ${round.title}`}><span /></button></div>)}</div><div className="admin-card"><div className="card-title"><p className="eyebrow">LIVE LEADERBOARD</p><span>{eventLive ? 'UPDATING' : 'NOT STARTED'}</span></div><div className="leader-row header"><span>TEAM</span><span>R1</span><span>R2</span><span>R3</span><span>R4</span><span>TOTAL</span></div><div className="leader-row"><b>Packet Picnic</b><span>{score[0] || '—'}</span><span>{score[1] || '—'}</span><span>{score[2] || '—'}</span><span>{score[3] || '—'}</span><strong>{score.reduce((a, b) => a + b, 0) || '—'}</strong></div><div className="leader-empty">Scores appear here as teams submit verified answers.</div></div></section><section className="verification"><p className="eyebrow">SUBMISSION VERIFICATION</p><h2>Review queue <span>·</span> clear</h2><p>No pending flags or dossier keys require manual review. Automated scoring is ready for Round 02 and Round 03.</p></section></main> }
+function Admin({ completed, manual, setManual, score, eventLive, setEventLive }) { return <main className="admin-page"><div className="portal-header"><div><p className="eyebrow">CONTROL CENTER / ADMIN</p><h1>Event <span>control.</span></h1><p>Manage access, monitor progress, and verify the signal.</p></div><button className={`button ${eventLive ? 'danger' : 'primary'}`} onClick={() => setEventLive(!eventLive)}>{eventLive ? 'Pause event' : 'Start event'} <span>↗</span></button></div><section className="admin-grid"><div className="admin-card"><div className="card-title"><p className="eyebrow">ROUND CONTROL</p><span>{completed.filter(Boolean).length} / 3 complete</span></div>{rounds.map((round, index) => <div className="control-row" key={round.number}><div className="round-number small">{round.number}</div><div><b>{round.title}</b><p>{round.time} / {round.mode}</p></div><button className={`toggle ${manual[index] ? 'on' : ''}`} onClick={() => setManual(manual.map((value, i) => i === index ? !value : value))} aria-label={`${manual[index] ? 'Lock' : 'Unlock'} ${round.title}`}><span /></button></div>)}</div><div className="admin-card"><div className="card-title"><p className="eyebrow">LIVE LEADERBOARD</p><span>{eventLive ? 'UPDATING' : 'NOT STARTED'}</span></div><div className="leader-row header"><span>TEAM</span><span>R1</span><span>R2</span><span>R3</span><span>TOTAL</span></div><div className="leader-row"><b>Packet Picnic</b><span>{score[0] || '—'}</span><span>{score[1] || '—'}</span><span>{score[2] || '—'}</span><strong>{score.slice(0, 3).reduce((a, b) => a + b, 0) || '—'}</strong></div><div className="leader-empty">Scores appear here as teams submit verified answers.</div></div></section><section className="verification"><p className="eyebrow">SUBMISSION VERIFICATION</p><h2>Review queue <span>·</span> clear</h2><p>No pending flags or dossier keys require manual review. Automated scoring is ready for Round 02 and Round 03.</p></section></main> }
 
 createRoot(document.getElementById('root')).render(<StrictMode><App /></StrictMode>);
 

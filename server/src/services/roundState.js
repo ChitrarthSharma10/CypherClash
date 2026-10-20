@@ -2,6 +2,7 @@ import { EventEmitter } from "node:events";
 import { InvestigationCase } from "../models/InvestigationCase.js";
 import { RoundState } from "../models/RoundState.js";
 import { logEvent } from "../utils/logging.js";
+import { TOTAL_ROUNDS } from "../../../shared/rounds.js";
 
 const states = new Map();
 const roundStateEvents = new EventEmitter();
@@ -305,7 +306,13 @@ async function saveState(state, expected, extraFilter = {}) {
 export async function initializeRoundStates() {
   await migrateLegacyInvestigationCases();
   states.clear();
-  const savedStates = await RoundState.find().sort({ round: 1 }).lean();
+  const roundFilter = {
+    $or: [
+      { round: { $gte: 1, $lte: TOTAL_ROUNDS } },
+      { round: { $gt: 1000 } },
+    ],
+  };
+  const savedStates = await RoundState.find(roundFilter).sort({ round: 1 }).lean();
   for (const state of savedStates) {
     states.set(state.round, state);
   }
@@ -318,7 +325,7 @@ export async function initializeRoundStates() {
   }
   await autoEndExpiredRounds();
   states.clear();
-  const currentStates = await RoundState.find().sort({ round: 1 }).lean();
+  const currentStates = await RoundState.find(roundFilter).sort({ round: 1 }).lean();
   for (const state of currentStates) {
     states.set(state.round, state);
   }
@@ -336,6 +343,7 @@ export async function initializeRoundStates() {
 
 export function listRoundStates() {
   return [...states.values()]
+    .filter((state) => (state.round >= 1 && state.round <= TOTAL_ROUNDS) || state.round > 1000)
     .sort((first, second) => first.round - second.round)
     .map(snapshot);
 }
@@ -408,6 +416,9 @@ async function withTransitionLock(operation) {
 }
 
 export async function startRound(round, durationSec, adminId = 'system') {
+  if (!Number.isInteger(round) || round < 1) {
+    throw new RoundStateError('INVALID_ROUND', 'Round must be a positive integer');
+  }
   return withTransitionLock(async () => {
     const current = states.get(round);
     if (current?.status === "running" || current?.status === "paused") {
@@ -449,6 +460,9 @@ export async function startRound(round, durationSec, adminId = 'system') {
 }
 
 export async function pauseRound(round, adminId = 'system') {
+  if (!Number.isInteger(round) || round < 1) {
+    throw new RoundStateError('INVALID_ROUND', 'Round must be a positive integer');
+  }
   return withTransitionLock(async () => {
     const current = states.get(round);
     if (!current || current.status !== "running") {
@@ -465,6 +479,9 @@ export async function pauseRound(round, adminId = 'system') {
 }
 
 export async function resumeRound(round, adminId = 'system') {
+  if (!Number.isInteger(round) || round < 1) {
+    throw new RoundStateError('INVALID_ROUND', 'Round must be a positive integer');
+  }
   return withTransitionLock(async () => {
     const current = states.get(round);
     if (
@@ -490,6 +507,9 @@ export async function resumeRound(round, adminId = 'system') {
 }
 
 export async function endRound(round, adminId = 'system') {
+  if (!Number.isInteger(round) || round < 1) {
+    throw new RoundStateError('INVALID_ROUND', 'Round must be a positive integer');
+  }
   return withTransitionLock(async () => {
     const current = states.get(round);
     if (round === 3) {

@@ -1,7 +1,8 @@
 import { Server as SocketIOServer } from 'socket.io';
 import { config } from './config.js';
-import { registerMazeHandlers } from './games/mazeSocket.js';
-import { registerRunnerHandlers } from './games/runnerSocket.js';
+import { registerMazeHandlers, setupMazeRoundListener } from './games/mazeSocket.js';
+import { registerRunnerHandlers, setupRunnerRoundListener } from './games/runnerSocket.js';
+import { onRoundStateChange } from './services/roundState.js';
 
 export function setupSocketIO(httpServer) {
   const io = new SocketIOServer(httpServer, {
@@ -12,6 +13,13 @@ export function setupSocketIO(httpServer) {
     },
   });
 
+  onRoundStateChange((state) => {
+    io.emit('round:update', state);
+  });
+
+  setupMazeRoundListener(io);
+  setupRunnerRoundListener(io);
+
   io.on('connection', (socket) => {
     registerMazeHandlers(io, socket);
     registerRunnerHandlers(io, socket);
@@ -19,3 +27,4 @@ export function setupSocketIO(httpServer) {
 
   return io;
 }
+

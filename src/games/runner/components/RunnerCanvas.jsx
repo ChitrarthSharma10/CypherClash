@@ -10,10 +10,11 @@ import * as THREE from 'three';
  * - Power-Ups (Magnet with visual attraction field, 2X Star with speed aura, Shield with electric bubble & shatter shockwave, Vault)
  * - 3D Roadblock Hurdles, Overhead Highway Signs, and Delivery Trucks
  */
-export default function RunnerCanvas({ state, playerId, onGoldCollected }) {
+export default function RunnerCanvas({ state, gameState, playerId, onGoldCollected, onAction }) {
   const mountRef = useRef(null);
-  const stateRef = useRef(state);
-  stateRef.current = state;
+  const currentGameState = state || gameState;
+  const stateRef = useRef(currentGameState);
+  stateRef.current = currentGameState;
 
   useEffect(() => {
     const container = mountRef.current;
