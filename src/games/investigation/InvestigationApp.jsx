@@ -940,6 +940,50 @@ export default function InvestigationApp({
         </div>
 
         <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+          {isSplitMode ? (
+            <button
+              onClick={() => {
+                setIsSplitMode(false);
+                try {
+                  sessionStorage.removeItem(`investigation_split_${teamId}`);
+                } catch {}
+              }}
+              className="product-btn"
+              style={{
+                fontSize: '12px',
+                padding: '6px 14px',
+                cursor: 'pointer',
+                background: 'rgba(255, 255, 255, 0.08)',
+                border: '1px solid rgba(255, 255, 255, 0.25)',
+                color: '#e6f4f8',
+                fontWeight: 700,
+              }}
+              title="Switch to single role view"
+            >
+              ⌕ Single Role View
+            </button>
+          ) : (
+            <button
+              onClick={handleJoinSameScreen}
+              className="product-btn product-btn--primary"
+              style={{
+                fontSize: '12px',
+                padding: '6px 14px',
+                fontWeight: 800,
+                cursor: 'pointer',
+                background: '#00c8e9',
+                color: '#050d14',
+                border: 'none',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+              }}
+              title="Display Lead Detective and Forensic Analyst side-by-side on one screen"
+            >
+              ◫ Split-Screen View (Both Roles)
+            </button>
+          )}
+
           <button
             className="product-btn"
             style={{
@@ -1087,7 +1131,7 @@ export default function InvestigationApp({
 
             <div className="investigation-split-container">
               {/* Left Column: Lead Detective */}
-              <div className={mobileTab === 'detective' ? '' : 'is-hidden-mobile'}>
+              <div className={mobileTab === 'detective' ? '' : 'is-hidden-mobile'} style={{ display: 'flex', flexDirection: 'column', minHeight: 0, height: '100%' }}>
                 <InvestigationStationPanel
                   actingRole="detective"
                   teamId={teamId}
@@ -1103,7 +1147,7 @@ export default function InvestigationApp({
               </div>
 
               {/* Right Column: Forensic Analyst */}
-              <div className={mobileTab === 'analyst' ? '' : 'is-hidden-mobile'}>
+              <div className={mobileTab === 'analyst' ? '' : 'is-hidden-mobile'} style={{ display: 'flex', flexDirection: 'column', minHeight: 0, height: '100%' }}>
                 <InvestigationStationPanel
                   actingRole="analyst"
                   teamId={teamId}

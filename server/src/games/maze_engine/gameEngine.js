@@ -473,7 +473,7 @@ export class MazeGameEngine {
       return;
     }
 
-    const hunterSpeed = GAME_CONFIG.SPEED * (GAME_CONFIG.HUNTER_SPEED_MULTIPLIER || 1.4);
+    const hunterSpeed = GAME_CONFIG.SPEED * (GAME_CONFIG.HUNTER_SPEED_MULTIPLIER ?? 0.85);
     const step = hunterSpeed * dt;
 
     const hCol = Math.floor(this.hunter.x);

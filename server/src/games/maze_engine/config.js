@@ -8,7 +8,7 @@ export const GAME_CONFIG = {
   GAME_ID: 'treasure-hunt',
   TICK_RATE_HZ: 20,                // 20 updates per second (50ms interval)
   SPEED: 2.2,                      // Deliberate explorer speed: 132+ step 4-door maze lasts 3-4 min
-  HUNTER_SPEED_MULTIPLIER: 1.4,    // Hunter speed = 1.4x the player's normal speed
+  HUNTER_SPEED_MULTIPLIER: 0.85,   // Hunter speed = 0.85x player speed so pursuit is thrilling but maze is doable
   HUNTER_START_DISTANCE: 3,        // Hunter starts 3 maze cells behind the player, activating chase immediately once player moves into corridor
   CHARACTER_RADIUS: 0.35,          // Collision radius (cell is 1.0 x 1.0) ensures clean buffer to walls
   COLLISION_COOLDOWN_MS: 800,      // Minimum time between collision penalties

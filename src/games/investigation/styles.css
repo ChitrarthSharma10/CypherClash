@@ -756,11 +756,8 @@
     height: auto;
     overflow: visible;
   }
-  .investigation-split-panel {
-    height: auto;
-    min-height: 600px;
-  }
-  .investigation-split-panel.is-hidden-mobile {
-    display: none;
+  .investigation-split-panel.is-hidden-mobile,
+  .is-hidden-mobile {
+    display: none !important;
   }
 }
