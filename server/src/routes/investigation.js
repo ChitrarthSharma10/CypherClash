@@ -1,4 +1,4 @@
-﻿import { randomBytes } from 'node:crypto';
+import { randomBytes } from 'node:crypto';
 import express from 'express';
 import { z } from 'zod';
 import { requireTeam } from '../middleware/auth.js';
@@ -134,12 +134,18 @@ router.get('/state', requireTeam, async (req, res, next) => {
       round: 2,
     }).lean();
     const hintsUsed = Math.max(session.progress?.hintsUsed || 0, entitlement?.hintsUsed || 0);
-    const revealedHint = session.progress?.revealedHint
-      || (entitlement?.hintDetails ? {
-        stage: entitlement.hintDetails.stage,
-        text: STAGE_HINTS[entitlement.hintDetails.stage],
-        unlockedAt: entitlement.hintDetails.unlockedAt,
-      } : null);
+    const rawRevealed = session.progress?.revealedHint;
+    const revealedHint = rawRevealed
+      ? {
+          stage: rawRevealed.stage,
+          text: STAGE_HINTS[rawRevealed.stage] || rawRevealed.text,
+          unlockedAt: rawRevealed.unlockedAt,
+        }
+      : (entitlement?.hintDetails ? {
+          stage: entitlement.hintDetails.stage,
+          text: STAGE_HINTS[entitlement.hintDetails.stage],
+          unlockedAt: entitlement.hintDetails.unlockedAt,
+        } : null);
 
     return res.json({
       ok: true,
@@ -627,12 +633,18 @@ router.post('/hint', requireTeam, validateBody(hintSchema), async (req, res, nex
     // 1. Check if either GameSession or HintEntitlement already consumed the single entitlement
     const existingEntitlement = await HintEntitlement.findOne({ teamId: req.team.teamId, round: 2 }).lean();
     if ((existingEntitlement && existingEntitlement.hintsUsed >= 1) || (session.progress?.hintsUsed >= 1)) {
-      const existingRevealed = session.progress?.revealedHint
-        || (existingEntitlement?.hintDetails ? {
-          stage: existingEntitlement.hintDetails.stage,
-          text: STAGE_HINTS[existingEntitlement.hintDetails.stage],
-          unlockedAt: existingEntitlement.hintDetails.unlockedAt,
-        } : null);
+      const rawExisting = session.progress?.revealedHint;
+      const existingRevealed = rawExisting
+        ? {
+            stage: rawExisting.stage,
+            text: STAGE_HINTS[rawExisting.stage] || rawExisting.text,
+            unlockedAt: rawExisting.unlockedAt,
+          }
+        : (existingEntitlement?.hintDetails ? {
+            stage: existingEntitlement.hintDetails.stage,
+            text: STAGE_HINTS[existingEntitlement.hintDetails.stage],
+            unlockedAt: existingEntitlement.hintDetails.unlockedAt,
+          } : null);
       return res.status(409).json({
         ok: false,
         error: 'Hint entitlement already consumed for Round 2. Only one hint is permitted per round.',
