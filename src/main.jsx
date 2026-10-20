@@ -726,16 +726,29 @@ function CyberRunnerScreen({ onBack, onLogout }) {
 }
 
 function InvestigationScreen({ onBack, onLogout }) {
-  const { data: teamData, error: pollingError } = useVisiblePolling(() => apiRequest('/api/team/me'));
-  useEffect(() => {
-    if (pollingError === 'Authentication required') onLogout();
-  }, [pollingError, onLogout]);
+  const [teamLookup, setTeamLookup] = useState({ loading: true, data: null, error: '' });
 
-  if (!teamData && !pollingError) return <LoadingState label="Loading Cyber Investigation…" />;
-  if (!teamData) return <ErrorState message={pollingError} onRetry={() => window.location.reload()} />;
+  useEffect(() => {
+    let active = true;
+    apiRequest('/api/team/me')
+      .then((data) => {
+        if (active) setTeamLookup({ loading: false, data, error: '' });
+      })
+      .catch((error) => {
+        if (active) setTeamLookup({ loading: false, data: null, error: error.message });
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  if (teamLookup.loading) return <LoadingState label="Loading Cyber Investigation…" />;
+  if (!teamLookup.data && teamLookup.error !== 'Authentication required') {
+    return <ErrorState message={teamLookup.error} onRetry={() => window.location.reload()} />;
+  }
 
   return <InvestigationApp
-    teamId={teamData.teamId}
+    teamId={teamLookup.data?.teamId || ''}
     onBack={onBack}
     onLogout={onLogout}
   />;

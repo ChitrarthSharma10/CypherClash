@@ -12,6 +12,7 @@ import {
   endRound,
   initializeRoundStates,
   pauseRound,
+  ROUND3_DURATION_SEC,
   startRound,
 } from "../src/services/roundState.js";
 import { hashPassword } from "../src/utils/passwords.js";
@@ -58,8 +59,8 @@ async function joinDetective(cookie) {
   return post("/api/investigation/join", {}, cookie);
 }
 
-async function joinAnalyst(invite) {
-  return post("/api/investigation/join/analyst", { invite });
+async function joinAnalyst(invite, cookie) {
+  return post("/api/investigation/join/analyst", { invite }, cookie);
 }
 
 async function getCase() {
@@ -159,13 +160,17 @@ test("detective and analyst roles are claimed once with the existing invite cont
     headers: {
       origin: "http://localhost:5177",
       "access-control-request-method": "POST",
-      "access-control-request-headers": "content-type",
+      "access-control-request-headers": "content-type, x-investigation-role",
     },
   });
   assert.equal(prototypePreflight.status, 204);
   assert.equal(
     prototypePreflight.headers.get("access-control-allow-origin"),
     "http://localhost:5177",
+  );
+  assert.match(
+    prototypePreflight.headers.get("access-control-allow-headers") || "",
+    /x-investigation-role/i,
   );
 
   const detectiveCookie = await login();
@@ -184,7 +189,7 @@ test("detective and analyst roles are claimed once with the existing invite cont
   assert.equal(joined.state.role, "detective");
 
   const analystClaims = await Promise.all([
-    joinAnalyst(joined.analystInvite),
+    joinAnalyst(` ${joined.analystInvite} `, detectiveCookie),
     joinAnalyst(joined.analystInvite),
   ]);
   assert.deepEqual(
@@ -197,18 +202,33 @@ test("detective and analyst roles are claimed once with the existing invite cont
   const analystCookie = analystResponse.headers
     .get("set-cookie")
     .split(";", 1)[0];
+  assert.match(analystCookie, /^cc_analyst\.sid=/);
+  assert.match(detectiveCookie, /^cc_team\.sid=/);
   const claimedCase = await getCase();
   assert.ok(claimedCase.detectiveSessionHash);
   assert.ok(claimedCase.analystSessionHash);
 
   const [detectiveState, analystState] = await Promise.all([
     request("/api/investigation/state", {
-      headers: { cookie: detectiveCookie },
+      headers: {
+        cookie: `${detectiveCookie}; ${analystCookie}`,
+        "x-investigation-role": "detective",
+      },
     }),
-    request("/api/investigation/state", { headers: { cookie: analystCookie } }),
+    request("/api/investigation/state", {
+      headers: {
+        cookie: `${detectiveCookie}; ${analystCookie}`,
+        "x-investigation-role": "analyst",
+      },
+    }),
   ]);
-  assert.equal((await detectiveState.json()).state.role, "detective");
-  assert.equal((await analystState.json()).state.role, "analyst");
+  const detectivePayload = await detectiveState.json();
+  const analystPayload = await analystState.json();
+  assert.equal(detectivePayload.state.role, "detective");
+  assert.equal(analystPayload.state.role, "analyst");
+  assert.equal(detectivePayload.deadline, analystPayload.deadline);
+  assert.ok(Date.parse(detectivePayload.serverNow));
+  assert.ok(Date.parse(analystPayload.serverNow));
   const publicState = await request("/api/investigation/state", {
     headers: { cookie: detectiveCookie },
   });
@@ -217,6 +237,51 @@ test("detective and analyst roles are claimed once with the existing invite cont
     false,
   );
   assert.equal((await joinAnalyst(joined.analystInvite)).status, 401);
+});
+
+test("Round 3 starts with a fixed 45-minute duration", async () => {
+  const started = await startRound(3, 3600, "investigation-duration-test");
+  assert.equal(started.durationSec, ROUND3_DURATION_SEC);
+  assert.equal(started.durationSec, 2700);
+  assert.equal(
+    started.deadline.getTime() - started.startedAt.getTime(),
+    2700 * 1000,
+  );
+});
+
+test("the detective can renew an expired invitation without replacing its session", async () => {
+  await startRound(3, 300, "investigation-branch-test");
+  const detectiveCookie = await login();
+  const joined = await (await joinDetective(detectiveCookie)).json();
+  await RoundState.updateOne(
+    { round: 3, "investigations.teamId": teamId },
+    {
+      $set: {
+        "investigations.$.inviteExpiresAt": new Date(Date.now() - 1000),
+      },
+    },
+  );
+
+  const renewed = await post(
+    "/api/investigation/invitation/renew",
+    {},
+    detectiveCookie,
+  );
+  assert.equal(renewed.status, 200);
+  assert.equal(renewed.headers.get("set-cookie"), null);
+  const renewal = await renewed.json();
+  assert.notEqual(renewal.analystInvite, joined.analystInvite);
+  assert.ok(new Date(renewal.inviteExpiresAt).getTime() > Date.now());
+  assert.equal((await joinAnalyst(joined.analystInvite)).status, 401);
+
+  const analyst = await joinAnalyst(renewal.analystInvite);
+  assert.equal(analyst.status, 201);
+  assert.equal(
+    (await request("/api/investigation/state", {
+      headers: { cookie: detectiveCookie },
+    })).status,
+    200,
+  );
 });
 
 test("evidence 2 and 3 can be collected by either role while evidence 1 is detective-only", async () => {

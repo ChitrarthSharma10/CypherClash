@@ -4,6 +4,7 @@ import helmet from 'helmet';
 import { config } from './config.js';
 import {
   adminSessionMiddleware,
+  investigationSessionMiddleware,
   leaderboardSessionMiddleware,
   teamSessionMiddleware,
 } from './sessionMiddleware.js';
@@ -36,7 +37,7 @@ export function createApp() {
   app.use('/api/games', noStore, teamSessionMiddleware, gameRoutes);
   app.use('/api/rounds/2/investigation', noStore, teamSessionMiddleware, investigationRoutes);
   app.use('/api/rounds/3', noStore, teamSessionMiddleware, round3Routes);
-  app.use('/api/investigation', noStore, teamSessionMiddleware, round3InvestigationRoutes);
+  app.use('/api/investigation', noStore, investigationSessionMiddleware, round3InvestigationRoutes);
   app.use((req, res) => res.status(404).json({ error: 'Not found' }));
   app.use((error, req, res, next) => {
     if (res.headersSent) return next(error);

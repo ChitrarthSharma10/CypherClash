@@ -22,6 +22,9 @@ const clueSchema = z.object({ key: z.enum(["ev1", "ev2", "ev3"]) }).strict();
 const decryptSchema = z
   .object({ token: z.string().trim().min(1).max(32) })
   .strict();
+const analystInviteSchema = z
+  .object({ invite: z.string().trim().min(32).max(128) })
+  .strict();
 const accusationSchema = z
   .object({
     suspect: z.enum(["Mara Chen", "Idris Khan", "Sofia Laurent", "Evan Walsh"]),
@@ -158,7 +161,7 @@ router.post(
 // Analyst claims the invite on their own device; this does not invalidate the detective's team session.
 router.post(
   "/join/analyst",
-  validateBody(z.object({ invite: z.string().min(32).max(128) }).strict()),
+  validateBody(analystInviteSchema),
   async (req, res, next) => {
     try {
       const round = await getRound3State();
@@ -242,6 +245,61 @@ router.post(
           .status(409)
           .json({ error: "The Forensic Analyst station is already claimed" });
       return res.status(201).json({ state: publicState(doc, "analyst") });
+    } catch (error) {
+      return next(error);
+    }
+  },
+);
+
+router.post(
+  "/invitation/renew",
+  requireInvestigationParticipant,
+  requireRunningInvestigation,
+  validateBody(emptySchema),
+  async (req, res, next) => {
+    try {
+      if (req.investigationRole !== "detective") {
+        return res
+          .status(403)
+          .json({ error: "Only the Lead Detective can renew the invitation" });
+      }
+      const now = new Date();
+      const invite = randomBytes(32).toString("base64url");
+      const inviteExpiresAt = new Date(now.getTime() + 10 * 60 * 1000);
+      const doc = await updateRound3Investigation(
+        req.investigation.attemptNo,
+        {
+          teamId: req.team.teamId,
+          attemptNo: req.investigation.attemptNo,
+          detectiveSessionHash: hashSession(req.sessionID),
+          analystJoinedAt: null,
+          finalResult: { $exists: false },
+        },
+        {
+          $set: {
+            "investigations.$.inviteHash": hash(invite),
+            "investigations.$.inviteExpiresAt": inviteExpiresAt,
+          },
+          $push: {
+            "investigations.$.activity": {
+              type: "invitation_renewed",
+              message: "Lead Detective renewed the analyst invitation",
+              role: "detective",
+              at: now,
+            },
+          },
+        },
+      );
+      if (!doc) {
+        return res
+          .status(409)
+          .json({ error: "The analyst station is already claimed or the case is locked" });
+      }
+      return res.json({
+        state: publicState(doc, "detective"),
+        analystInvite: invite,
+        inviteExpiresAt,
+      });
     } catch (error) {
       return next(error);
     }

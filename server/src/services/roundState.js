@@ -6,6 +6,7 @@ import { TOTAL_ROUNDS } from "../../../shared/rounds.js";
 
 const states = new Map();
 const roundStateEvents = new EventEmitter();
+export const ROUND3_DURATION_SEC = 45 * 60;
 let transitionLock = Promise.resolve();
 let monitor;
 
@@ -420,6 +421,7 @@ export async function startRound(round, durationSec, adminId = 'system') {
     throw new RoundStateError('INVALID_ROUND', 'Round must be a positive integer');
   }
   return withTransitionLock(async () => {
+    const effectiveDurationSec = round === 3 ? ROUND3_DURATION_SEC : durationSec;
     const current = states.get(round);
     if (current?.status === "running" || current?.status === "paused") {
       throw new RoundStateError(
@@ -448,8 +450,8 @@ export async function startRound(round, durationSec, adminId = 'system') {
             : (current?.attemptNo ?? 1),
         status: "running",
         startedAt,
-        deadline: new Date(startedAt.getTime() + durationSec * 1000),
-        durationSec,
+        deadline: new Date(startedAt.getTime() + effectiveDurationSec * 1000),
+        durationSec: effectiveDurationSec,
         pausedAt: undefined,
         endedAt: undefined,
       },

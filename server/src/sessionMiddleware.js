@@ -4,6 +4,7 @@ import { sessionStore } from './sessionStore.js';
 
 export const ADMIN_COOKIE_NAME = 'cc_admin.sid';
 export const TEAM_COOKIE_NAME = 'cc_team.sid';
+export const ANALYST_COOKIE_NAME = 'cc_analyst.sid';
 
 const cookieOptions = {
   httpOnly: true,
@@ -31,6 +32,34 @@ export const teamSessionMiddleware = session({
   name: TEAM_COOKIE_NAME,
   cookie: { ...cookieOptions },
 });
+
+export const analystSessionMiddleware = session({
+  ...baseSessionConfig,
+  name: ANALYST_COOKIE_NAME,
+  cookie: { ...cookieOptions },
+});
+
+function hasCookie(req, name) {
+  return (req.headers.cookie || '')
+    .split(';')
+    .some((cookie) => cookie.trim().startsWith(`${name}=`));
+}
+
+export function investigationSessionMiddleware(req, res, next) {
+  const requestedRole = req.get('x-investigation-role');
+  const hasAnalystCookie = hasCookie(req, ANALYST_COOKIE_NAME);
+  const hasTeamCookie = hasCookie(req, TEAM_COOKIE_NAME);
+  const useAnalystSession =
+    req.path === '/join/analyst' ||
+    requestedRole === 'analyst' ||
+    (hasAnalystCookie && !hasTeamCookie);
+
+  return (useAnalystSession ? analystSessionMiddleware : teamSessionMiddleware)(
+    req,
+    res,
+    next,
+  );
+}
 
 // Backward-compatibility alias
 export const sessionMiddleware = teamSessionMiddleware;

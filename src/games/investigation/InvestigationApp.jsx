@@ -1,7 +1,19 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+﻿import { useState, useEffect, useRef, useCallback } from 'react';
 import './styles.css';
 import ConstellationCanvas from './components/ConstellationCanvas.jsx';
 import InvestigationGuidelinesModal from './components/InvestigationGuidelinesModal.jsx';
+
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
+
+function investigationRoleHeaders(teamId, role) {
+  let participantRole = role;
+  if (!participantRole) {
+    try {
+      participantRole = sessionStorage.getItem(`investigation_role_${teamId}`);
+    } catch {}
+  }
+  return participantRole ? { 'X-Investigation-Role': participantRole } : {};
+}
 
 const EVIDENCE_ITEMS = {
   ev1: {
@@ -78,14 +90,28 @@ export default function InvestigationApp({
   onBack,
   onLogout,
 }) {
-  const [role, setRole] = useState(null); // 'detective' | 'analyst' | null
+  const [role, setRole] = useState(() => {
+    try {
+      return sessionStorage.getItem(`investigation_role_${teamId}`) || null;
+    } catch {
+      return null;
+    }
+  }); // 'detective' | 'analyst' | null
   const [caseState, setCaseState] = useState(null);
   const [deadline, setDeadline] = useState(null);
+  const serverOffsetRef = useRef(0);
   const [roundStatus, setRoundStatus] = useState('running');
   const [activeTab, setActiveTab] = useState('overview'); // 'overview' | 'evidence' | 'forensics' | 'suspects' | 'accusation'
   const [analystInviteCode, setAnalystInviteCode] = useState(() => {
     try {
       return sessionStorage.getItem(`analyst_invite_${teamId}`) || '';
+    } catch {
+      return '';
+    }
+  });
+  const [analystInviteExpiresAt, setAnalystInviteExpiresAt] = useState(() => {
+    try {
+      return sessionStorage.getItem(`analyst_invite_expires_${teamId}`) || '';
     } catch {
       return '';
     }
@@ -114,48 +140,76 @@ export default function InvestigationApp({
   // Fetch Case State Helper
   const fetchState = useCallback(async () => {
     try {
-      const res = await fetch('/api/investigation/state', { credentials: 'include' });
-      if (res.status === 401 || res.status === 403) {
-        // Not joined yet
+      const res = await fetch(`${API_URL}/api/investigation/state`, {
+        credentials: 'include',
+        headers: investigationRoleHeaders(teamId, role),
+      });
+      if (res.status === 401) {
+        setRole(null);
+        setCaseState(null);
+        try {
+          sessionStorage.removeItem(`investigation_role_${teamId}`);
+        } catch {}
         setLoading(false);
         return null;
       }
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        if (data.code === 'ROUND_NOT_STARTED' || data.code === 'ROUND_NOT_RUNNING') {
-          setErrorNotice(data.error || 'Round 3 is not currently active');
-        }
+        setErrorNotice(data.error || `Round 3 state request failed (${res.status})`);
         setLoading(false);
         return null;
       }
       const data = await res.json();
       setCaseState(data.state);
       setRole(data.state?.role || null);
-      if (data.deadline) setDeadline(new Date(data.deadline).getTime());
+      if (data.state?.role) {
+        try {
+          sessionStorage.setItem(`investigation_role_${teamId}`, data.state.role);
+        } catch {}
+      }
+      if (data.state?.roles?.analyst) {
+        setAnalystInviteCode('');
+        setAnalystInviteExpiresAt('');
+        try {
+          sessionStorage.removeItem(`analyst_invite_${teamId}`);
+          sessionStorage.removeItem(`analyst_invite_expires_${teamId}`);
+        } catch {}
+      }
+      if (data.deadline) {
+        const deadlineMs = Date.parse(data.deadline);
+        const serverNowMs = Date.parse(data.serverNow);
+        if (Number.isFinite(serverNowMs)) {
+          serverOffsetRef.current = serverNowMs - Date.now();
+        }
+        setDeadline((current) => current === deadlineMs ? current : deadlineMs);
+      }
       if (data.roundStatus) setRoundStatus(data.roundStatus);
+      setErrorNotice(null);
       setLoading(false);
       return data;
     } catch {
+      setErrorNotice(`Unable to reach the Round 3 API at ${API_URL}`);
       setLoading(false);
       return null;
     }
-  }, []);
+  }, [role, teamId]);
 
   // Initial Load & Continuous Polling
   useEffect(() => {
     fetchState();
+    if (!role) return undefined;
     const interval = setInterval(fetchState, 1800);
     return () => clearInterval(interval);
-  }, [fetchState]);
+  }, [fetchState, role]);
 
   // Case Timer Loop
   useEffect(() => {
     if (!deadline) {
-      setRemainingTime('45:00');
+      setRemainingTime('—:—');
       return;
     }
     const tick = () => {
-      const now = Date.now();
+      const now = Date.now() + serverOffsetRef.current;
       const diff = Math.max(0, deadline - now);
       const totalSec = Math.floor(diff / 1000);
       const mins = String(Math.floor(totalSec / 60)).padStart(2, '0');
@@ -171,7 +225,7 @@ export default function InvestigationApp({
   const handleJoinDetective = async () => {
     try {
       setLoading(true);
-      const res = await fetch('/api/investigation/join', {
+      const res = await fetch(`${API_URL}/api/investigation/join`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -181,10 +235,15 @@ export default function InvestigationApp({
       if (!res.ok) throw new Error(data.error || 'Failed to claim Lead Detective');
       setCaseState(data.state);
       setRole('detective');
+      try {
+        sessionStorage.setItem(`investigation_role_${teamId}`, 'detective');
+      } catch {}
       if (data.analystInvite) {
         setAnalystInviteCode(data.analystInvite);
+        setAnalystInviteExpiresAt(data.inviteExpiresAt || '');
         try {
           sessionStorage.setItem(`analyst_invite_${teamId}`, data.analystInvite);
+          sessionStorage.setItem(`analyst_invite_expires_${teamId}`, data.inviteExpiresAt || '');
         } catch {}
       }
       showToast('Lead Detective station claimed! Share the invite with your analyst.', 'success');
@@ -205,7 +264,7 @@ export default function InvestigationApp({
     }
     try {
       setLoading(true);
-      const res = await fetch('/api/investigation/join/analyst', {
+      const res = await fetch(`${API_URL}/api/investigation/join/analyst`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -215,6 +274,9 @@ export default function InvestigationApp({
       if (!res.ok) throw new Error(data.error || 'Invalid or expired invitation');
       setCaseState(data.state);
       setRole('analyst');
+      try {
+        sessionStorage.setItem(`investigation_role_${teamId}`, 'analyst');
+      } catch {}
       showToast('Connected as Forensic Analyst! Case workspace unlocked.', 'success');
       await fetchState();
     } catch (err) {
@@ -224,12 +286,38 @@ export default function InvestigationApp({
     }
   };
 
+  const handleRenewInvite = async () => {
+    try {
+      const res = await fetch(`${API_URL}/api/investigation/invitation/renew`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...investigationRoleHeaders(teamId, 'detective'),
+        },
+        credentials: 'include',
+        body: JSON.stringify({}),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to renew analyst invitation');
+      setCaseState(data.state);
+      setAnalystInviteCode(data.analystInvite);
+      setAnalystInviteExpiresAt(data.inviteExpiresAt || '');
+      try {
+        sessionStorage.setItem(`analyst_invite_${teamId}`, data.analystInvite);
+        sessionStorage.setItem(`analyst_invite_expires_${teamId}`, data.inviteExpiresAt || '');
+      } catch {}
+      showToast('Analyst invitation renewed.', 'success');
+    } catch (err) {
+      showToast(err.message, 'error');
+    }
+  };
+
   // Add Evidence Clue
   const handleAddEvidence = async (key) => {
     try {
-      const res = await fetch('/api/investigation/evidence', {
+      const res = await fetch(`${API_URL}/api/investigation/evidence`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...investigationRoleHeaders(teamId, role) },
         credentials: 'include',
         body: JSON.stringify({ key }),
       });
@@ -248,9 +336,9 @@ export default function InvestigationApp({
     const token = decryptToken.trim();
     if (!token) return;
     try {
-      const res = await fetch('/api/investigation/decrypt', {
+      const res = await fetch(`${API_URL}/api/investigation/decrypt`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...investigationRoleHeaders(teamId, role) },
         credentials: 'include',
         body: JSON.stringify({ token }),
       });
@@ -272,9 +360,9 @@ export default function InvestigationApp({
       return;
     }
     try {
-      const res = await fetch('/api/investigation/accusation', {
+      const res = await fetch(`${API_URL}/api/investigation/accusation`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...investigationRoleHeaders(teamId, role) },
         credentials: 'include',
         body: JSON.stringify({
           suspect: accusedSuspect,
@@ -294,9 +382,9 @@ export default function InvestigationApp({
   // Approve Accusation
   const handleApproveAccusation = async () => {
     try {
-      const res = await fetch('/api/investigation/accusation/approve', {
+      const res = await fetch(`${API_URL}/api/investigation/accusation/approve`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...investigationRoleHeaders(teamId, role) },
         credentials: 'include',
         body: JSON.stringify({}),
       });
@@ -345,7 +433,7 @@ export default function InvestigationApp({
               color: '#00c8e9',
               fontWeight: 700,
             }}>
-              TEAM: {teamId}
+              TEAM: {caseState?.teamId || teamId || 'INVITATION REQUIRED'}
             </span>
             {role && (
               <span style={{
@@ -499,13 +587,14 @@ export default function InvestigationApp({
             </div>
 
             {/* Detective Analyst Share Bar */}
-            {analystInviteCode && role === 'detective' && (
+            {analystInviteCode && role === 'detective' && !caseState.roles?.analyst && (
               <div style={{ background: 'rgba(0, 200, 233, 0.08)', border: '1px solid #00c8e9', padding: '14px 20px', borderRadius: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div>
                   <strong style={{ color: '#00c8e9', fontSize: '13px' }}>Share with Forensic Analyst:</strong>
                   <span style={{ marginLeft: '10px', fontFamily: 'monospace', fontSize: '13px', background: '#050d14', padding: '4px 10px', borderRadius: '4px', border: '1px solid rgba(0,200,233,0.3)', color: '#fff' }}>
                     {analystInviteCode}
                   </span>
+                  {analystInviteExpiresAt && <small style={{ display: 'block', marginTop: '6px', color: '#9fb8c2' }}>Expires {new Date(analystInviteExpiresAt).toLocaleTimeString()}</small>}
                 </div>
                 <button
                   className="product-btn product-btn--small"
@@ -516,6 +605,13 @@ export default function InvestigationApp({
                   style={{ background: '#00c8e9', color: '#000', border: 0, fontWeight: 700 }}
                 >
                   Copy Invite
+                </button>
+                <button
+                  className="product-btn product-btn--small"
+                  onClick={handleRenewInvite}
+                  style={{ background: 'transparent', color: '#00c8e9', border: '1px solid #00c8e9', fontWeight: 700 }}
+                >
+                  Renew Invite
                 </button>
               </div>
             )}
@@ -867,3 +963,4 @@ export default function InvestigationApp({
     </div>
   );
 }
+
