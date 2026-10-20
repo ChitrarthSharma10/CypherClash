@@ -3,6 +3,8 @@
  * Concept: "Operation Shadow Beacon - Campus Relay Incident"
  */
 
+import { config } from '../config.js';
+
 export const TOTAL_STAGES = 4;
 
 export const INVESTIGATION_CLUES = Object.freeze([
@@ -10,45 +12,49 @@ export const INVESTIGATION_CLUES = Object.freeze([
     stage: 1,
     title: 'Incident Alert & Origin Trace',
     shortDesc: 'Trace suspicious origin gateway node',
-    prompt: 'Inspect the campus gateway alert log and HTTP inspection headers. Identify the suspicious origin gateway node.',
+    prompt: 'The alarm speaks of damage, but damage is only the end of a story. Before the signal reached its destination, it crossed a threshold that left no obvious mark in the report. Follow the incident back to its earliest point of arrival. The origin remembers what the visible account leaves unsaid.',
     resource: '/investigation/resources/incident-log',
     expectedAnswer: 'ALPHA-RELAY-77',
     normalize: (val) => String(val || '').trim().toUpperCase(),
   },
   {
     stage: 2,
-    title: 'Advisory Topology & Cluster Recon',
-    shortDesc: 'Extract concealed service cluster ID',
-    prompt: 'Inspect the security advisory topology diagram image attributes and DOM metadata. Find the backup authentication service cluster ID.',
+    title: 'Forensic Evidence Correlation',
+    shortDesc: 'Correlate timeline records and recover the displaced frame identifier',
+    prompt: 'Three records describe the same moment, yet their stories refuse to agree. One remembers a movement, another records an arrival, and a third insists the sequence was impossible. Find the account that reconciles the contradiction. The identifier you seek is buried among the ordinary details of that report.',
     resource: '/investigation/resources/advisory',
-    expectedAnswer: 'SEC-VAULT-909',
+    expectedAnswer: 'FRAME-SHIFT-246',
     normalize: (val) => String(val || '').trim().toUpperCase(),
   },
   {
     stage: 3,
-    title: 'Diagnostic Terminal Override',
-    shortDesc: 'Decode hidden override authorization key',
-    prompt: 'Inspect the internal diagnostics terminal DOM to reveal and decode the hidden override authorization token.',
+    title: 'Historical Configuration Investigation',
+    shortDesc: 'Inspect repository commit history to recover the challenge token',
+    prompt: 'The latest record appears innocent. Nothing remains where the evidence should be, and the present version offers no confession. Yet every change leaves a witness behind. Reconstruct the brief moment in which the missing value existed, and recover the key that the final record no longer carries.',
     resource: '/investigation/resources/terminal',
-    expectedAnswer: 'SHADOW-KEY-418',
-    normalize: (val) => String(val || '').trim().toUpperCase(),
+    expectedAnswer: 'hellowor!d',
+    normalize: (val) => String(val || '').trim(),
   },
   {
     stage: 4,
-    title: 'Signal Vault Neutralization Flag',
-    shortDesc: 'Extract the final flag CC{...}',
-    prompt: 'Unseal the signal vault and inspect the core confirmation receipt to retrieve the final incident neutralization flag CC{...}.',
+    title: 'Core Signal Vault: Signal Reconstruction',
+    shortDesc: 'Reconstruct the authentic signal sequence to name the protected word',
+    prompt: 'The vault has kept the truth in fragments, not in a single hiding place. Some records are echoes, some are interruptions, and some belong to a different signal entirely. Restore the sequence that survived the disturbance. When the fragments agree, the word they protect will be yours to name.',
     resource: '/investigation/resources/vault',
-    expectedAnswer: 'CC{DOM_SLEUTH_N3TW0RK_941}',
-    normalize: (val) => String(val || '').trim(),
+    expectedAnswer: 'UNMASKED',
+    normalize: (val) => {
+      const s = String(val || '').trim().toUpperCase();
+      const match = s.match(/^CC\{(.+)\}$/);
+      return match ? match[1].trim() : s;
+    },
   },
 ]);
 
 export const STAGE_HINTS = Object.freeze({
-  1: 'Focus on the HTML comments above the alert table. Web frameworks frequently leave routing headers like X-Origin-Node in debug comments.',
-  2: 'Examine the <img> element for the topology diagram. Modern web apps attach metadata in accessibility alt descriptions and custom data-* attributes.',
-  3: 'Inspect the hidden form inputs inside the diagnostic console. Look for an encoded base64 string and decode it with atob() in DevTools Console.',
-  4: 'Inspect the main container (#vault-core) on the unsealed vault page. Look for custom data attributes such as data-incident-flag containing the flag.',
+  1: 'Examine the internal structure and source metadata of the alert portal. Web applications often record origin routing headers where raw network transactions are logged.',
+  2: 'Cross-reference the contradictory timestamps across the door sensors and surveillance records. The specialist crime lab report isolates the exact frame marker injected during the video freeze.',
+  3: 'Examine the historical commit ledger of the repository. Changes made in earlier revisions often preserve diagnostic credentials that were later expunged from the active tree.',
+  4: 'Filter out decoy and noise artifacts on the console by matching their carrier stream and parity status. Align the surviving authentic fragments in ascending sequence order.',
 });
 
 export const RESOURCE_CONTENTS = Object.freeze({
@@ -76,86 +82,162 @@ export const RESOURCE_CONTENTS = Object.freeze({
         </tbody>
       </table>
       <div style="margin-top: 20px; padding: 14px; background: rgba(0, 200, 233, 0.05); border-left: 3px solid var(--club); font-size: 13px; color: #a3a3ad;">
-        Tip for analysts: Inbound HTTP route inspection headers are cataloged in system comments. Open DevTools (Ctrl+Shift+I / Inspect) and inspect the table elements and headers.
+        Operational Notice: Internal gateway route headers and ingress node metadata are archived within the incident report source records.
       </div>
     `,
   }),
   'advisory': Object.freeze({
     stage: 2,
-    brand: 'CAMPUS SEC-OPS // SECURITY ADVISORY',
-    title: 'Advisory: Gateway Node Relays & Core Topology',
+    brand: 'CAMPUS SEC-OPS // FORENSIC EVIDENCE BOARD',
+    title: 'Forensic Evidence Correlation',
     html: `
       <p class="product-eyebrow">CAMPUS IT SECURITY ADVISORY // SEC-ADVISORY-88</p>
-      <h1>Advisory: Gateway Node Relays & Core Topology</h1>
-      <p style="color: #a3a3ad; line-height: 1.6;">
-        Following unauthorized traffic through relay nodes, network architecture audits identified backup authentication clusters
-        concealed within legacy service diagrams. Review the schematic metadata below.
-      </p>
-      <div class="mock-advisory-schematic">
-        <img
-          src="/club-logo.jpg"
-          alt="Topology Diagram - Backup authentication endpoint concealed in service cluster: SEC-VAULT-909"
-          data-cluster-id="SEC-VAULT-909"
-          style="max-width: 280px; display: inline-block;"
-        />
-        <p style="margin-top: 12px; font-size: 12px; color: #a3a3ad;">
-          Campus Network Architecture Schematic v2.4 (Inspected asset: <code>sec_topology_rev2.svg</code>)
+      <h1>Forensic Evidence Correlation</h1>
+      <div class="cc-riddle-quote" style="margin: 18px 0; padding: 14px 18px; background: rgba(0, 200, 233, 0.08); border-left: 3px solid var(--club); border-radius: 4px;">
+        <p style="color: #e6f4f8; font-style: italic; margin: 0; line-height: 1.6;">
+          "Three records describe the same moment, yet their stories refuse to agree. One remembers a movement, another records an arrival, and a third insists the sequence was impossible. Find the account that reconciles the contradiction. The identifier you seek is buried among the ordinary details of that report."
         </p>
       </div>
+      <p style="color: #a3a3ad; line-height: 1.6;">
+        Photographs, surveillance captures, telemetry traces, and classified documents from the campus relay incident have been compiled onto the forensic analysis desk.
+        Examine and cross-reference the evidence documents. Compare the surveillance camera feeds with access logs and forensic notes to uncover the displaced frame report.
+      </p>
+      <div class="cc-evidence-board-wrapper">
+        <div class="cc-board-instructions" style="font-size: 13px; color: #72efdd; margin-bottom: 16px;">
+          [DIGITAL FORENSIC DESK]: Click on any evidence file or photograph to inspect its full report details and examine the forensic audit.
+        </div>
+        <div class="cc-evidence-desk-surface" id="evidence-board">
+          <div class="cc-forensic-item" data-item="1">
+            <img src="/assets/forensic/doc-incident-timeline.svg" alt="Exhibit 01: Campus Incident Timeline" />
+            <span class="cc-card-caption">Exhibit 01: Campus Incident Timeline</span>
+          </div>
+          <div class="cc-forensic-item" data-item="2">
+            <img src="/assets/forensic/cctv-server-rack.jpg" alt="Exhibit 02: CAM-04 Server Room Capture" />
+            <span class="cc-card-caption">Exhibit 02: CAM-04 Server Room Capture</span>
+          </div>
+          <div class="cc-forensic-item" data-item="3">
+            <img src="/assets/forensic/cctv-corridor.jpg" alt="Exhibit 03: CAM-02 Basement Corridor Capture" />
+            <span class="cc-card-caption">Exhibit 03: CAM-02 Basement Corridor Capture</span>
+          </div>
+          <div class="cc-forensic-item" data-item="4">
+            <img src="/assets/forensic/doc-access-logs.svg" alt="Exhibit 04: Reader CC-RD-04 Door Logs" />
+            <span class="cc-card-caption">Exhibit 04: Reader CC-RD-04 Door Logs</span>
+          </div>
+          <div class="cc-forensic-item" data-item="5">
+            <img src="/assets/forensic/doc-network-flow.svg" alt="Exhibit 05: Gateway Flow Capture" />
+            <span class="cc-card-caption">Exhibit 05: Gateway Flow Capture</span>
+          </div>
+          <div class="cc-forensic-item" data-item="6">
+            <img src="/assets/forensic/doc-forensic-report.svg" alt="Exhibit 06: DFU Video Integrity Report (DFU-REP-2026-042)" />
+            <span class="cc-card-caption">Exhibit 06: DFU Video Integrity Report</span>
+            <div class="cc-concealed-plate" style="display:none;">FRAME-SHIFT-246</div>
+          </div>
+          <div class="cc-forensic-item" data-item="7">
+            <img src="/assets/forensic/hardware-network-tap.jpg" alt="Exhibit 07: Hardware Ethernet Tap Splicer" />
+            <span class="cc-card-caption">Exhibit 07: Hardware Ethernet Tap Splicer</span>
+          </div>
+          <div class="cc-forensic-item" data-item="8">
+            <img src="/assets/forensic/hardware-tamper-switch.jpg" alt="Exhibit 08: Tampered Switch Chassis" />
+            <span class="cc-card-caption">Exhibit 08: Tampered Switch Chassis</span>
+          </div>
+          <div class="cc-forensic-item" data-item="9">
+            <img src="/assets/forensic/smartcard-badge-bag.jpg" alt="Exhibit 09: Seized RFID Keycard Badge" />
+            <span class="cc-card-caption">Exhibit 09: Seized RFID Keycard Badge</span>
+          </div>
+          <div class="cc-forensic-item" data-item="10">
+            <img src="/assets/forensic/doc-officer-statement.svg" alt="Exhibit 10: Officer Vance Witness Statement" />
+            <span class="cc-card-caption">Exhibit 10: Officer Vance Witness Statement</span>
+          </div>
+          <div class="cc-forensic-item" data-item="11">
+            <img src="/assets/forensic/doc-investigator-notes.svg" alt="Exhibit 11: Case Notebook Excerpt" />
+            <span class="cc-card-caption">Exhibit 11: Case Notebook Excerpt</span>
+          </div>
+          <div class="cc-forensic-item" data-item="12">
+            <img src="/assets/forensic/doc-evidence-inventory.svg" alt="Exhibit 12: Chain of Custody Register" />
+            <span class="cc-card-caption">Exhibit 12: Chain of Custody Register</span>
+          </div>
+          <div class="cc-forensic-item" data-item="13">
+            <img src="/assets/forensic/doc-floorplan-topology.svg" alt="Exhibit 13: Sub-Basement Floorplan" />
+            <span class="cc-card-caption">Exhibit 13: Sub-Basement Floorplan</span>
+          </div>
+        </div>
+      </div>
       <div style="margin-top: 20px; padding: 14px; background: rgba(0, 200, 233, 0.05); border-left: 3px solid var(--club); font-size: 13px; color: #a3a3ad;">
-        Tip for analysts: Graphic assets and topology images frequently contain descriptive accessibility attributes and custom dataset tags in their HTML markup.
+        Investigative Guidance: Cross-reference the surveillance telemetry, card reader entries, and laboratory analysis reports to isolate the anomaly.
       </div>
     `,
   }),
   'terminal': Object.freeze({
     stage: 3,
-    brand: 'CAMPUS SEC-OPS // DIAGNOSTIC TERMINAL',
-    title: 'Internal Diagnostic Override Console v4.2',
+    brand: 'CAMPUS SEC-OPS // COMMIT TELEMETRY AUDIT',
+    title: 'Historical Configuration Investigation',
     html: `
-      <p class="product-eyebrow">CLUSTER DIAGNOSTICS // SEC-VAULT-909</p>
-      <h1>Internal Diagnostic Override Console v4.2</h1>
+      <p class="product-eyebrow">CLUSTER AUDIT // HISTORICAL COMMIT LEDGER</p>
+      <h1>Historical Configuration Investigation</h1>
+      <div class="cc-riddle-quote" style="margin: 18px 0; padding: 14px 18px; background: rgba(0, 200, 233, 0.08); border-left: 3px solid var(--club); border-radius: 4px;">
+        <p style="color: #e6f4f8; font-style: italic; margin: 0; line-height: 1.6;">
+          "The latest record appears innocent. Nothing remains where the evidence should be, and the present version offers no confession. Yet every change leaves a witness behind. Reconstruct the brief moment in which the missing value existed, and recover the key that the final record no longer carries."
+        </p>
+      </div>
       <p style="color: #a3a3ad; line-height: 1.6;">
-        Connected to cluster SEC-VAULT-909. Access restricted by automated integrity lock.
-        To override and unlock the vault signature, enter the decoded diagnostic override key.
+        An internal repository managing diagnostic relay telemetry was audited after an unauthorized access attempt.
+        The current head revision appears sanitized, but code versioning systems record every historical delta.
+        Follow the repository link below, inspect the commit history, and examine what was added in earlier commits and subsequently removed.
       </p>
       <div class="mock-terminal-screen">
-        <p>&gt; CONNECT SEC-VAULT-909 --secure</p>
-        <p>&gt; STATUS: GATEWAY LOCKED // OVERRIDE KEY REQUIRED</p>
-        <p>&gt; BUFFER: OVERRIDE FIELD LOADED IN FORM DATA</p>
-        <p style="color: #ff6d6d;">&gt; ERROR: Authentication token hidden in DOM attributes. Decode before submitting.</p>
+        <p>&gt; GIT AUDIT TARGET: campus-relay-telemetry</p>
+        <p>&gt; STATUS: HEAD SANITIZED // HISTORICAL COMMITS PRESERVED</p>
+        <p>&gt; REPOSITORY INSPECTION PROTOCOL: Compare commit diffs on config/telemetry.json</p>
+        <div class="cc-terminal-repo-box" style="margin-top: 14px; padding: 14px; background: rgba(0, 200, 233, 0.08); border: 1px solid rgba(0, 200, 233, 0.25); border-radius: 6px;">
+          ${
+            config.investigationLead3GithubUrl
+              ? `
+                <p style="margin: 0 0 8px; color: #fff;"><strong>Official Challenge Repository:</strong></p>
+                <a href="${config.investigationLead3GithubUrl}" target="_blank" rel="noopener noreferrer" class="product-btn product-btn--small product-btn--primary">
+                  Open GitHub Challenge Repository ↗
+                </a>
+                <p style="margin: 8px 0 0; font-size: 12px; color: #72efdd;">Repository: <code>${config.investigationLead3GithubUrl}</code></p>
+              `
+              : `
+                <p style="margin: 0 0 8px; color: #ffbc00;"><strong>Public GitHub Link Pending Configuration:</strong></p>
+                <p style="margin: 0 0 8px; font-size: 13px; color: #a3a3ad; line-height: 1.5;">
+                  The dedicated challenge repository is staged locally at <code>.local-qa/shadow-relay-audit</code> with full commit history.
+                  Set <code>INVESTIGATION_LEAD3_GITHUB_URL</code> in <code>server/.env</code> once pushed to GitHub.
+                </p>
+                <p style="margin: 0; font-size: 11px; color: #72efdd; font-family: monospace;">
+                  Publishing command: <code>git remote add origin &lt;github-url&gt; &amp;&amp; git push -u origin main</code>
+                </p>
+              `
+          }
+        </div>
       </div>
-      <form onsubmit="return false;" style="margin: 20px 0;">
-        <input type="hidden" id="override-token" name="diag_override" value="U0hBRE9XLUtFWS00MTg=" />
-        <!-- Base64 override token format: SHADOW-KEY-XXX. Use atob(...) in Console or an online decoder -->
-        <p style="font-size: 13px; color: #a3a3ad;">
-          [SYSTEM NOTICE]: A hidden form field <code>#override-token</code> holds the base64 override parameter. Inspect the form element in DevTools.
-        </p>
-      </form>
+      <div style="margin-top: 20px; padding: 14px; background: rgba(0, 200, 233, 0.05); border-left: 3px solid var(--club); font-size: 13px; color: #a3a3ad;">
+        Investigative Guidance: When the present state of a repository has been sanitized, examine the ledger of historical revisions where previous configuration changes were recorded.
+      </div>
     `,
   }),
   'vault': Object.freeze({
     stage: 4,
     brand: 'CAMPUS SEC-OPS // CORE SIGNAL VAULT',
-    title: 'Core Signal Vault: Transmission Neutralized',
+    title: 'Core Signal Vault: Signal Reconstruction',
     html: `
-      <p class="product-eyebrow">VAULT LEVEL 4 // FINAL RECEIPT</p>
-      <h1>Core Signal Vault: Transmission Neutralized</h1>
-      <div
-        id="vault-core"
-        class="mock-vault-screen"
-        data-status="unsealed"
-        data-incident-flag="CC{DOM_SLEUTH_N3TW0RK_941}"
-      >
-        <strong>✓ ROGUE TRANSMISSION TERMINATED</strong>
-        <p style="color: #a3a3ad; max-width: 600px; margin: 0 auto 16px;">
-          Override accepted. The unauthorized beacon broadcast on node ALPHA-RELAY-77 has been permanently disabled.
+      <p class="product-eyebrow">VAULT LEVEL 4 // FINAL TRANSMISSION</p>
+      <h1>Core Signal Vault: Signal Reconstruction</h1>
+      <div class="cc-riddle-quote" style="margin: 18px 0; padding: 14px 18px; background: rgba(0, 200, 233, 0.08); border-left: 3px solid var(--club); border-radius: 4px;">
+        <p style="color: #e6f4f8; font-style: italic; margin: 0; line-height: 1.6;">
+          "The vault has kept the truth in fragments, not in a single hiding place. Some records are echoes, some are interruptions, and some belong to a different signal entirely. Restore the sequence that survived the disturbance. When the fragments agree, the word they protect will be yours to name."
         </p>
-        <p style="font-size: 13px; color: #00c8e9; font-family: var(--font-mono);">
-          Receipt metadata embedded in container dataset attribute: <code>data-incident-flag</code>
+      </div>
+      <div id="vault-core" class="mock-vault-screen cc-vault-page">
+        <strong>✓ ROGUE TRANSMISSION CONTAINMENT CORE</strong>
+        <p style="color: #a3a3ad; max-width: 680px; margin: 16px auto; line-height: 1.7;">
+          Signal analysis confirms the campus relay intrusion vector has been isolated.
+          All defensive perimeters across academic subnets have transitioned to active containment.
+          Use the interactive Signal Reconstruction Console below to correlate authenticated packets and restore the keyword.
         </p>
       </div>
       <div style="margin-top: 20px; padding: 14px; background: rgba(0, 200, 233, 0.05); border-left: 3px solid var(--club); font-size: 13px; color: #a3a3ad;">
-        Inspect element <code>#vault-core</code> in DevTools to read the canonical flag <code>CC&#123;...&#125;</code>, then return to the investigation tab to submit it.
+        Investigative Guidance: Filter out decoy and noise channels. Align verified carrier packets by chronological epoch to reconstruct the terminal signal.
       </div>
     `,
   }),
@@ -210,13 +292,15 @@ export function validateClueSubmission(stage, submittedAnswer) {
   if (!cleanInput) {
     return { ok: false, error: 'Answer cannot be empty' };
   }
-  const match = cleanInput === clue.expectedAnswer;
+  const match = clue.stage === 3
+    ? cleanInput.toLowerCase() === clue.expectedAnswer.toLowerCase()
+    : cleanInput === clue.expectedAnswer;
   if (!match) {
     return {
       ok: false,
       error: clue.stage === TOTAL_STAGES
-        ? 'Incorrect flag. Inspect the vault confirmation receipt carefully.'
-        : 'Incorrect clue answer. Check the resource comments, attributes, and tags carefully.',
+        ? 'Incorrect final keyword. Reconstruct the authentic signal fragment sequence in the vault console and submit the verified keyword.'
+        : 'Incorrect clue answer. Check the resource evidence, cards, and commit history carefully.',
     };
   }
   return { ok: true };

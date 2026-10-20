@@ -1,0 +1,49 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 580" width="500" height="580">
+  <defs>
+    <filter id="stmt-shadow" x="-5%" y="-5%" width="110%" height="110%">
+      <feDropShadow dx="2" dy="4" stdDeviation="4" flood-color="#000" flood-opacity="0.35"/>
+    </filter>
+  </defs>
+  
+  <rect x="10" y="10" width="480" height="560" rx="2" fill="#fffdfa" stroke="#cbd5e1" stroke-width="1.5" filter="url(#stmt-shadow)"/>
+  
+  <rect x="25" y="25" width="450" height="40" fill="#1e293b" rx="2"/>
+  <text x="40" y="45" font-family="'Courier New', monospace" font-size="10.5" font-weight="bold" fill="#f8fafc" letter-spacing="1">DEPARTMENT OF PUBLIC SAFETY // WITNESS STATEMENT</text>
+  <text x="40" y="57" font-family="'Courier New', monospace" font-size="8.5" fill="#94a3b8">DIVISION OF INVESTIGATIVE SERVICES  |  FORM DPS-WT-01</text>
+  
+  <!-- Info grid -->
+  <rect x="25" y="75" width="450" height="56" fill="#f8fafc" stroke="#e2e8f0" stroke-width="1"/>
+  <text x="35" y="93" font-family="monospace" font-size="8.5" fill="#334155"><tspan font-weight="bold">STATEMENT OF:</tspan> Security Officer Marcus Vance (Badge #408)</text>
+  <text x="35" y="108" font-family="monospace" font-size="8.5" fill="#334155"><tspan font-weight="bold">INTERVIEWER:</tspan> Det. R. Cross  |  <tspan font-weight="bold">DATE/TIME:</tspan> 2026-08-14 04:30 UTC</text>
+  <text x="35" y="122" font-family="monospace" font-size="8.5" fill="#334155"><tspan font-weight="bold">INCIDENT REF:</tspan> #CC-2026-0814 (Building C Sub-Basement Ingress)</text>
+  
+  <!-- Statement text -->
+  <text x="25" y="155" font-family="'Courier New', monospace" font-size="10.5" font-weight="bold" fill="#0f172a">RECORDED TESTIMONY EXCERPT:</text>
+  <line x1="25" y1="161" x2="475" y2="161" stroke="#0f172a" stroke-width="1"/>
+  
+  <rect x="25" y="170" width="450" height="265" fill="#f8fafc" stroke="#e2e8f0" stroke-width="1" rx="2"/>
+  <text x="35" y="190" font-family="monospace" font-size="8" fill="#334155">"I was stationed at the Central Dispatch console monitoring basement and perimeter</text>
+  <text x="35" y="204" font-family="monospace" font-size="8" fill="#334155">cameras. Around 03:14 UTC, while doing my routine sweep, I noticed the feed</text>
+  <text x="35" y="218" font-family="monospace" font-size="8" fill="#334155">for <tspan font-weight="bold" fill="#0f172a">Camera 04 (Server Rack B-04)</tspan> stuttered for a fraction of a second.</text>
+  <text x="35" y="232" font-family="monospace" font-size="8" fill="#334155">There was a distinct video glitch—like a tape hitching or a digital frame freeze."</text>
+  
+  <text x="35" y="258" font-family="monospace" font-size="8" fill="#334155">"I checked again immediately, but the aisle appeared completely undisturbed.</text>
+  <text x="35" y="272" font-family="monospace" font-size="8" fill="#334155">I assumed it was automatic gain cycling or an artifact of the night-vision IR,</text>
+  <text x="35" y="286" font-family="monospace" font-size="8" fill="#334155">especially since hallway camera CAM-02 had not triggered an alarm."</text>
+  
+  <text x="35" y="312" font-family="monospace" font-size="8" fill="#334155">"Two minutes later, the NOC gateway alarm tripped. When I checked Room B-04,</text>
+  <text x="35" y="326" font-family="monospace" font-size="8" fill="#334155">the door was cracked with a door wedge and rack SW-4 inspection panel was open.</text>
+  <text x="35" y="340" font-family="monospace" font-size="8" fill="#334155">The video we were watching had to have been fake or frozen during those minutes."</text>
+  
+  <text x="35" y="366" font-family="monospace" font-size="8" font-style="italic" fill="#0284c7">"The detective confirmed they sent the DVR stream to the DFU forensics lab to pull</text>
+  <text x="35" y="380" font-family="monospace" font-size="8" font-style="italic" fill="#0284c7">the container analysis report (DFU-REP-2026-042) for that frame freeze."</text>
+  
+  <line x1="25" y1="450" x2="475" y2="450" stroke="#cbd5e1" stroke-width="1"/>
+  
+  <text x="25" y="475" font-family="monospace" font-size="8.5" fill="#1e293b"><tspan font-weight="bold">DECLARANT SIGNATURE:</tspan> <em>Officer M. Vance #408</em></text>
+  <text x="250" y="475" font-family="monospace" font-size="8.5" fill="#1e293b"><tspan font-weight="bold">INVESTIGATOR:</tspan> <em>Det. R. Cross #812</em></text>
+  
+  <rect x="25" y="495" width="450" height="40" fill="#f1f5f9" stroke="#cbd5e1" stroke-width="1"/>
+  <text x="35" y="512" font-family="monospace" font-size="8" fill="#475569">EXAMINER NOTE: Officer's visual observation corroborates PTS jitter at 03:14:20 UTC.</text>
+  <text x="35" y="525" font-family="monospace" font-size="8" fill="#475569">Cross-reference with Video Authentication Report: DFU-REP-2026-042.</text>
+</svg>

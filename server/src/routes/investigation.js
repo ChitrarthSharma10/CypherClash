@@ -18,6 +18,7 @@ import {
 import { getRoundState, listRoundStates } from '../services/roundState.js';
 import { submitGameResult } from '../services/scoring.js';
 import { isTeamEligibleForRound } from '../services/progression.js';
+import { config } from '../config.js';
 import { logEvent } from '../utils/logging.js';
 
 const router = express.Router();
@@ -231,6 +232,7 @@ router.get('/resources/:slug', requireTeam, async (req, res, next) => {
       title: resource.title,
       stage: resource.stage,
       html: resource.html,
+      githubUrl: slug === 'terminal' ? (config.investigationLead3GithubUrl || null) : undefined,
     });
   } catch (error) {
     return next(error);

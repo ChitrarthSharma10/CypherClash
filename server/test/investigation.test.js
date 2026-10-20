@@ -1,6 +1,12 @@
 import './bootstrap.js';
 import test, { after, before, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 import { connectDatabase, disconnectDatabase } from '../src/db.js';
 import { createApp } from '../src/app.js';
 import { sessionStore } from '../src/sessionStore.js';
@@ -280,50 +286,89 @@ test('Investigation lifecycle, hints, scoring formula, ledger integration, and r
   // Stage 2 resource is now unlocked
   const advisoryRes = await request('/api/rounds/2/investigation/resources/advisory', { headers: { cookie: cookieA } });
   assert.equal(advisoryRes.status, 200);
-  assert.ok((await advisoryRes.json()).html.includes('SEC-VAULT-909'));
+  const advisoryData = await advisoryRes.json();
+  assert.ok(advisoryData.html.includes('FRAME-SHIFT-246'));
+  assert.ok(advisoryData.html.includes('Three records describe the same moment, yet their stories refuse to agree'));
 
-  // 7. Complete stage 2
-  await request('/api/rounds/2/investigation/submit', {
+  // 7. Verify old Lead 2 answer is rejected
+  const oldStage2Res = await request('/api/rounds/2/investigation/submit', {
     method: 'POST',
     headers: { cookie: cookieA, 'content-type': 'application/json' },
     body: JSON.stringify({ stage: 2, answer: 'SEC-VAULT-909' }),
   });
+  assert.equal(oldStage2Res.status, 422);
 
-  // 8. Complete stage 3
-  await request('/api/rounds/2/investigation/submit', {
+  // Complete stage 2 with new answer
+  const stage2Res = await request('/api/rounds/2/investigation/submit', {
     method: 'POST',
     headers: { cookie: cookieA, 'content-type': 'application/json' },
-    body: JSON.stringify({ stage: 3, answer: 'SHADOW-KEY-418' }),
+    body: JSON.stringify({ stage: 2, answer: 'FRAME-SHIFT-246' }),
   });
+  assert.equal(stage2Res.status, 200);
+
+  // Stage 3 resource is now unlocked
+  const terminalRes = await request('/api/rounds/2/investigation/resources/terminal', { headers: { cookie: cookieA } });
+  assert.equal(terminalRes.status, 200);
+  const terminalData = await terminalRes.json();
+  assert.ok(terminalData.html.includes('The latest record appears innocent'));
+  assert.ok(terminalData.html.includes('campus-relay-telemetry'));
+
+  // 8. Verify old Lead 3 answers are rejected
+  const oldStage3Res = await request('/api/rounds/2/investigation/submit', {
+    method: 'POST',
+    headers: { cookie: cookieA, 'content-type': 'application/json' },
+    body: JSON.stringify({ stage: 3, answer: 'REWIND-KEY-731' }),
+  });
+  assert.equal(oldStage3Res.status, 422);
+
+  // Complete stage 3 with new challenge token
+  const stage3Res = await request('/api/rounds/2/investigation/submit', {
+    method: 'POST',
+    headers: { cookie: cookieA, 'content-type': 'application/json' },
+    body: JSON.stringify({ stage: 3, answer: 'hellowor!d' }),
+  });
+  assert.equal(stage3Res.status, 200);
 
   // Stage 4 resource (vault) is now unlocked
   const vaultRes = await request('/api/rounds/2/investigation/resources/vault', { headers: { cookie: cookieA } });
   assert.equal(vaultRes.status, 200);
-  assert.ok((await vaultRes.json()).html.includes('CC{DOM_SLEUTH_N3TW0RK_941}'));
+  const vaultData = await vaultRes.json();
+  assert.ok(vaultData.html.includes('The vault has kept the truth in fragments'));
+  assert.ok(vaultData.html.includes('Signal Reconstruction'));
 
-  // 9. Complete stage 4 (final flag)
-  // Formula: max(150, 500 - (15 * 2) - (25 * 1)) = 500 - 30 - 25 = 445 points
-  const finalRes = await request('/api/rounds/2/investigation/submit', {
+  // Verify old Lead 4 answer is rejected
+  const oldStage4Res = await request('/api/rounds/2/investigation/submit', {
     method: 'POST',
     headers: { cookie: cookieA, 'content-type': 'application/json' },
     body: JSON.stringify({ stage: 4, answer: 'CC{DOM_SLEUTH_N3TW0RK_941}' }),
   });
+  assert.equal(oldStage4Res.status, 422);
+
+  // 9. Complete stage 4 (final keyword)
+  // Formula: max(150, 500 - (15 * 5) - (25 * 1))
+  // wrongAttempts: 2 initial + 1 (old stage 2) + 1 (old stage 3) + 1 (old stage 4) = 5 wrong attempts
+  // Penalty = 5 * 15 + 25 = 75 + 25 = 100 -> Score = 400 points
+  const finalRes = await request('/api/rounds/2/investigation/submit', {
+    method: 'POST',
+    headers: { cookie: cookieA, 'content-type': 'application/json' },
+    body: JSON.stringify({ stage: 4, answer: 'UNMASKED' }),
+  });
   assert.equal(finalRes.status, 200);
   const finalData = await finalRes.json();
   assert.equal(finalData.completed, true);
-  assert.equal(finalData.points, 445);
+  assert.equal(finalData.points, 400);
 
   // 10. Ledger verification: exactly ONE ScoreEntry must exist
   const scoreEntries = await ScoreEntry.find({ teamId: teamA, round: 2, kind: 'game_result' });
   assert.equal(scoreEntries.length, 1);
-  assert.equal(scoreEntries[0].amount, 445);
+  assert.equal(scoreEntries[0].amount, 400);
   assert.equal(scoreEntries[0].game, 'investigation');
 
   // 11. Replay and duplicate submission protection: repeated final submit returns 409
   const repeatRes = await request('/api/rounds/2/investigation/submit', {
     method: 'POST',
     headers: { cookie: cookieA, 'content-type': 'application/json' },
-    body: JSON.stringify({ stage: 4, answer: 'CC{DOM_SLEUTH_N3TW0RK_941}' }),
+    body: JSON.stringify({ stage: 4, answer: 'UNMASKED' }),
   });
   assert.equal(repeatRes.status, 409);
   const repeatEntries = await ScoreEntry.find({ teamId: teamA, round: 2, kind: 'game_result' });
@@ -334,8 +379,8 @@ test('Investigation lifecycle, hints, scoring formula, ledger integration, and r
   const board = await getLeaderboard(teamA);
   const row = board.rows.find((r) => r.name === `Test Alpha ${teamA}`);
   assert.ok(row);
-  assert.equal(row.r2, 445);
-  assert.equal(row.total, 445);
+  assert.equal(row.r2, 400);
+  assert.equal(row.total, 400);
 });
 
 test('Concurrent final submissions cannot create duplicate ScoreEntry records', async () => {
@@ -349,7 +394,7 @@ test('Concurrent final submissions cannot create duplicate ScoreEntry records', 
   });
 
   // Solve stages 1-3
-  for (const [stage, answer] of [[1, 'ALPHA-RELAY-77'], [2, 'SEC-VAULT-909'], [3, 'SHADOW-KEY-418']]) {
+  for (const [stage, answer] of [[1, 'ALPHA-RELAY-77'], [2, 'FRAME-SHIFT-246'], [3, 'hellowor!d']]) {
     await request('/api/rounds/2/investigation/submit', {
       method: 'POST',
       headers: { cookie: cookieA, 'content-type': 'application/json' },
@@ -362,7 +407,7 @@ test('Concurrent final submissions cannot create duplicate ScoreEntry records', 
     request('/api/rounds/2/investigation/submit', {
       method: 'POST',
       headers: { cookie: cookieA, 'content-type': 'application/json' },
-      body: JSON.stringify({ stage: 4, answer: 'CC{DOM_SLEUTH_N3TW0RK_941}' }),
+      body: JSON.stringify({ stage: 4, answer: 'UNMASKED' }),
     })
   );
 
@@ -592,4 +637,248 @@ test('Hint failure handling: database error on GameSession rolls back HintEntitl
   } finally {
     GameSession.findOneAndUpdate = originalFindOneAndUpdate;
   }
+});
+
+test('Lead 1 regression: existing answer ALPHA-RELAY-77 and resource content remain strictly intact', async () => {
+  await startRound(2, 2700, 'admin');
+  const cookieTeam = await teamCookie(teamA);
+
+  await request('/api/rounds/2/investigation/start', {
+    method: 'POST',
+    headers: { cookie: cookieTeam, 'content-type': 'application/json' },
+    body: '{}',
+  });
+
+  const clue1 = INVESTIGATION_CLUES.find((c) => c.stage === 1);
+  assert.equal(clue1.expectedAnswer, 'ALPHA-RELAY-77');
+  assert.equal(clue1.resource, '/investigation/resources/incident-log');
+  assert.ok(clue1.prompt.includes('The alarm speaks of damage, but damage is only the end of a story'));
+
+  const logRes = await request('/api/rounds/2/investigation/resources/incident-log', {
+    headers: { cookie: cookieTeam },
+  });
+  assert.equal(logRes.status, 200);
+  const logData = await logRes.json();
+  assert.ok(logData.html.includes('X-Origin-Node: ALPHA-RELAY-77'));
+  assert.ok(logData.html.includes('mock-log-table'));
+
+  // Wrong answer is rejected
+  const wrongRes = await request('/api/rounds/2/investigation/submit', {
+    method: 'POST',
+    headers: { cookie: cookieTeam, 'content-type': 'application/json' },
+    body: JSON.stringify({ stage: 1, answer: 'WRONG-ORIGIN-NODE' }),
+  });
+  assert.equal(wrongRes.status, 422);
+
+  // Correct answer is accepted
+  const correctRes = await request('/api/rounds/2/investigation/submit', {
+    method: 'POST',
+    headers: { cookie: cookieTeam, 'content-type': 'application/json' },
+    body: JSON.stringify({ stage: 1, answer: 'ALPHA-RELAY-77' }),
+  });
+  assert.equal(correctRes.status, 200);
+});
+
+test('Lead 2 redesign: accepts FRAME-SHIFT-246, rejects old SEC-VAULT-909, and resource embeds evidence board', async () => {
+  await startRound(2, 2700, 'admin');
+  const cookieTeam = await teamCookie(teamA);
+
+  await request('/api/rounds/2/investigation/start', {
+    method: 'POST',
+    headers: { cookie: cookieTeam, 'content-type': 'application/json' },
+    body: '{}',
+  });
+  await request('/api/rounds/2/investigation/submit', {
+    method: 'POST',
+    headers: { cookie: cookieTeam, 'content-type': 'application/json' },
+    body: JSON.stringify({ stage: 1, answer: 'ALPHA-RELAY-77' }),
+  });
+
+  const clue2 = INVESTIGATION_CLUES.find((c) => c.stage === 2);
+  assert.equal(clue2.expectedAnswer, 'FRAME-SHIFT-246');
+  assert.ok(clue2.prompt.includes('Three records describe the same moment, yet their stories refuse to agree'));
+
+  const advisoryRes = await request('/api/rounds/2/investigation/resources/advisory', {
+    headers: { cookie: cookieTeam },
+  });
+  assert.equal(advisoryRes.status, 200);
+  const advisoryData = await advisoryRes.json();
+  assert.ok(advisoryData.html.includes('FRAME-SHIFT-246'));
+  assert.ok(advisoryData.html.includes('Three records describe the same moment'));
+  assert.ok(advisoryData.html.includes('DFU-REP-2026-042'));
+  assert.ok(advisoryData.html.includes('doc-forensic-report.svg'));
+  assert.ok(advisoryData.html.includes('cctv-server-rack.jpg'));
+
+  // Old answer must be rejected
+  const oldRes = await request('/api/rounds/2/investigation/submit', {
+    method: 'POST',
+    headers: { cookie: cookieTeam, 'content-type': 'application/json' },
+    body: JSON.stringify({ stage: 2, answer: 'SEC-VAULT-909' }),
+  });
+  assert.equal(oldRes.status, 422);
+
+  // New answer accepted and unlocks Lead 3
+  const newRes = await request('/api/rounds/2/investigation/submit', {
+    method: 'POST',
+    headers: { cookie: cookieTeam, 'content-type': 'application/json' },
+    body: JSON.stringify({ stage: 2, answer: 'FRAME-SHIFT-246' }),
+  });
+  assert.equal(newRes.status, 200);
+  const submitData = await newRes.json();
+  assert.equal(submitData.stage, 3);
+
+  // Lead 3 resource is now accessible
+  const terminalRes = await request('/api/rounds/2/investigation/resources/terminal', {
+    headers: { cookie: cookieTeam },
+  });
+  assert.equal(terminalRes.status, 200);
+
+  // Verify all 13 forensic assets exist locally in public/assets/forensic/
+  const forensicDir = path.resolve(__dirname, '../../public/assets/forensic');
+  const expectedAssets = [
+    'doc-incident-timeline.svg',
+    'cctv-server-rack.jpg',
+    'cctv-corridor.jpg',
+    'doc-access-logs.svg',
+    'doc-network-flow.svg',
+    'doc-forensic-report.svg',
+    'hardware-network-tap.jpg',
+    'hardware-tamper-switch.jpg',
+    'smartcard-badge-bag.jpg',
+    'doc-officer-statement.svg',
+    'doc-investigator-notes.svg',
+    'doc-evidence-inventory.svg',
+    'doc-floorplan-topology.svg',
+  ];
+  for (const asset of expectedAssets) {
+    const fullPath = path.join(forensicDir, asset);
+    assert.ok(fs.existsSync(fullPath), `Forensic asset ${asset} must exist locally`);
+  }
+
+  // Verify doc-forensic-report.svg contains the canonical answer
+  const forensicReportSvg = fs.readFileSync(path.join(forensicDir, 'doc-forensic-report.svg'), 'utf8');
+  assert.ok(forensicReportSvg.includes('FRAME-SHIFT-246'));
+
+  // Verify production bundle does not leak canonical answer
+  const distDir = path.resolve(__dirname, '../../dist/assets');
+  if (fs.existsSync(distDir)) {
+    const jsFiles = fs.readdirSync(distDir).filter((f) => f.endsWith('.js'));
+    for (const jsFile of jsFiles) {
+      const jsContent = fs.readFileSync(path.join(distDir, jsFile), 'utf8');
+      assert.ok(!jsContent.includes('FRAME-SHIFT-246'), `Production JS bundle ${jsFile} must not leak FRAME-SHIFT-246`);
+    }
+  }
+});
+
+test('Lead 3 redesign: accepts hellowor!d, rejects old REWIND-KEY-731 and SHADOW-KEY-418, and resource links CyberHint repository', async () => {
+  await startRound(2, 2700, 'admin');
+  const cookieTeam = await teamCookie(teamA);
+
+  await request('/api/rounds/2/investigation/start', {
+    method: 'POST',
+    headers: { cookie: cookieTeam, 'content-type': 'application/json' },
+    body: '{}',
+  });
+  await request('/api/rounds/2/investigation/submit', {
+    method: 'POST',
+    headers: { cookie: cookieTeam, 'content-type': 'application/json' },
+    body: JSON.stringify({ stage: 1, answer: 'ALPHA-RELAY-77' }),
+  });
+  await request('/api/rounds/2/investigation/submit', {
+    method: 'POST',
+    headers: { cookie: cookieTeam, 'content-type': 'application/json' },
+    body: JSON.stringify({ stage: 2, answer: 'FRAME-SHIFT-246' }),
+  });
+
+  const clue3 = INVESTIGATION_CLUES.find((c) => c.stage === 3);
+  assert.equal(clue3.expectedAnswer, 'hellowor!d');
+  assert.ok(clue3.prompt.includes('The latest record appears innocent'));
+
+  const terminalRes = await request('/api/rounds/2/investigation/resources/terminal', {
+    headers: { cookie: cookieTeam },
+  });
+  assert.equal(terminalRes.status, 200);
+  const terminalData = await terminalRes.json();
+  assert.ok(terminalData.html.includes('The latest record appears innocent'));
+  assert.ok(terminalData.html.includes('campus-relay-telemetry'));
+  assert.ok(terminalData.html.includes('https://github.com/DDuggad/CyberHint'));
+
+  // Old answers must be rejected
+  const oldRes1 = await request('/api/rounds/2/investigation/submit', {
+    method: 'POST',
+    headers: { cookie: cookieTeam, 'content-type': 'application/json' },
+    body: JSON.stringify({ stage: 3, answer: 'SHADOW-KEY-418' }),
+  });
+  assert.equal(oldRes1.status, 422);
+
+  const oldRes2 = await request('/api/rounds/2/investigation/submit', {
+    method: 'POST',
+    headers: { cookie: cookieTeam, 'content-type': 'application/json' },
+    body: JSON.stringify({ stage: 3, answer: 'REWIND-KEY-731' }),
+  });
+  assert.equal(oldRes2.status, 422);
+
+  // New answer accepted
+  const newRes = await request('/api/rounds/2/investigation/submit', {
+    method: 'POST',
+    headers: { cookie: cookieTeam, 'content-type': 'application/json' },
+    body: JSON.stringify({ stage: 3, answer: 'hellowor!d' }),
+  });
+  assert.equal(newRes.status, 200);
+});
+
+test('Lead 4 redesign: accepts UNMASKED, rejects invalid answers, and resource provides signal reconstruction', async () => {
+  await startRound(2, 2700, 'admin');
+  const cookieTeam = await teamCookie(teamA);
+
+  await request('/api/rounds/2/investigation/start', {
+    method: 'POST',
+    headers: { cookie: cookieTeam, 'content-type': 'application/json' },
+    body: '{}',
+  });
+  await request('/api/rounds/2/investigation/submit', {
+    method: 'POST',
+    headers: { cookie: cookieTeam, 'content-type': 'application/json' },
+    body: JSON.stringify({ stage: 1, answer: 'ALPHA-RELAY-77' }),
+  });
+  await request('/api/rounds/2/investigation/submit', {
+    method: 'POST',
+    headers: { cookie: cookieTeam, 'content-type': 'application/json' },
+    body: JSON.stringify({ stage: 2, answer: 'FRAME-SHIFT-246' }),
+  });
+  await request('/api/rounds/2/investigation/submit', {
+    method: 'POST',
+    headers: { cookie: cookieTeam, 'content-type': 'application/json' },
+    body: JSON.stringify({ stage: 3, answer: 'hellowor!d' }),
+  });
+
+  const clue4 = INVESTIGATION_CLUES.find((c) => c.stage === 4);
+  assert.equal(clue4.expectedAnswer, 'UNMASKED');
+  assert.ok(clue4.prompt.includes('The vault has kept the truth in fragments'));
+
+  const vaultRes = await request('/api/rounds/2/investigation/resources/vault', {
+    headers: { cookie: cookieTeam },
+  });
+  assert.equal(vaultRes.status, 200);
+  const vaultData = await vaultRes.json();
+  assert.ok(vaultData.html.includes('The vault has kept the truth in fragments'));
+  assert.ok(vaultData.html.includes('Signal Reconstruction'));
+
+  // Old answer must be rejected
+  const oldRes = await request('/api/rounds/2/investigation/submit', {
+    method: 'POST',
+    headers: { cookie: cookieTeam, 'content-type': 'application/json' },
+    body: JSON.stringify({ stage: 4, answer: 'CC{DOM_SLEUTH_N3TW0RK_941}' }),
+  });
+  assert.equal(oldRes.status, 422);
+
+  // New answer accepted
+  const newRes = await request('/api/rounds/2/investigation/submit', {
+    method: 'POST',
+    headers: { cookie: cookieTeam, 'content-type': 'application/json' },
+    body: JSON.stringify({ stage: 4, answer: 'UNMASKED' }),
+  });
+  assert.equal(newRes.status, 200);
+  const newData = await newRes.json();
+  assert.equal(newData.completed, true);
 });
