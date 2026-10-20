@@ -302,9 +302,9 @@ export default function MapGuidelinesModal({ isOpen, onClose }) {
       icon: <HunterIcon />,
       name: 'Shadow Hunter',
       category: 'Server Maze Pursuer',
-      effect: 'Relentlessly chases players along shortest paths! If caught: reset to start & collected items restored, while TIMER KEEPS RUNNING!',
+      effect: 'Relentlessly chases players along shortest paths! Getting caught: -50 PTS deduction, reset to start, items restored, timer keeps running.',
       badgeType: 'badge-reduce',
-      badgeText: '⚠️ CATCH RESETS TO START',
+      badgeText: '-50 PTS (Catch Penalty)',
     },
     {
       icon: <GemsIcon />,
@@ -342,9 +342,9 @@ export default function MapGuidelinesModal({ isOpen, onClose }) {
       icon: <DigPitTrapIcon />,
       name: 'Dig / Spike Pit',
       category: 'Sunken Hazard Excavation',
-      effect: 'Sunken spike pit hazard · Falling in restarts the expedition from the beginning! Wall bumps: -10 pts.',
+      effect: 'Sunken spike pit hazard · Falling into pit: -30 PTS deduction and restarts from beginning. (Wall collisions have 0 penalty).',
       badgeType: 'badge-reduce',
-      badgeText: '⚠️ RESTARTS GAME',
+      badgeText: '-30 PTS (Pit Penalty)',
     },
     {
       icon: <TreasureVaultIcon />,

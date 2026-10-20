@@ -16,13 +16,16 @@ export const GAME_CONFIG = {
   HAZARD_PENALTY: 30,              // EMP shockwave point deduction
 
   // Scoring table: max 500 total for flawless run (140 collectibles + 60 checkpoints + 60 switches + 140 escape + 100 speed)
+  // Wall collision penalty is 0. Penalty is applied for getting caught by hunter (-50 pts) or falling in a pit (-30 pts).
   SCORING: {
     COLLECTIBLE_POINTS: 10,            // 14 Collectibles = 140 pts
     CHECKPOINT_POINTS: 15,             // 4 Checkpoints = 60 pts
     SWITCH_POINTS: 15,                 // 4 Switches = 60 pts
     COMPLETION_BONUS: 140,             // Ancient treasure vault escape bonus
     TIME_POINTS_DIVIDEND: 10000,       // Speed bonus up to 100 pts: Math.min(100, Math.round(10000 / finishTimeSec))
-    COLLISION_SCORE_PENALTY: 10,       // Wall collision penalty deduction (-10 pts per bump)
+    COLLISION_SCORE_PENALTY: 0,        // 0 penalty: wall collision does NOT reduce points
+    HUNTER_CATCH_PENALTY: 50,          // -50 pts penalty deduction when caught by hunter
+    PIT_FALL_PENALTY: 30,              // -30 pts penalty deduction when falling in pit trap
   },
 };
 

@@ -41,6 +41,8 @@ export class MazeGameEngine {
     this.score = 0;
     this.penalties = 0;
     this.collisionsCount = 0;
+    this.hunterCatchesCount = 0;
+    this.pitFallsCount = 0;
     this.restartsCount = 0;
     this.respawnNotice = null;
     this.portalAlertCount = 0;
@@ -364,13 +366,15 @@ export class MazeGameEngine {
 
   handlePitFall(pit, now) {
     this.restartsCount = (this.restartsCount || 0) + 1;
+    this.pitFallsCount = (this.pitFallsCount || 0) + 1;
     this.character.x = this.layout.start.x;
     this.character.y = this.layout.start.y;
     this.character.vx = 0;
     this.character.vy = 0;
-    this.score = 0;
-    this.penalties = 0;
-    this.collisionsCount = 0;
+
+    const penalty = GAME_CONFIG.SCORING.PIT_FALL_PENALTY || 30;
+    this.penalties += penalty;
+    this.score = Math.max(0, this.score - penalty);
     this.portalAlertCount = 0;
     this.portalNotice = null;
 
@@ -385,13 +389,16 @@ export class MazeGameEngine {
       b.openUntil = 0;
     });
 
-    this.respawnNotice = `⚠️ FELL INTO PIT TRAP · GAME RESTARTED`;
-    this.addEvent('PIT_FALL', `Fell into ${pit.label || 'Pit Trap'}! Game restarted from start.`);
+    this.respawnNotice = `⚠️ FELL INTO PIT TRAP · -${penalty} PTS PENALTY`;
+    this.addEvent('PIT_FALL', `Fell into ${pit.label || 'Pit Trap'}! -${penalty} pts penalty. Reset to start.`);
 
     this.repository.logEvent(this.sessionId, 'PIT_FALL', {
       pitId: pit.id,
+      penalty,
+      penaltiesTotal: this.penalties,
       restartsCount: this.restartsCount,
       timeElapsedMs: Math.round(this.timeElapsedMs),
+      score: this.score,
     });
   }
 
@@ -524,20 +531,21 @@ export class MazeGameEngine {
 
   handleHunterCatch(now) {
     this.restartsCount = (this.restartsCount || 0) + 1;
+    this.hunterCatchesCount = (this.hunterCatchesCount || 0) + 1;
     this.character.x = this.layout.start.x;
     this.character.y = this.layout.start.y;
     this.character.vx = 0;
     this.character.vy = 0;
+
+    const penalty = GAME_CONFIG.SCORING.HUNTER_CATCH_PENALTY || 50;
+    this.penalties += penalty;
+    this.score = Math.max(0, this.score - penalty);
 
     // Hunter back at its start distance (start cell, dormant until player reaches distance)
     this.hunter.x = this.layout.start.x;
     this.hunter.y = this.layout.start.y;
     this.hunter.active = false;
 
-    // Reset team's maze score and progress to the starting state (collected items restored)
-    this.score = 0;
-    this.penalties = 0;
-    this.collisionsCount = 0;
     this.portalAlertCount = 0;
     this.portalNotice = null;
 
@@ -553,12 +561,15 @@ export class MazeGameEngine {
     });
 
     // Game timer must keep running and must not reset. Do not end the game on catch.
-    this.respawnNotice = '⚠️ CAUGHT BY HUNTER · RESET TO START · TIMER RUNNING';
-    this.addEvent('HUNTER_CATCH', 'The hunter caught you! Reset to start, timer continues.');
+    this.respawnNotice = `⚠️ CAUGHT BY HUNTER · -${penalty} PTS PENALTY · TIMER RUNNING`;
+    this.addEvent('HUNTER_CATCH', `The hunter caught you! -${penalty} pts penalty. Reset to start, timer continues.`);
 
     this.repository.logEvent(this.sessionId, 'HUNTER_CATCH', {
       restartsCount: this.restartsCount,
+      penalty,
+      penaltiesTotal: this.penalties,
       timeElapsedMs: Math.round(this.timeElapsedMs),
+      score: this.score,
     });
   }
 
@@ -616,7 +627,9 @@ export class MazeGameEngine {
         switchesPoints: switchesActivated * GAME_CONFIG.SCORING.SWITCH_POINTS,
         completionBonus,
         timePoints,
-        collisionDeductions: -this.penalties,
+        hunterCatchPenalties: (this.hunterCatchesCount || 0) * (GAME_CONFIG.SCORING.HUNTER_CATCH_PENALTY || 50),
+        pitFallPenalties: (this.pitFallsCount || 0) * (GAME_CONFIG.SCORING.PIT_FALL_PENALTY || 30),
+        penaltiesDeduction: -this.penalties,
       },
     };
 
