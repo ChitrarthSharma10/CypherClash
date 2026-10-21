@@ -1479,12 +1479,21 @@ function InvestigationScreen({ onBack, onLogout }) {
     };
   }, []);
 
+  useEffect(() => {
+    if (teamLookup.error === "Authentication required") {
+      onLogout();
+    }
+  }, [teamLookup.error, onLogout]);
+
   if (teamLookup.loading)
     return <LoadingState label="Loading your Case HELIX investigation…" />;
-  if (!teamLookup.data && teamLookup.error !== "Authentication required") {
+  if (teamLookup.error === "Authentication required") {
+    return <LoadingState label="Redirecting to login…" />;
+  }
+  if (!teamLookup.data) {
     return (
       <ErrorState
-        message={teamLookup.error}
+        message={teamLookup.error || "Failed to load team data"}
         onRetry={() => window.location.reload()}
       />
     );

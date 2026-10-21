@@ -194,7 +194,8 @@ function evaluateCaseReport(report, state) {
   const validTheories =
     !report.rejectedTheories ||
     (report.rejectedTheories.length === 2 &&
-      report.rejectedTheories.includes("database") &&
+      (report.rejectedTheories.includes("database") ||
+        report.rejectedTheories.includes("malfunction")) &&
       report.rejectedTheories.includes("contractor"));
 
   const correct =

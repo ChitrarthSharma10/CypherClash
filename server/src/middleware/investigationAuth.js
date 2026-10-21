@@ -43,8 +43,8 @@ export async function requireInvestigationParticipant(req, res, next) {
       (entry) => entry.teamId === teamId && entry.attemptNo === attemptNo,
     );
 
-    // Auto-initialize case for this team if not yet created and round is running
-    if (!investigation && round.status === "running") {
+    // Auto-initialize case for this team if not yet created and round exists
+    if (!investigation && round) {
       const now = new Date();
       const currentSessionHash = sessionHash(req.sessionID);
       investigation = await claimRound3Investigation(attemptNo, {

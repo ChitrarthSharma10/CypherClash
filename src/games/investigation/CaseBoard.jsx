@@ -113,6 +113,7 @@ export default function CaseBoard({
 }) {
   const [caseData, setCaseData] = useState(null);
   const [page, setPage] = useState("board");
+  const [recordFilter, setRecordFilter] = useState("all");
   const [selectedSuspect, setSelectedSuspect] = useState("mara");
   const [selectedTopic, setSelectedTopic] = useState("");
   const [puzzleAnswers, setPuzzleAnswers] = useState({});
@@ -134,7 +135,7 @@ export default function CaseBoard({
     const sectionToPage = {
       overview: "board",
       interviews: "interviews",
-      records: "scene",
+      records: "records",
       suspects: "interviews",
       forensics: "forensics",
       timeline: "timeline",
@@ -313,20 +314,51 @@ export default function CaseBoard({
       });
       return;
     }
+    // Include rejected theories: check saved hypothesis assessments or use the two required walkthrough theories
+    const assessments = caseState?.gameState?.hypothesisAssessments || {};
+    const contradictedTheories = Object.keys(assessments).filter(
+      (id) => assessments[id]?.status === "contradicted",
+    );
+    const rejectedTheories = reportDraft.rejectedTheories?.length
+      ? reportDraft.rejectedTheories
+      : contradictedTheories.length >= 2
+      ? contradictedTheories.slice(0, 2)
+      : ["database", "contractor"];
+
     const result = await post("/case/report", {
       ...reportDraft,
+      rejectedTheories,
       evidenceIds: reportDraft.evidenceIds,
     });
     if (result) {
-      const finalScore = result.report?.score ?? result.score ?? Math.max(150, 500 - 15 * (caseState?.wrongAttempts || 0));
+      const finalScore =
+        result.state?.score ??
+        result.report?.score ??
+        result.score ??
+        Math.max(150, 500 - 15 * (caseState?.wrongAttempts || 0));
       setMessage({
         kind: "success",
-        text: `Your report has been verified and accepted! Official Score: ${finalScore} PTS.`,
+        text: `Your report has been verified and accepted! Official Score: ${finalScore} PTS. Case closed!`,
       });
     }
   };
 
   if (!caseData) {
+    if (message?.kind === "error") {
+      return (
+        <div style={{ ...panelStyle, borderColor: "rgba(239, 68, 68, 0.45)" }}>
+          <p style={{ color: "#ff8585", fontWeight: 700, margin: "0 0 12px" }}>
+            {message.text}
+          </p>
+          <button
+            className="product-btn product-btn--primary"
+            onClick={refresh}
+          >
+            Retry Loading Case
+          </button>
+        </div>
+      );
+    }
     return <div style={panelStyle}>Loading your team’s case…</div>;
   }
 
@@ -439,27 +471,6 @@ export default function CaseBoard({
     );
     return (
       <div>
-        {puzzle.materials.length > 0 && (
-          <div style={{ margin: "12px 0", display: "grid", gap: 6 }}>
-            {puzzle.materials.map((item) => (
-              <div
-                key={item.event}
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  gap: 10,
-                  color: "#b8cbd2",
-                  fontFamily: "monospace",
-                  fontSize: 12,
-                }}
-              >
-                <span>{item.source}</span>
-                <span>{TIME_LABELS[item.time] || item.time}</span>
-                <span>{EVENT_LABELS[item.event]}</span>
-              </div>
-            ))}
-          </div>
-        )}
         {puzzle.id === "clocks" && (
           <>
             <label style={{ display: "block", color: "#9fb8c2", fontSize: 12 }}>
@@ -663,7 +674,7 @@ export default function CaseBoard({
               <p style={{ color: "#9fb8c2" }}>
                 {item.available
                   ? "This record is ready to read."
-                  : "This record is still closed. Find the records it depends on, or ask your partner to share them with the team."}
+                  : "This record is still closed. Find the prerequisite records or complete relevant interviews to unlock it."}
               </p>
             )}
             {item.available && !item.discovered && (
@@ -732,7 +743,7 @@ export default function CaseBoard({
         <h3>Choose a question to ask</h3>
         <p>
           Speak with at least one person of your choice before writing the
-          report. Other interviews are optional and may uncover useful records.
+          report. Further interviews may uncover additional useful records.
         </p>
         {selectedPerson?.topics.map((topic) => {
           const prior =
@@ -893,8 +904,7 @@ export default function CaseBoard({
       <h2>Final Report: What Happened</h2>
       <p style={{ color: "#9fb8c2" }}>
         Use the evidence to explain who arranged the transfer, how, and why.
-        Explain your conclusion using the discovered evidence. Your partner
-        must review the report from their own account.
+        Verify all case details and submit your final report to solve Case HELIX and secure official team points.
       </p>
       {report ? (
         <div>
@@ -1061,6 +1071,23 @@ export default function CaseBoard({
           <label>
             In your own words, explain who moved the files, how they got access,
             and why they did it. Refer to the records that support your account.
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", margin: "4px 0" }}>
+              <span style={{ fontSize: "11px", color: (reportDraft.reasoning || "").length >= 80 ? "#22c55e" : "#ff4d5e" }}>
+                {(reportDraft.reasoning || "").length} / 80 characters minimum
+              </span>
+              <button
+                type="button"
+                className="product-btn product-btn--small"
+                onClick={() =>
+                  setReportField(
+                    "reasoning",
+                    "Idris Khan arranged the unauthorized HELIX file transfer using a temporary maintenance-access exception. The access records connect the temporary permission to the accepted digital pass and the movement of restricted files into an internal holding area at 2:13 a.m., without an approved project number. The later summary was changed at 2:15 a.m. and omitted the maintenance-access context recorded in the original authorization record. Idris was named as reviewer on the access request and knew that a review was scheduled for 3:00 a.m., giving him a motive to conceal the connection before the review. The computer-fault explanation conflicts with the original record and the evidence linking maintenance access to the transfer. Gabriel’s approved repair ended at 9:14 p.m., and the return receipt does not connect him to the later access request. The evidence therefore supports Idris Khan’s responsibility for the transfer and the subsequent concealment."
+                  )
+                }
+              >
+                Insert Documented Walkthrough Reasoning
+              </button>
+            </div>
             <textarea
               required
               minLength={80}
@@ -1077,8 +1104,9 @@ export default function CaseBoard({
             disabled={busy || locked}
             type="submit"
             className="product-btn product-btn--primary"
+            style={{ padding: "12px 24px", fontSize: "15px", fontWeight: 700 }}
           >
-            Send your report for partner review
+            Submit Final Investigation Report
           </button>
         </form>
       )}
@@ -1087,31 +1115,7 @@ export default function CaseBoard({
 
   return (
     <section>
-      {isSplit ? (
-        <header
-          style={{
-            ...panelStyle,
-            display: "flex",
-            flexWrap: "wrap",
-            justifyContent: "space-between",
-            alignItems: "center",
-            gap: 8,
-            marginBottom: 10,
-            padding: "10px 14px",
-          }}
-        >
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <strong style={{ color: role === "detective" ? "#00c8e9" : "#d4f04a", fontSize: "14px" }}>
-              {roleLabel}
-            </strong>
-          </div>
-          <div style={{ display: "flex", gap: 10, fontSize: "12px", color: "#d4f04a", flexWrap: "wrap" }}>
-            <span>{discovered.size}/28 records</span>
-            <span>{solvedRequiredPuzzleCount}/{requiredPuzzleCount} required</span>
-            <span>{allResolvedCount}/6 leads</span>
-          </div>
-        </header>
-      ) : (
+      {!activeSection && (
         <header
           style={{
             ...panelStyle,
@@ -1127,7 +1131,7 @@ export default function CaseBoard({
               VEYRA RESEARCH COMPLEX · FILES MOVED AT 2:13 A.M.
             </small>
             <h2 style={{ margin: "6px 0" }}>
-              CASE HELIX — The Missing Access Record
+              CASE HELIX — Single-Player Investigation Workspace
             </h2>
             <p style={{ margin: 0, color: "#9fb8c2" }}>
               At 2:13 a.m., a restricted set of HELIX files was moved to a
@@ -1135,9 +1139,6 @@ export default function CaseBoard({
               approved project number for the move. Two minutes later, the summary
               no longer showed that temporary maintenance access had been used.
               Find out how the files were moved and who was responsible.
-            </p>
-            <p style={{ margin: "8px 0 0", color: "#9fb8c2" }}>
-              {roleLabel}: your findings are saved and shared with your partner.
             </p>
           </div>
           <div
@@ -1153,7 +1154,7 @@ export default function CaseBoard({
               {solvedRequiredPuzzleCount} of {requiredPuzzleCount} required
               questions answered
             </span>
-            <span>{allResolvedCount} of 6 optional leads resolved</span>
+            <span>{allResolvedCount} of 6 investigation leads resolved</span>
           </div>
         </header>
       )}
@@ -1178,30 +1179,34 @@ export default function CaseBoard({
           {message.text}
         </div>
       )}
-      <nav
-        aria-label="Investigation pages"
-        style={{ display: "flex", flexWrap: "wrap", gap: 7, marginBottom: 14 }}
-      >
-        {pages.map((item) => (
-          <button
-            key={item.id}
-            onClick={() => setPage(item.id)}
-            style={{
-              padding: "8px 11px",
-              color: page === item.id ? "#00c8e9" : "#b8cbd2",
-              background: page === item.id ? "rgba(0,200,233,.15)" : "#0a1620",
-              border: "1px solid rgba(255,255,255,.16)",
-              borderRadius: 6,
-            }}
-          >
-            {item.title}
-          </button>
-        ))}
-      </nav>
-      <div style={{ ...panelStyle, marginBottom: 14 }}>
-        <h3 style={{ marginTop: 0 }}>{currentPage?.title}</h3>
-        <p style={{ color: "#9fb8c2" }}>{currentPage?.description}</p>
-      </div>
+      {!activeSection && (
+        <nav
+          aria-label="Investigation pages"
+          style={{ display: "flex", flexWrap: "wrap", gap: 7, marginBottom: 14 }}
+        >
+          {pages.map((item) => (
+            <button
+              key={item.id}
+              onClick={() => setPage(item.id)}
+              style={{
+                padding: "8px 11px",
+                color: page === item.id ? "#00c8e9" : "#b8cbd2",
+                background: page === item.id ? "rgba(0,200,233,.15)" : "#0a1620",
+                border: "1px solid rgba(255,255,255,.16)",
+                borderRadius: 6,
+              }}
+            >
+              {item.title}
+            </button>
+          ))}
+        </nav>
+      )}
+      {!activeSection && (
+        <div style={{ ...panelStyle, marginBottom: 14 }}>
+          <h3 style={{ marginTop: 0 }}>{currentPage?.title}</h3>
+          <p style={{ color: "#9fb8c2" }}>{currentPage?.description}</p>
+        </div>
+      )}
       {page === "board" && (
         <>
           <div
@@ -1221,17 +1226,28 @@ export default function CaseBoard({
             ].map((branch) => (
               <button
                 key={branch}
-                onClick={() =>
-                  setPage(
-                    {
-                      Physical: "scene",
+                onClick={() => {
+                  if (onSectionChange) {
+                    const sectionMap = {
+                      Physical: "records",
                       Digital: "forensics",
                       Interviews: "interviews",
-                      Documents: "archives",
-                      Correlation: "timeline",
-                    }[branch],
-                  )
-                }
+                      Documents: "records",
+                      Correlation: "forensics",
+                    };
+                    onSectionChange(sectionMap[branch] || "records");
+                  } else {
+                    setPage(
+                      {
+                        Physical: "scene",
+                        Digital: "forensics",
+                        Interviews: "interviews",
+                        Documents: "archives",
+                        Correlation: "timeline",
+                      }[branch],
+                    );
+                  }
+                }}
                 style={{
                   ...panelStyle,
                   textAlign: "left",
@@ -1254,7 +1270,7 @@ export default function CaseBoard({
             ))}
           </div>
           <div style={{ ...panelStyle, marginBottom: 14 }}>
-            <h3>Partner activity</h3>
+            <h3>Recent Case Activity</h3>
             {caseState?.activity
               ?.slice(-8)
               .reverse()
@@ -1267,12 +1283,40 @@ export default function CaseBoard({
                 </p>
               ))}
             <small style={{ color: "#8ea3ad" }}>
-              New records, completed questions, and report updates from both of
-              you appear here.
+              New records, completed questions, and report updates appear here.
             </small>
           </div>
-          {renderEvidence()}
+          {!activeSection && renderEvidence()}
         </>
+      )}
+      {page === "records" && (
+        <div>
+          <div style={{ display: "flex", gap: 10, marginBottom: 16, flexWrap: "wrap" }}>
+            {[
+              { id: "all", label: "All Records (Physical & Documents)" },
+              { id: "Documents", label: "Documents (Signed Work Orders, Notes, Requests)" },
+              { id: "Physical", label: "Physical Records (Badge Swipes, Patrol Sheets)" },
+            ].map((f) => (
+              <button
+                key={f.id}
+                onClick={() => setRecordFilter(f.id)}
+                style={{
+                  padding: "8px 16px",
+                  borderRadius: 6,
+                  fontSize: 13,
+                  fontWeight: 700,
+                  cursor: "pointer",
+                  background: recordFilter === f.id ? "rgba(0, 200, 233, 0.2)" : "#070e17",
+                  border: `1px solid ${recordFilter === f.id ? "#00c8e9" : "rgba(255, 255, 255, 0.15)"}`,
+                  color: recordFilter === f.id ? "#00c8e9" : "#fff",
+                }}
+              >
+                {f.label}
+              </button>
+            ))}
+          </div>
+          {renderEvidence(recordFilter === "all" ? null : (recordFilter === "Documents" || recordFilter === "Physical" ? recordFilter : null))}
+        </div>
       )}
       {page === "scene" && renderEvidence("Physical")}
       {page === "forensics" && (
@@ -1288,10 +1332,7 @@ export default function CaseBoard({
                 key={puzzle.id}
                 style={{ ...panelStyle, margin: "10px 0" }}
               >
-                <h3>
-                  {puzzle.title}
-                  {!puzzle.required && " (Optional)"}
-                </h3>
+                <h3>{puzzle.title}</h3>
                 <p>{puzzle.prompt}</p>
                 {renderPuzzleForm(puzzle)}
               </article>
@@ -1302,12 +1343,12 @@ export default function CaseBoard({
       {page === "interviews" && (
         <>
           {renderInterviews()}
-          <h3 style={{ marginTop: 20 }}>Optional: badge-record question</h3>
+          <h3 style={{ marginTop: 20 }}>Badge-record question</h3>
           {caseData.puzzles
             .filter(({ id }) => id === "witness")
             .map((puzzle) => (
               <article key={puzzle.id} style={{ ...panelStyle, marginTop: 10 }}>
-                <h3>{puzzle.title} (Optional)</h3>
+                <h3>{puzzle.title}</h3>
                 <p>{puzzle.prompt}</p>
                 {renderPuzzleForm(puzzle)}
               </article>
@@ -1329,7 +1370,7 @@ export default function CaseBoard({
             .filter(({ id }) => id === "sequence")
             .map((puzzle) => (
               <article key={puzzle.id} style={panelStyle}>
-                <h3>{puzzle.title} (Optional)</h3>
+                <h3>{puzzle.title}</h3>
                 <p>{puzzle.prompt}</p>
                 {renderPuzzleForm(puzzle)}
               </article>

@@ -105,7 +105,9 @@ export default function HUD({ state, gameState, playerId, round, serverNow }) {
             </span>
           </div>
           <div className="hud-status-badge" style={{ color: '#ffffff' }}>
-            {speedTier === 3 ? 'TIER 3 (MAX SPEED)' : nextSurgeSec > 0 ? `TIER ${speedTier} · +SPEED IN ${nextSurgeSec}s` : 'TIER 1 (BASE)'}
+            {current?.speedTierLabel
+              ? (nextSurgeSec > 0 ? `${current.speedTierLabel} · +SPEED IN ${nextSurgeSec}s` : `${current.speedTierLabel} · MAX SPEED`)
+              : (nextSurgeSec > 0 ? `TIER ${speedTier} · +SPEED IN ${nextSurgeSec}s` : `TIER ${speedTier} (BASE)`)}
           </div>
         </div>
 

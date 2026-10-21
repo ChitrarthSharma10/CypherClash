@@ -352,37 +352,37 @@ export default function InvestigationGuidelinesModal({ isOpen, onClose }) {
   const guidelines = [
     {
       icon: <CoOpKeyboardIcon />,
-      name: "Two roles, one case",
-      category: "Work with your partner",
+      name: "Single-player investigation",
+      category: "Lead Investigator Workspace",
       effect:
-        "The Detective interviews people and checks physical records. The Analyst checks computer activity and file records. Both players share the same case.",
+        "Interview complex personnel, examine physical records, inspect system message logs, and solve forensic puzzles in a single unified workspace.",
       badgeType: "badge-player",
-      badgeText: "TEAMWORK",
+      badgeText: "SOLO OPS",
     },
     {
       icon: <EvidenceTileIcon />,
       name: "Find the records",
       category: "Evidence from different sources",
       effect:
-        "Read each record carefully. Some are ready at the start; others become available after your team finds related records or completes an interview.",
+        "Read each record carefully. Some are ready at the start; others become available after you discover related records or complete witness interviews.",
       badgeType: "badge-neutral",
       badgeText: "RECORDS",
     },
     {
       icon: <YarnPinIcon />,
-      name: "Share what you find",
-      category: "Your partner sees team discoveries",
+      name: "Synchronized Evidence",
+      category: "Live ledger updates",
       effect:
-        "New records and completed questions are saved to the shared case, so you and your partner can compare findings.",
+        "New records, interview notes, and solved questions are instantly recorded to your active case ledger.",
       badgeType: "badge-add",
-      badgeText: "SHARED CASE",
+      badgeText: "CASE LEDGER",
     },
     {
       icon: <DecipherKeyIcon />,
       name: "Answer case questions",
       category: "Two required questions",
       effect:
-        "Correct the computer clock and compare the original access record with its later summary. Four other questions are optional extras.",
+        "Correct the computer clock and compare the original access record with its later summary to unlock essential case evidence.",
       badgeType: "badge-bonus",
       badgeText: "QUESTIONS",
     },
@@ -391,7 +391,7 @@ export default function InvestigationGuidelinesModal({ isOpen, onClose }) {
       name: "Test every explanation",
       category: "Separate facts from guesses",
       effect:
-        "Choose any records your team has found when saving an assessment. For the final report, use evidence to rule out two alternatives.",
+        "Choose any records you have found when saving an assessment. For the final report, use evidence to rule out two alternatives.",
       badgeType: "badge-reduce",
       badgeText: "REASONING",
     },
@@ -400,7 +400,7 @@ export default function InvestigationGuidelinesModal({ isOpen, onClose }) {
       name: "Keep an eye on the clock",
       category: "45-minute investigation",
       effect:
-        "Your team has 45 minutes to investigate. When the round ends, you can still review the case, but you cannot add records or change answers.",
+        "You have 45 minutes to investigate. When the round ends, you can still review the case, but you cannot add records or change answers.",
       badgeType: "badge-reduce",
       badgeText: "45 MINUTES",
     },
@@ -409,7 +409,7 @@ export default function InvestigationGuidelinesModal({ isOpen, onClose }) {
       name: "Write the final report",
       category: "Explain what happened",
       effect:
-        "Interview one person of your choice, cite eight key records, explain who moved the files and why, and rule out two alternatives. Your partner must review the report.",
+        "Interview one person of your choice, cite eight key records, explain who moved the files and why, and rule out two alternatives. Submit directly for case clearance and scoring.",
       badgeType: "badge-bonus",
       badgeText: "FINAL REPORT",
     },

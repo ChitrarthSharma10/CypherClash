@@ -423,35 +423,26 @@ export class RunnerGameEngine {
       }
     }
 
-    // Base speed and tiers derived from GAME_CONFIG.BASE_SPEED (tunable constant)
-    const elapsedSec = this.timeElapsedMs / 1000;
+    // Speed increases by 0.2 times the initial speed after every 500 meters
     const base = GAME_CONFIG.BASE_SPEED;
-    let targetSpeed = base;
-    let tier = 1;
-
-    if (elapsedSec >= 50) {
-      tier = 3;
-      targetSpeed = base * 1.5;
-    } else if (elapsedSec >= 25) {
-      tier = 2;
-      targetSpeed = base * 1.25;
-    } else {
-      tier = 1;
-      targetSpeed = base;
-    }
+    const intervalMeters = GAME_CONFIG.SPEED_SURGE_DISTANCE_METERS || 500;
+    const surgeFactor = GAME_CONFIG.SPEED_SURGE_FACTOR ?? 0.2;
+    const surgeStep = Math.floor(this.distanceMeters / intervalMeters);
+    const tier = surgeStep + 1;
+    const targetSpeed = base * (1 + surgeFactor * surgeStep);
 
     if (this.speedTier !== tier) {
       this.speedTier = tier;
-      this.repository.logEvent(this.sessionId, 'SPEED_SURGE', {
+      this.repository?.logEvent(this.sessionId, 'SPEED_SURGE', {
         tier,
         speed: targetSpeed,
-        elapsedSec: Math.round(elapsedSec),
+        distanceMeters: Math.round(this.distanceMeters),
       });
     }
 
     // Accelerate smoothly towards target tier speed
     if (this.speed < targetSpeed) {
-      this.speed = Math.min(targetSpeed, this.speed + 2.0 * dt);
+      this.speed = Math.min(targetSpeed, this.speed + 3.0 * dt);
     } else if (this.speed > targetSpeed) {
       this.speed = Math.max(targetSpeed, this.speed - 1.0 * dt);
     }
@@ -627,10 +618,17 @@ export class RunnerGameEngine {
     const visibleCoins = this.coins.filter((c) => c.distance >= minD && c.distance <= maxD);
     const visiblePowerUps = this.powerUps.filter((p) => p.distance >= minD && p.distance <= maxD);
 
-    const elapsedSec = Math.max(0, this.timeElapsedMs / 1000);
-    const speedTier = this.status === 'IN_PROGRESS' ? (elapsedSec >= 60 ? 3 : elapsedSec >= 30 ? 2 : 1) : 1;
-    const speedTierLabel = speedTier === 3 ? 'TIER 3 (HYPER SPRINT)' : speedTier === 2 ? 'TIER 2 (SPEED SURGE)' : 'TIER 1 (BASE)';
-    const nextSurgeSec = this.status === 'IN_PROGRESS' && speedTier < 3 ? Math.max(0, Math.ceil(30 - (elapsedSec % 30))) : 0;
+    const intervalMeters = GAME_CONFIG.SPEED_SURGE_DISTANCE_METERS || 500;
+    const surgeFactor = GAME_CONFIG.SPEED_SURGE_FACTOR ?? 0.2;
+    const surgeStep = Math.floor(this.distanceMeters / intervalMeters);
+    const speedTier = this.status === 'IN_PROGRESS' ? surgeStep + 1 : 1;
+    const speedMultiplierStr = (1 + surgeFactor * surgeStep).toFixed(1);
+    const speedTierLabel = `TIER ${speedTier} (${speedMultiplierStr}x SPEED)`;
+    const nextMilestoneMeters = (surgeStep + 1) * intervalMeters;
+    const distanceToNext = Math.max(0, nextMilestoneMeters - this.distanceMeters);
+    const nextSurgeSec = this.status === 'IN_PROGRESS' && nextMilestoneMeters < GAME_CONFIG.COURSE_LENGTH_METERS && this.speed > 0
+      ? Math.max(1, Math.ceil(distanceToNext / this.speed))
+      : 0;
 
     return {
       sessionId: this.sessionId,

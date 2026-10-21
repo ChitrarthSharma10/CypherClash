@@ -24,8 +24,10 @@ export const GAME_CONFIG = {
 
   // Runner Speeds (meters / second) - Tuned for comfortably doable co-op run
   BASE_SPEED: 12.25,               // Tunable base speed constant (lowered by ~30%)
+  SPEED_SURGE_DISTANCE_METERS: 500, // Speed surge triggered every 500m
+  SPEED_SURGE_FACTOR: 0.2,          // Increase speed by 0.2x initial speed every 500m
   SPEED_ACCELERATION: 0.035,
-  MAX_SPEED: 16.0,
+  MAX_SPEED: 26.0,
   COLLISION_RECOVERY_TIME_SEC: 3.0, // Massive slowdown for 3 seconds on collision
   COLLISION_SLOWDOWN_FACTOR: 0.25,  // Slow to 25% of normal speed on collision
 
