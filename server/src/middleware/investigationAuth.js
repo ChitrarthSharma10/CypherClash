@@ -55,7 +55,10 @@ export async function requireInvestigationParticipant(req, res, next) {
       investigation.analystSessionHash === currentSessionHash;
 
     const requestedRole =
-      req.headers["x-acting-role"] || req.query.role || req.body?.actingRole;
+      req.headers["x-acting-role"] ||
+      req.headers["x-investigation-role"] ||
+      req.query.role ||
+      req.body?.actingRole;
 
     let role = null;
 

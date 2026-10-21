@@ -293,11 +293,24 @@ router.post(
   validateBody(emptySchema),
   async (req, res, next) => {
     try {
-      const round = await runningRound3();
-      if (!round)
+      const round = await getRound3State();
+      if (
+        !round ||
+        round.status !== "running" ||
+        !round.deadline ||
+        new Date(round.deadline).getTime() <= Date.now()
+      ) {
         return res
           .status(409)
-          .json({ error: "Round 3 is not running", code: "ROUND_NOT_RUNNING" });
+          .json({ error: "Round 3 is not open right now.", code: "ROUND_NOT_RUNNING" });
+      }
+      if (!(await isTeamEligibleForRound(req.team.teamId, 3))) {
+        return res.status(403).json({
+          error:
+            "Your team must complete the earlier rounds before joining Round 3.",
+          code: "PROGRESSION_PREREQUISITE_NOT_MET",
+        });
+      }
       const attemptNo = round.attemptNo ?? 1;
       const now = new Date();
       const currentSessionHash = hashSession(req.sessionID);
@@ -336,24 +349,20 @@ router.post(
           ],
           accusation: null,
         });
-      } else if (
-        existing.detectiveSessionHash === currentSessionHash &&
-        existing.analystJoinedAt == null
-      ) {
+      } else {
         doc = await updateRound3Investigation(
           attemptNo,
           {
-            _id: existing._id,
             teamId: req.team.teamId,
             attemptNo,
-            detectiveSessionHash: currentSessionHash,
-            analystJoinedAt: null,
             finalResult: { $exists: false },
           },
           {
             $set: {
-              "investigations.$.analystJoinedAt": now,
+              "investigations.$.detectiveSessionHash": currentSessionHash,
               "investigations.$.analystSessionHash": currentSessionHash,
+              "investigations.$.detectiveJoinedAt": existing.detectiveJoinedAt || now,
+              "investigations.$.analystJoinedAt": existing.analystJoinedAt || now,
             },
             $unset: {
               "investigations.$.inviteHash": 1,
@@ -362,24 +371,16 @@ router.post(
             $push: {
               "investigations.$.activity": {
                 type: "role_joined",
-                message: "Forensic Analyst joined the case",
-                role: "analyst",
+                message: "Stations switched to same-screen mode",
+                role: "system",
                 at: now,
               },
             },
           },
         );
-      } else if (
-        existing.detectiveSessionHash === currentSessionHash &&
-        existing.analystSessionHash === currentSessionHash
-      ) {
-        doc = existing;
-      } else {
-        return res
-          .status(409)
-          .json({
-            error: "Station seats are already claimed by another session",
-          });
+        if (!doc) {
+          doc = existing;
+        }
       }
 
       if (!doc) {

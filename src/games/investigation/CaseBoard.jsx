@@ -103,6 +103,7 @@ export default function CaseBoard({
   caseState,
   setCaseState,
   locked,
+  isSplit = false,
 }) {
   const [caseData, setCaseData] = useState(null);
   const [page, setPage] = useState("board");
@@ -125,7 +126,10 @@ export default function CaseBoard({
   const refresh = useCallback(async () => {
     const response = await fetch(`${API_URL}/api/investigation/case`, {
       credentials: "include",
-      headers: { "X-Investigation-Role": role },
+      headers: {
+        "X-Investigation-Role": role,
+        "x-acting-role": role,
+      },
     });
     const data = await response.json();
     if (!response.ok)
@@ -177,6 +181,7 @@ export default function CaseBoard({
         headers: {
           "Content-Type": "application/json",
           "X-Investigation-Role": role,
+          "x-acting-role": role,
         },
         body: JSON.stringify(body),
       });
@@ -1081,50 +1086,76 @@ export default function CaseBoard({
 
   return (
     <section>
-      <header
-        style={{
-          ...panelStyle,
-          display: "flex",
-          flexWrap: "wrap",
-          justifyContent: "space-between",
-          gap: 12,
-          marginBottom: 14,
-        }}
-      >
-        <div>
-          <small style={{ color: "#00c8e9" }}>
-            VEYRA RESEARCH COMPLEX · FILES MOVED AT 2:13 A.M.
-          </small>
-          <h2 style={{ margin: "6px 0" }}>
-            CASE HELIX — The Missing Access Record
-          </h2>
-          <p style={{ margin: 0, color: "#9fb8c2" }}>
-            At 2:13 a.m., a restricted set of HELIX files was moved to a
-            temporary holding area inside the complex. The receipt lists no
-            approved project number for the move. Two minutes later, the summary
-            no longer showed that temporary maintenance access had been used.
-            Find out how the files were moved and who was responsible.
-          </p>
-          <p style={{ margin: "8px 0 0", color: "#9fb8c2" }}>
-            {roleLabel}: your findings are saved and shared with your partner.
-          </p>
-        </div>
-        <div
+      {isSplit ? (
+        <header
           style={{
+            ...panelStyle,
             display: "flex",
-            gap: 12,
+            flexWrap: "wrap",
+            justifyContent: "space-between",
             alignItems: "center",
-            color: "#d4f04a",
+            gap: 8,
+            marginBottom: 10,
+            padding: "10px 14px",
           }}
         >
-          <span>{discovered.size} of 28 records found</span>
-          <span>
-            {solvedRequiredPuzzleCount} of {requiredPuzzleCount} required
-            questions answered
-          </span>
-          <span>{allResolvedCount} of 6 optional leads resolved</span>
-        </div>
-      </header>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <strong style={{ color: role === "detective" ? "#00c8e9" : "#d4f04a", fontSize: "14px" }}>
+              {roleLabel}
+            </strong>
+          </div>
+          <div style={{ display: "flex", gap: 10, fontSize: "12px", color: "#d4f04a", flexWrap: "wrap" }}>
+            <span>{discovered.size}/28 records</span>
+            <span>{solvedRequiredPuzzleCount}/{requiredPuzzleCount} required</span>
+            <span>{allResolvedCount}/6 leads</span>
+          </div>
+        </header>
+      ) : (
+        <header
+          style={{
+            ...panelStyle,
+            display: "flex",
+            flexWrap: "wrap",
+            justifyContent: "space-between",
+            gap: 12,
+            marginBottom: 14,
+          }}
+        >
+          <div>
+            <small style={{ color: "#00c8e9" }}>
+              VEYRA RESEARCH COMPLEX · FILES MOVED AT 2:13 A.M.
+            </small>
+            <h2 style={{ margin: "6px 0" }}>
+              CASE HELIX — The Missing Access Record
+            </h2>
+            <p style={{ margin: 0, color: "#9fb8c2" }}>
+              At 2:13 a.m., a restricted set of HELIX files was moved to a
+              temporary holding area inside the complex. The receipt lists no
+              approved project number for the move. Two minutes later, the summary
+              no longer showed that temporary maintenance access had been used.
+              Find out how the files were moved and who was responsible.
+            </p>
+            <p style={{ margin: "8px 0 0", color: "#9fb8c2" }}>
+              {roleLabel}: your findings are saved and shared with your partner.
+            </p>
+          </div>
+          <div
+            style={{
+              display: "flex",
+              gap: 12,
+              alignItems: "center",
+              color: "#d4f04a",
+            }}
+          >
+            <span>{discovered.size} of 28 records found</span>
+            <span>
+              {solvedRequiredPuzzleCount} of {requiredPuzzleCount} required
+              questions answered
+            </span>
+            <span>{allResolvedCount} of 6 optional leads resolved</span>
+          </div>
+        </header>
+      )}
       {locked && (
         <div
           role="status"

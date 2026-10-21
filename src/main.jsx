@@ -4186,23 +4186,106 @@ function CredentialBox({ credentials }) {
   if (!credentials) return null;
   return (
     <div className="credential-box">
-      <strong>Team credentials shown once</strong>
-      <p>Save the password now. It will not be displayed again.</p>
-      <div>
-        <span>
-          Team ID <code>{credentials.teamId}</code>
-        </span>
-        <CopyButton value={credentials.teamId} />
-      </div>
-      <div>
-        <span>
-          Password <code>{credentials.password}</code>
-        </span>
-        <CopyButton value={credentials.password} />
-      </div>
+      <strong>Team credentials</strong>
+      <p>{credentials.password ? 'Save the password now. It will not be displayed again.' : 'Custom password was set by administrator.'}</p>
+      <div><span>Team ID <code>{credentials.teamId}</code></span><CopyButton value={credentials.teamId} /></div>
+      {credentials.password && <div><span>Password <code>{credentials.password}</code></span><CopyButton value={credentials.password} /></div>}
     </div>
   );
 }
+
+function ResetPasswordModal({ team, onClose, onSuccess }) {
+  const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [error, setError] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+
+  const handleGenerate = () => {
+    setPassword(generateLocalRandomPassword(12));
+    setError('');
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError('');
+    setSubmitting(true);
+    try {
+      const body = {};
+      if (password && password.trim().length > 0) {
+        body.password = password;
+      }
+      const result = await apiRequest(`/api/admin/teams/${team.teamId}/reset-password`, {
+        method: 'POST',
+        body: JSON.stringify(body),
+      });
+      setPassword('');
+      onSuccess(result);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <section className="modal cc-prog-modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '520px' }}>
+        <button className="close" onClick={onClose} aria-label="Close dialog">×</button>
+        <p className="eyebrow">ACCESS CONTROL / CREDENTIAL RESET</p>
+        <h2>Reset password</h2>
+        <p style={{ margin: '8px 0 16px', color: '#c8c8d0', fontSize: '13px', lineHeight: 1.5 }}>
+          Resetting the password for <strong>{team.name}</strong> (<code>{team.teamId}</code>) will immediately invalidate all active team sessions and clear login lockouts.
+        </p>
+
+        {error && <p className="product-message is-error" role="alert" style={{ marginBottom: '14px' }}>{error}</p>}
+
+        <form onSubmit={handleSubmit}>
+          <Field label="NEW PASSWORD (OPTIONAL)">
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+              <input
+                type={showPassword ? 'text' : 'password'}
+                className="product-input"
+                value={password}
+                placeholder="Leave blank to generate on server"
+                onChange={(e) => {
+                  setPassword(e.target.value);
+                  if (error) setError('');
+                }}
+                style={{ flex: 1 }}
+              />
+              <button
+                type="button"
+                className="product-btn product-btn--small product-btn--light"
+                onClick={() => setShowPassword((prev) => !prev)}
+              >
+                {showPassword ? 'Hide' : 'Show'}
+              </button>
+              <button
+                type="button"
+                className="product-btn product-btn--small product-btn--light"
+                onClick={handleGenerate}
+              >
+                Generate random
+              </button>
+            </div>
+          </Field>
+          <p style={{ fontSize: '12px', color: '#8e8e99', margin: '4px 0 18px', lineHeight: 1.4 }}>
+            10–128 characters, no leading/trailing spaces, cannot contain team ID/name, no single repeated character or obvious sequences. Leave empty to generate automatically on server.
+          </p>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+            <button type="button" className="product-btn product-btn--light" onClick={onClose} disabled={submitting}>
+              Cancel
+            </button>
+            <button type="submit" className="product-btn product-btn--primary" disabled={submitting}>
+              {submitting ? 'Resetting…' : 'Reset password'}
+            </button>
+          </div>
+        </form>
+      </section>
+    </div>
+  );
+}
+
 
 function ManageProgressModal({ team, onClose, onRefresh }) {
   const [data, setData] = useState(null);
@@ -4916,9 +4999,14 @@ function AdminDashboard({ onLogout }) {
   const [logs, setLogs] = useState([]);
   const [form, setForm] = useState({
     name: "",
+    password: "",
     biasPoints: 0,
     initialProgression: 1,
   });
+  const [showCreatePassword, setShowCreatePassword] = useState(false);
+  const [formError, setFormError] = useState("");
+  const [editErrors, setEditErrors] = useState({});
+  const [resetModalTeam, setResetModalTeam] = useState(null);
   const [manageProgressTeam, setManageProgressTeam] = useState(null);
   const [credentials, setCredentials] = useState(null);
   const [edits, setEdits] = useState({});
@@ -5103,18 +5191,27 @@ function AdminDashboard({ onLogout }) {
 
   const createTeam = async (event) => {
     event.preventDefault();
+    setFormError("");
     setState({ loading: false, error: "", success: "" });
     try {
+      const payload = {
+        name: form.name,
+        biasPoints: Number(form.biasPoints),
+        initialProgression: Number(form.initialProgression || 1),
+      };
+      if (form.password && form.password.trim().length > 0) {
+        payload.password = form.password;
+      }
       const result = await apiRequest("/api/admin/teams", {
         method: "POST",
-        body: JSON.stringify({
-          name: form.name,
-          biasPoints: Number(form.biasPoints),
-          initialProgression: Number(form.initialProgression || 1),
-        }),
+        body: JSON.stringify(payload),
       });
-      setCredentials({ teamId: result.team.teamId, password: result.password });
-      setForm({ name: "", biasPoints: 0, initialProgression: 1 });
+      if (result.password) {
+        setCredentials({ teamId: result.team.teamId, password: result.password });
+      } else {
+        setCredentials({ teamId: result.team.teamId });
+      }
+      setForm({ name: "", password: "", biasPoints: 0, initialProgression: 1 });
       setState({
         loading: false,
         error: "",
@@ -5122,43 +5219,28 @@ function AdminDashboard({ onLogout }) {
       });
       await load();
     } catch (error) {
+      setFormError(error.message);
       setState({ loading: false, error: error.message, success: "" });
     }
   };
 
   const updateTeam = async (teamId, patch) => {
-    setEditErrors((prev) => ({ ...prev, [teamId]: '' }));
+    setEditErrors((prev) => ({ ...prev, [teamId]: "" }));
     try {
       await apiRequest(`/api/admin/teams/${teamId}`, {
         method: "PATCH",
         body: JSON.stringify(patch),
       });
+      setEdits((prev) => {
+        const next = { ...prev };
+        delete next[`${teamId}:name`];
+        delete next[teamId];
+        return next;
+      });
       setState({ loading: false, error: "", success: `${teamId} updated.` });
       await load();
     } catch (error) {
-      setState({ loading: false, error: error.message, success: "" });
-    }
-  };
-
-  const resetPassword = async (teamId) => {
-    if (
-      !window.confirm(
-        `Reset the password for ${teamId}? This will sign the team out.`,
-      )
-    )
-      return;
-    try {
-      const result = await apiRequest(
-        `/api/admin/teams/${teamId}/reset-password`,
-        { method: "POST", body: JSON.stringify({}) },
-      );
-      setCredentials({ teamId: result.teamId, password: result.password });
-      setState({
-        loading: false,
-        error: "",
-        success: `${teamId} password reset.`,
-      });
-    } catch (error) {
+      setEditErrors((prev) => ({ ...prev, [teamId]: error.message }));
       setState({ loading: false, error: error.message, success: "" });
     }
   };
@@ -5343,15 +5425,71 @@ function AdminDashboard({ onLogout }) {
         <form className="admin-create-form" onSubmit={createTeam}>
           <Field label="TEAM NAME">
             <input
+              name="name"
               required
               value={form.name}
-              onChange={(event) =>
-                setForm({ ...form, name: event.target.value })
-              }
+              onChange={(event) => {
+                setForm({ ...form, name: event.target.value });
+                if (formError) setFormError("");
+              }}
             />
           </Field>
+          <Field label="PASSWORD (OPTIONAL)">
+            <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+              <input
+                name="password"
+                type={showCreatePassword ? "text" : "password"}
+                className="product-input"
+                value={form.password}
+                placeholder="Leave blank to generate on server"
+                onChange={(event) => {
+                  setForm({ ...form, password: event.target.value });
+                  if (formError) setFormError("");
+                }}
+                style={{ flex: 1 }}
+              />
+              <button
+                type="button"
+                className="product-btn product-btn--small product-btn--light"
+                onClick={() => setShowCreatePassword((prev) => !prev)}
+              >
+                {showCreatePassword ? "Hide" : "Show"}
+              </button>
+              <button
+                type="button"
+                className="product-btn product-btn--small product-btn--light"
+                onClick={() => {
+                  const randPass = generateLocalRandomPassword(12);
+                  setForm((prev) => ({ ...prev, password: randPass }));
+                  if (formError) setFormError("");
+                }}
+              >
+                Generate random
+              </button>
+            </div>
+          </Field>
+          <p
+            style={{
+              fontSize: "12px",
+              color: "#8e8e99",
+              margin: "-4px 0 10px",
+              lineHeight: 1.4,
+            }}
+          >
+            10–128 characters, no leading/trailing spaces, cannot contain team ID/name, no single repeated character or obvious sequences. Leave empty to generate automatically on server.
+          </p>
+          {formError && (
+            <p
+              className="product-message is-error"
+              role="alert"
+              style={{ margin: "-6px 0 10px" }}
+            >
+              {formError}
+            </p>
+          )}
           <Field label="BIAS POINTS">
             <input
+              name="biasPoints"
               type="number"
               value={form.biasPoints}
               onChange={(event) =>
@@ -5361,6 +5499,7 @@ function AdminDashboard({ onLogout }) {
           </Field>
           <Field label="INITIAL PROGRESSION">
             <select
+              name="initialProgression"
               className="product-input cc-prog-select"
               value={form.initialProgression || 1}
               onChange={(event) =>
@@ -5416,12 +5555,15 @@ function AdminDashboard({ onLogout }) {
                     <input
                       className="table-input cc-team-name-input"
                       value={edits[`${team.teamId}:name`] ?? team.name}
-                      onChange={(event) =>
+                      onChange={(event) => {
                         setEdits({
                           ...edits,
                           [`${team.teamId}:name`]: event.target.value,
-                        })
-                      }
+                        });
+                        if (editErrors[team.teamId]) {
+                          setEditErrors((prev) => ({ ...prev, [team.teamId]: "" }));
+                        }
+                      }}
                     />
                     <button
                       className="table-action"
@@ -5433,6 +5575,19 @@ function AdminDashboard({ onLogout }) {
                     >
                       Save name
                     </button>
+                    {editErrors[team.teamId] && (
+                      <div
+                        className="product-message is-error"
+                        role="alert"
+                        style={{
+                          marginTop: "4px",
+                          fontSize: "11px",
+                          padding: "4px 6px",
+                        }}
+                      >
+                        {editErrors[team.teamId]}
+                      </div>
+                    )}
                   </td>
                   <td>
                     <span className="cc-prog-badge">
@@ -5508,7 +5663,7 @@ function AdminDashboard({ onLogout }) {
                       </button>
                       <button
                         className="table-action"
-                        onClick={() => resetPassword(team.teamId)}
+                        onClick={() => setResetModalTeam(team)}
                       >
                         Reset team password
                       </button>
@@ -5561,6 +5716,22 @@ function AdminDashboard({ onLogout }) {
           team={manageProgressTeam}
           onClose={() => setManageProgressTeam(null)}
           onRefresh={() => void load({ includeLogs: true })}
+        />
+      )}
+      {resetModalTeam && (
+        <ResetPasswordModal
+          team={resetModalTeam}
+          onClose={() => setResetModalTeam(null)}
+          onSuccess={(result) => {
+            if (result.password) {
+              setCredentials({ teamId: result.teamId, password: result.password });
+              setState({ loading: false, error: "", success: `${result.teamId} password reset. New credentials shown below.` });
+            } else {
+              setCredentials({ teamId: result.teamId });
+              setState({ loading: false, error: "", success: `${result.teamId} password reset to chosen password.` });
+            }
+            setResetModalTeam(null);
+          }}
         />
       )}
     </main>

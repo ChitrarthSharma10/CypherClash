@@ -46,13 +46,13 @@ function hasCookie(req, name) {
 }
 
 export function investigationSessionMiddleware(req, res, next) {
-  const requestedRole = req.get("x-investigation-role");
+  const requestedRole = req.get("x-investigation-role") || req.get("x-acting-role");
   const hasAnalystCookie = hasCookie(req, ANALYST_COOKIE_NAME);
   const hasTeamCookie = hasCookie(req, TEAM_COOKIE_NAME);
   const useAnalystSession =
     req.path === "/join/analyst" ||
-    requestedRole === "analyst" ||
-    (hasAnalystCookie && !hasTeamCookie);
+    (hasAnalystCookie && !hasTeamCookie) ||
+    (requestedRole === "analyst" && !hasTeamCookie);
 
   return (useAnalystSession ? analystSessionMiddleware : teamSessionMiddleware)(
     req,
