@@ -7,8 +7,14 @@ import { config } from './config.js';
 import { initializeRoundStates, startRoundStateMonitor } from './services/roundState.js';
 import { ScoreEntry } from './models/ScoreEntry.js';
 import { GameSession } from './models/GameSession.js';
-import { rebuildLeaderboard } from './services/leaderboard.js';
 import { setupSocketIO } from './socket.js';
+import { MAZE_LAYOUTS } from './games/maze_engine/config.js';
+import { validateLayout } from './games/maze_engine/validateLayout.js';
+
+// Validate all maze layouts at boot; throws on failure
+for (const layout of MAZE_LAYOUTS) {
+  validateLayout(layout);
+}
 
 await connectDatabase();
 await GameSession.createIndexes();

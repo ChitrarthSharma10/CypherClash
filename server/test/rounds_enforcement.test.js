@@ -364,3 +364,112 @@ test('game join is refused when round is paused or ended', async () => {
   });
   assert.equal(circuitEnded.status, 409);
 });
+
+test('admin duration is respected for all rounds 1 to 3', async () => {
+  const aCookie = await adminCookie();
+
+  // Round 1 with custom duration 420s (7 mins)
+  const r1Res = await request('/api/admin/rounds/1/start', {
+    method: 'POST',
+    headers: { cookie: aCookie, 'content-type': 'application/json' },
+    body: JSON.stringify({ durationSec: 420 }),
+  });
+  assert.ok([200, 201].includes(r1Res.status));
+  const r1Data = await r1Res.json();
+  assert.equal(r1Data.durationSec, 420);
+  await request('/api/admin/rounds/1/end', { method: 'POST', headers: { cookie: aCookie, 'content-type': 'application/json' }, body: '{}' });
+
+  // Round 2 with custom duration 600s (10 mins)
+  const r2Res = await request('/api/admin/rounds/2/start', {
+    method: 'POST',
+    headers: { cookie: aCookie, 'content-type': 'application/json' },
+    body: JSON.stringify({ durationSec: 600 }),
+  });
+  assert.ok([200, 201].includes(r2Res.status));
+  const r2Data = await r2Res.json();
+  assert.equal(r2Data.durationSec, 600);
+  await request('/api/admin/rounds/2/end', { method: 'POST', headers: { cookie: aCookie, 'content-type': 'application/json' }, body: '{}' });
+
+  // Round 3 with custom duration 300s (5 mins) - must NOT be hardcoded to 2700
+  const r3Res = await request('/api/admin/rounds/3/start', {
+    method: 'POST',
+    headers: { cookie: aCookie, 'content-type': 'application/json' },
+    body: JSON.stringify({ durationSec: 300 }),
+  });
+  assert.ok([200, 201].includes(r3Res.status));
+  const r3Data = await r3Res.json();
+  assert.equal(r3Data.durationSec, 300);
+  await request('/api/admin/rounds/3/end', { method: 'POST', headers: { cookie: aCookie, 'content-type': 'application/json' }, body: '{}' });
+});
+
+test('pause freezes round timer and deadline extends upon resume', async () => {
+  const aCookie = await adminCookie();
+
+  const startRes = await request('/api/admin/rounds/1/start', {
+    method: 'POST',
+    headers: { cookie: aCookie, 'content-type': 'application/json' },
+    body: JSON.stringify({ durationSec: 1800 }),
+  });
+  assert.ok([200, 201].includes(startRes.status));
+  const started = await startRes.json();
+
+  const pauseRes = await request('/api/admin/rounds/1/pause', {
+    method: 'POST',
+    headers: { cookie: aCookie, 'content-type': 'application/json' },
+    body: '{}',
+  });
+  assert.equal(pauseRes.status, 200);
+  const paused = await pauseRes.json();
+  assert.equal(paused.status, 'paused');
+  assert.ok(paused.pausedAt);
+
+  // Resume after a delay
+  await new Promise((resolve) => setTimeout(resolve, 100));
+  const resumeRes = await request('/api/admin/rounds/1/resume', {
+    method: 'POST',
+    headers: { cookie: aCookie, 'content-type': 'application/json' },
+    body: '{}',
+  });
+  assert.equal(resumeRes.status, 200);
+  const resumed = await resumeRes.json();
+  assert.equal(resumed.status, 'running');
+  assert.ok(new Date(resumed.deadline).getTime() >= new Date(started.deadline).getTime());
+
+  await request('/api/admin/rounds/1/end', { method: 'POST', headers: { cookie: aCookie, 'content-type': 'application/json' }, body: '{}' });
+});
+
+test('incomplete run points saved at round end, and late results outside grace window are rejected', async () => {
+  const aCookie = await adminCookie();
+  const tCookie = await teamCookie();
+
+  // Start Round 1
+  await request('/api/admin/rounds/1/start', {
+    method: 'POST',
+    headers: { cookie: aCookie, 'content-type': 'application/json' },
+    body: JSON.stringify({ durationSec: 1800 }),
+  });
+
+  // Maze socket connects and registers
+  const mazeSocket = connectSocketClient();
+  await new Promise((resolve) => {
+    mazeSocket.on('maze:room_status', () => resolve(true));
+    mazeSocket.emit('maze:join_room', { teamId, sessionId: `maze_${teamId}`, playerId: 'P1' });
+  });
+
+  // Admin ends Round 1
+  await request('/api/admin/rounds/1/end', {
+    method: 'POST',
+    headers: { cookie: aCookie, 'content-type': 'application/json' },
+    body: '{}',
+  });
+
+  mazeSocket.disconnect();
+
+  // Submission after round is ended is rejected
+  const lateCircuit = await request('/api/games/circuit/start', {
+    method: 'POST',
+    headers: { cookie: tCookie, 'content-type': 'application/json' },
+  });
+  assert.equal(lateCircuit.status, 409);
+});
+

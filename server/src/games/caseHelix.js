@@ -753,7 +753,7 @@ export const CASE_PAGES = [
     id: "scene",
     title: "Physical Records",
     branch: "Physical",
-    role: "detective",
+    role: "both",
     description:
       "Check the hallway image, badge entries, and patrol sheet. These records can show where activity happened, but may not identify a person.",
   },
@@ -761,7 +761,7 @@ export const CASE_PAGES = [
     id: "forensics",
     title: "Computer Records",
     branch: "Digital",
-    role: "analyst",
+    role: "both",
     description:
       "Complete the clock and summary questions. The identity question is an optional extra.",
   },
@@ -769,7 +769,7 @@ export const CASE_PAGES = [
     id: "archives",
     title: "Documents",
     branch: "Documents",
-    role: "detective",
+    role: "both",
     description:
       "Read the signed work orders, access requests, message conversations, and Leena’s note.",
   },
@@ -777,7 +777,7 @@ export const CASE_PAGES = [
     id: "interviews",
     title: "Interviews",
     branch: "Interviews",
-    role: "detective",
+    role: "both",
     description:
       "Choose a suspect for at least one follow-up interview. You do not have to interview everyone.",
   },
@@ -812,7 +812,7 @@ export const CASE_PUZZLES = [
     id: "clocks",
     required: true,
     title: "Correct the Clock and Order the Events",
-    role: "analyst",
+    role: "both",
     evidence: ["EV05", "EV06"],
     prompt:
       "One computer clock was two minutes fast. Enter how many minutes it was ahead, then place the six events in the order they really happened.",
@@ -825,7 +825,7 @@ export const CASE_PUZZLES = [
     id: "identity",
     required: false,
     title: "What Does Each Record Identify?",
-    role: "analyst",
+    role: "both",
     evidence: ["EV01", "EV12"],
     prompt:
       "For each record, choose whether it identifies a badge or temporary digital pass, a person, a computer, a system account, or an event. A computer’s name does not tell you who was using it.",
@@ -841,7 +841,7 @@ export const CASE_PUZZLES = [
     id: "audit",
     required: true,
     title: "What Did the Summary Leave Out?",
-    role: "analyst",
+    role: "both",
     evidence: ["EV08", "EV09"],
     prompt:
       "Compare the short summary with the original access record. Find the missing detail about temporary maintenance access. Then separate the time Leena wrote her note (10:06 p.m.), the time the summary changed (2:15 a.m.), and the time the archive received her note (8:40 a.m.).",
@@ -857,7 +857,7 @@ export const CASE_PUZZLES = [
     id: "witness",
     required: false,
     title: "What Does the Badge Record Prove?",
-    role: "detective",
+    role: "both",
     evidence: ["EV01", "EV10"],
     prompt:
       "Show Mara the badge record. Decide what it proves, and what it cannot tell you about the person who carried the badge.",
@@ -871,7 +871,7 @@ export const CASE_PUZZLES = [
     id: "sequence",
     required: false,
     title: "Put the Events in Order",
-    role: "shared",
+    role: "both",
     evidence: ["EV20", "EV22"],
     prompt:
       "Place the events in the order they happened. The short-term repair permission had to be set up before the system could accept the digital pass and move the files.",
@@ -1026,11 +1026,7 @@ export function getPublicCaseState(state, role) {
       ...item,
       discovered: evidence.has(item.id),
       detail: evidence.has(item.id) ? item.detail : null,
-      available:
-        (item.role === "Shared" ||
-          item.role === "both" ||
-          item.role.toLowerCase() === role) &&
-        item.requires.every((id) => evidence.has(id)),
+      available: item.requires.every((id) => evidence.has(id)),
     })),
     puzzles: CASE_PUZZLES.filter(({ id }) => id !== "theories").map(
       ({
@@ -1046,10 +1042,7 @@ export function getPublicCaseState(state, role) {
         role: puzzleRole,
         required: isRequired,
         prompt,
-        available:
-          (!["detective", "analyst"].includes(puzzleRole) ||
-            puzzleRole === role) &&
-          required.every((id) => evidence.has(id)),
+        available: required.every((id) => evidence.has(id)),
         solved: (state.solvedPuzzles || []).includes(id),
         materials:
           id === "clocks" || id === "sequence"

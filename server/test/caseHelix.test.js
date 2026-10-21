@@ -114,6 +114,10 @@ test("evidence dependencies and role-specific investigations remain enforced by 
   );
   assert.equal(
     analystStart.evidence.find(({ id }) => id === "EV01").available,
+    true,
+  );
+  assert.equal(
+    analystStart.evidence.find(({ id }) => id === "EV07").available,
     false,
   );
   const analystProgress = getPublicCaseState(

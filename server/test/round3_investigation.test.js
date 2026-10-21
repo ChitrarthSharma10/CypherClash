@@ -272,14 +272,18 @@ test("Round 3 detective admission requires eligible team progression", async () 
   }
 });
 
-test("Round 3 starts with a fixed 45-minute duration", async () => {
+test("Round 3 honours admin-set duration when provided or defaults to 45 minutes", async () => {
   const started = await startRound(3, 3600, "investigation-duration-test");
-  assert.equal(started.durationSec, ROUND3_DURATION_SEC);
-  assert.equal(started.durationSec, 2700);
+  assert.equal(started.durationSec, 3600);
   assert.equal(
     started.deadline.getTime() - started.startedAt.getTime(),
-    2700 * 1000,
+    3600 * 1000,
   );
+  await endRound(3, "investigation-duration-test");
+
+  const defaulted = await startRound(3, undefined, "investigation-default-duration-test");
+  assert.equal(defaulted.durationSec, ROUND3_DURATION_SEC);
+  assert.equal(defaulted.durationSec, 2700);
 });
 
 test("paused participant state exposes the pause time and server deadline", async () => {
@@ -357,6 +361,10 @@ test("Case HELIX exposes role-appropriate branches and protects locked evidence"
   );
   assert.equal(
     detectivePayload.case.evidence.find(({ id }) => id === "EV05").available,
+    true,
+  );
+  assert.equal(
+    detectivePayload.case.evidence.find(({ id }) => id === "EV07").available,
     false,
   );
   assert.equal(
@@ -368,11 +376,6 @@ test("Case HELIX exposes role-appropriate branches and protects locked evidence"
     false,
   );
 
-  assert.equal(
-    (await post("/api/investigation/case/evidence/EV01", {}, analystCookie))
-      .status,
-    403,
-  );
   assert.equal(
     (await post("/api/investigation/case/evidence/EV07", {}, analystCookie))
       .status,
@@ -408,7 +411,7 @@ test("clock puzzle validates exact answers, role, prerequisites, and shared pers
         detectiveCookie,
       )
     ).status,
-    403,
+    409,
   );
   assert.equal(
     (await post("/api/investigation/case/evidence/EV05", {}, analystCookie))
@@ -497,7 +500,7 @@ test("interview follow-ups require evidence and persist their transcript for bot
   assert.equal(
     (await post("/api/investigation/case/interviews", body, analystCookie))
       .status,
-    403,
+    409,
   );
   assert.equal(
     (await post("/api/investigation/case/interviews", body, detectiveCookie))
@@ -783,7 +786,8 @@ test("short cooperative investigation submits a report without hypothesis assess
   assert.equal(submission.status, 201);
   const proposed = (await submission.json()).state.gameState.report;
   assert.deepEqual(proposed.approvals, ["detective"]);
-  const expectedScore = Math.max(0, 100 - 5 * readyState.wrongAttempts - 35);
+  const latestCaseState = await getCase();
+  const expectedScore = Math.max(150, 500 - 15 * (latestCaseState.wrongAttempts || 0));
   assert.equal(proposed.score, expectedScore);
   assert.equal(
     (await post("/api/investigation/case/report/approve", {}, detectiveCookie))
@@ -831,7 +835,7 @@ test("report submission also works when players choose to save separate assessme
     detectiveCookie,
   );
   assert.equal(submission.status, 201);
-  assert.equal((await submission.json()).state.gameState.report.score, 100);
+  assert.equal((await submission.json()).state.gameState.report.score, 500);
   assert.equal(
     (await post("/api/investigation/case/report/approve", {}, analystCookie))
       .status,
@@ -843,10 +847,10 @@ test("report submission also works when players choose to save separate assessme
     game: "investigation",
     kind: "game_result",
   }).lean();
-  assert.equal(score.amount, 100);
+  assert.equal(score.amount, 500);
 });
 
-test("legacy evidence 2 and 3 can be collected by either role while evidence 1 is detective-only", async () => {
+test("all evidence clues (ev1, ev2, ev3) and decrypt can be completed by any team member in role-less flow", async () => {
   await startRound(3, 300, "investigation-branch-test");
   const detectiveCookie = await login();
   const joined = await (await joinDetective(detectiveCookie)).json();
@@ -858,12 +862,12 @@ test("legacy evidence 2 and 3 can be collected by either role while evidence 1 i
   assert.equal(
     (await post("/api/investigation/evidence", { key: "ev1" }, analystCookie))
       .status,
-    403,
+    201,
   );
   assert.equal(
     (await post("/api/investigation/evidence", { key: "ev1" }, detectiveCookie))
       .status,
-    201,
+    409,
   );
   assert.equal(
     (await post("/api/investigation/evidence", { key: "ev4" }, analystCookie))
@@ -878,7 +882,7 @@ test("legacy evidence 2 and 3 can be collected by either role while evidence 1 i
         detectiveCookie,
       )
     ).status,
-    403,
+    200,
   );
   assert.equal(
     (await post("/api/investigation/evidence", { key: "ev2" }, detectiveCookie))
@@ -911,11 +915,6 @@ test("evidence, decryption, accusation, and cross-role approvals are atomic", as
     .get("set-cookie")
     .split(";", 1)[0];
 
-  assert.equal(
-    (await post("/api/investigation/evidence", { key: "ev1" }, analystCookie))
-      .status,
-    403,
-  );
   assert.equal(
     (await post("/api/investigation/evidence", { key: "ev1" }, detectiveCookie))
       .status,
@@ -1524,96 +1523,110 @@ test("expired analyst invites cannot be redeemed", async () => {
   assert.equal((await joinAnalyst(joined.analystInvite)).status, 401);
 });
 
-test("same-screen mode: one session holds both seats and role permissions are strictly enforced", async () => {
+test("unified role-less mode: single team member can complete case end-to-end alone and verify final score", async () => {
   await startRound(3, 300, "investigation-branch-test");
   const teamCookie = await login();
 
-  // Same-screen join with single session
-  const joinRes = await post("/api/investigation/join/same-screen", {}, teamCookie);
-  assert.equal(joinRes.status, 200);
+  // Auto-join case without any role assignment
+  const joinRes = await post("/api/investigation/join", {}, teamCookie);
+  assert.equal(joinRes.status, 201);
   const joinData = await joinRes.json();
-  assert.equal(joinData.ok, true);
-  assert.equal(joinData.detectiveState.role, "detective");
-  assert.equal(joinData.analystState.role, "analyst");
+  assert.equal(joinData.state.hasBothSeats, true);
 
-  // Detective fetches state with x-acting-role: detective
-  const detStateRes = await request("/api/investigation/state", {
-    headers: { cookie: teamCookie, "x-acting-role": "detective" },
+  // Single user fetches case structure
+  const caseRes = await request("/api/investigation/case", {
+    headers: { cookie: teamCookie },
   });
-  assert.equal(detStateRes.status, 200);
-  const detState = await detStateRes.json();
-  assert.equal(detState.state.role, "detective");
+  assert.equal(caseRes.status, 200);
+  const caseData = await caseRes.json();
+  assert.ok(caseData.case);
 
-  // Analyst fetches state with x-acting-role: analyst on SAME cookie
-  const anaStateRes = await request("/api/investigation/state", {
-    headers: { cookie: teamCookie, "x-acting-role": "analyst" },
-  });
-  assert.equal(anaStateRes.status, 200);
-  const anaState = await anaStateRes.json();
-  assert.equal(anaState.state.role, "analyst");
+  // Collect all available evidence in cascading dependency order
+  for (let pass = 0; pass < 6; pass++) {
+    const currentCaseRes = await request("/api/investigation/case", {
+      headers: { cookie: teamCookie },
+    });
+    const { case: currentCase } = await currentCaseRes.json();
+    for (const ev of currentCase.evidence) {
+      if (ev.available && !ev.discovered) {
+        const res = await post(`/api/investigation/case/evidence/${ev.id}`, {}, teamCookie);
+        assert.ok([200, 201].includes(res.status), `Evidence ${ev.id} status: ${res.status}`);
+      }
+    }
+  }
 
-  // ev1 is detective-only: analyst attempting ev1 gets 403
-  const anaEv1 = await request("/api/investigation/evidence", {
-    method: "POST",
-    headers: { cookie: teamCookie, "Content-Type": "application/json", "x-acting-role": "analyst" },
-    body: JSON.stringify({ key: "ev1" }),
-  });
-  assert.equal(anaEv1.status, 403);
+  // Solve required clocks puzzle
+  const canonicalOrder = [
+    "maintenance-prepared",
+    "credential-event",
+    "service-relay",
+    "exception-active",
+    "token-accepted-export",
+    "audit-view-changed",
+  ];
+  const clocksRes = await post(
+    "/api/investigation/case/puzzles/clocks",
+    { answer: { offsetMinutes: 2, eventOrder: canonicalOrder } },
+    teamCookie,
+  );
+  assert.equal(clocksRes.status, 200);
+  assert.equal((await clocksRes.json()).solved, true);
 
-  // Detective successfully submits ev1
-  const detEv1 = await request("/api/investigation/evidence", {
-    method: "POST",
-    headers: { cookie: teamCookie, "Content-Type": "application/json", "x-acting-role": "detective" },
-    body: JSON.stringify({ key: "ev1" }),
-  });
-  assert.equal(detEv1.status, 201);
+  // Solve required audit puzzle
+  const auditRes = await post(
+    "/api/investigation/case/puzzles/audit",
+    {
+      answer: {
+        missingField: "maintenanceContext",
+        sourceRecord: "authorization-source-ledger",
+        noteCreatedAt: "22:06",
+        noteIngestedAt: "08:40",
+        viewModifiedAt: "02:15",
+      },
+    },
+    teamCookie,
+  );
+  assert.equal(auditRes.status, 200);
+  assert.equal((await auditRes.json()).solved, true);
 
-  // Detective cannot decrypt (only analyst decrypts)
-  const detDecrypt = await request("/api/investigation/decrypt", {
-    method: "POST",
-    headers: { cookie: teamCookie, "Content-Type": "application/json", "x-acting-role": "detective" },
-    body: JSON.stringify({ token: "HELIX" }),
-  });
-  assert.equal(detDecrypt.status, 403);
+  // Conduct interview with Idris
+  const interviewRes = await post(
+    "/api/investigation/case/interviews",
+    {
+      suspectId: "idris",
+      topicId: "maintenance",
+      evidenceId: "EV14",
+    },
+    teamCookie,
+  );
+  assert.equal(interviewRes.status, 200);
 
-  // Analyst successfully decrypts
-  const anaDecrypt = await request("/api/investigation/decrypt", {
-    method: "POST",
-    headers: { cookie: teamCookie, "Content-Type": "application/json", "x-acting-role": "analyst" },
-    body: JSON.stringify({ token: "HELIX" }),
-  });
-  assert.equal(anaDecrypt.status, 200);
-  const decryptData = await anaDecrypt.json();
-  assert.equal(decryptData.state.decrypted, true);
+  // Single user can submit clue EV1 without role block
+  const ev1Res = await post("/api/investigation/evidence", { key: "ev1" }, teamCookie);
+  assert.equal(ev1Res.status, 201);
 
-  // Detective submits accusation citing ev1
-  const detAccuse = await request("/api/investigation/accusation", {
-    method: "POST",
-    headers: { cookie: teamCookie, "Content-Type": "application/json", "x-acting-role": "detective" },
-    body: JSON.stringify({
-      suspect: "Mara Chen",
-      evidenceKey: "ev1",
-      reasoning: "Comprehensive forensic audit reveals physical access log anomaly.",
-    }),
-  });
-  assert.equal(detAccuse.status, 201);
+  // Single user can decrypt HELIX token without role block
+  const decryptRes = await post("/api/investigation/decrypt", { token: "HELIX" }, teamCookie);
+  assert.equal(decryptRes.status, 200);
+  assert.equal((await decryptRes.json()).state.decrypted, true);
 
-  // Submitter (detective) cannot approve their own accusation
-  const detSelfApprove = await request("/api/investigation/accusation/approve", {
-    method: "POST",
-    headers: { cookie: teamCookie, "Content-Type": "application/json", "x-acting-role": "detective" },
-    body: JSON.stringify({}),
-  });
-  assert.equal(detSelfApprove.status, 409);
-
-  // Partner (analyst) approves the accusation
-  const anaApprove = await request("/api/investigation/accusation/approve", {
-    method: "POST",
-    headers: { cookie: teamCookie, "Content-Type": "application/json", "x-acting-role": "analyst" },
-    body: JSON.stringify({}),
-  });
-  assert.equal(anaApprove.status, 200);
-  const finalData = await anaApprove.json();
-  assert.equal(finalData.state.accusation.agreed, true);
+  // Submit final report: immediately verified & scored
+  const reportRes = await post(
+    "/api/investigation/case/report",
+    {
+      suspectId: "idris",
+      method: "temporary-maintenance-exception",
+      motive: "conceal-audit-exposure",
+      auditExplanation: "later-summary-omitted-maintenance-context",
+      eventOrder: canonicalOrder,
+      evidenceIds: ["EV01", "EV07", "EV14", "EV17", "EV24", "EV26", "EV27", "EV28"],
+      reasoning: "A thorough forensic audit demonstrates that temporary maintenance access enabled the transfer of HELIX files and the subsequent summary modification concealed exposure.",
+    },
+    teamCookie,
+  );
+  assert.ok([200, 201].includes(reportRes.status));
+  const reportData = await reportRes.json();
+  assert.ok(reportData.state.completed);
+  assert.equal(reportData.state.score, 500);
 });
 

@@ -1379,6 +1379,8 @@ function DualControlMazeScreen({ onBack, onLogout }) {
   return (
     <MazeApp
       teamId={screenData.team.teamId}
+      round={screenData.team?.currentRound}
+      serverNow={screenData.team?.serverNow}
       onBack={onBack}
       onLogout={onLogout}
     />
@@ -1445,6 +1447,8 @@ function CyberRunnerScreen({ onBack, onLogout }) {
   return (
     <RunnerApp
       teamId={screenData.team.teamId}
+      round={screenData.team?.currentRound}
+      serverNow={screenData.team?.serverNow}
       onBack={onBack}
       onLogout={onLogout}
     />
@@ -1487,6 +1491,8 @@ function InvestigationScreen({ onBack, onLogout }) {
   return (
     <InvestigationApp
       teamId={teamLookup.data?.teamId || ""}
+      round={teamLookup.data?.currentRound}
+      serverNow={teamLookup.data?.serverNow}
       onBack={onBack}
       onLogout={onLogout}
     />
@@ -1702,6 +1708,7 @@ function CircuitSyncGame({ onBack, onLogout }) {
 
   return (
     <main className="product-page cc-circuit-page">
+      <TimeLeftBanner round={round} serverNow={teamData?.serverNow} />
       <div className="product-heading cc-circuit-heading">
         <div>
           <p className="product-eyebrow">ROUND 01 / TEAM CIRCUIT PUZZLE</p>
@@ -2108,6 +2115,7 @@ function InvestigationGame({ onBack, onLogout }) {
 
   return (
     <main className="product-page cc-investigation-page">
+      <TimeLeftBanner round={round} serverNow={teamData?.serverNow} />
       <div className="product-heading cc-circuit-heading">
         <div>
           <p className="product-eyebrow">ROUND 02 / WEB UI HIJACKING</p>

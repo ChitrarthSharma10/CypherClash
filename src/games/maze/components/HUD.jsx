@@ -1,11 +1,14 @@
 import { useState, useEffect, useRef } from 'react';
+import { useRoundTimer } from '../../../components/TimeLeftBanner.jsx';
 
-export default function HUD({ state, gameState, playerId }) {
+export default function HUD({ state, gameState, playerId, round, serverNow }) {
   const current = state || gameState;
   const timeElapsedMs = current?.timeElapsedMs ?? 0;
   const totalSeconds = Math.max(0, Math.floor(timeElapsedMs / 1000));
   const mins = String(Math.floor(totalSeconds / 60)).padStart(2, '0');
   const secs = String(totalSeconds % 60).padStart(2, '0');
+
+  const { formattedTime: roundTimeLeft, isPaused, isCritical } = useRoundTimer(round, serverNow);
 
   const score = current?.score ?? 0;
   const penalties = current?.penalties ?? 0;
@@ -59,13 +62,20 @@ export default function HUD({ state, gameState, playerId }) {
       {/* 1. Timer Card */}
       <div className="hud-card">
         <div className="hud-label" style={{ fontSize: '11px', fontWeight: 700, color: 'rgba(255, 255, 255, 0.5)', letterSpacing: '0.04em' }}>
-          TIME (STOPWATCH)
+          {isPaused ? 'ROUND PAUSED' : 'ROUND COUNTDOWN'} · ELAPSED
         </div>
-        <div className="hud-value" style={{ fontSize: '32px', fontWeight: 800, color: '#ffffff', margin: '4px 0' }}>
-          {mins}:{secs}
+        <div className="hud-value" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', margin: '4px 0' }}>
+          <span style={{ fontSize: '26px', fontWeight: 800, color: isCritical || isPaused ? '#ff4d5e' : '#d4f04a' }}>
+            {round ? roundTimeLeft : `${mins}:${secs}`}
+          </span>
+          {round && (
+            <span style={{ fontSize: '15px', fontWeight: 700, color: '#9fb8c2' }}>
+              ⏱ {mins}:{secs}
+            </span>
+          )}
         </div>
         <div className="hud-status-badge" style={{ fontSize: '11px', fontWeight: 700, color: 'rgba(255, 255, 255, 0.5)', letterSpacing: '0.04em' }}>
-          TIME ELAPSED
+          {round ? 'ADMIN COUNTDOWN · ELAPSED TIME' : 'TIME ELAPSED'}
         </div>
       </div>
 
@@ -115,7 +125,7 @@ export default function HUD({ state, gameState, playerId }) {
           ACTIVE
         </div>
         <div className="hud-status-badge" style={{ fontSize: '11px', fontWeight: 700, color: '#ffffff' }}>
-          CORN: <strong style={{ color: '#ffffff' }}>{collectedCount}/{totalCollectibles}</strong> · NESTS: <strong style={{ color: '#ffffff' }}>{checkpointsPassed}/{totalCheckpoints}</strong>
+          GEMS: <strong style={{ color: '#ffffff' }}>{collectedCount}/{totalCollectibles}</strong> · WAYPOINTS: <strong style={{ color: '#ffffff' }}>{checkpointsPassed}/{totalCheckpoints}</strong>
         </div>
       </div>
     </div>

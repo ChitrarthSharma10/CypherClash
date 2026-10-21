@@ -81,7 +81,7 @@ export async function submitGameResult(teamId, game, points, session) {
     }
     if (
       !currentRound
-      || !['running', 'paused'].includes(currentRound.status)
+      || !['running', 'paused', 'ended'].includes(currentRound.status)
       || currentRound.attemptNo !== session.attemptNo
     ) {
       throw new ScoringError('ROUND_NOT_RUNNING', 'Game session round is no longer active');
@@ -90,14 +90,37 @@ export async function submitGameResult(teamId, game, points, session) {
     const pausedMs = currentRound.status === 'paused' && currentRound.pausedAt
       ? Math.max(0, now - currentRound.pausedAt.getTime())
       : 0;
-    if (currentRound.deadline.getTime() + pausedMs + 2000 < now) {
+    const deadlineMs = currentRound.deadline ? new Date(currentRound.deadline).getTime() : 0;
+    const endedMs = currentRound.endedAt ? new Date(currentRound.endedAt).getTime() : deadlineMs;
+    const effectiveCutoff = currentRound.status === 'ended' ? endedMs + 2000 : deadlineMs + pausedMs + 2000;
+    if (effectiveCutoff < now) {
       throw new ScoringError('ROUND_NOT_RUNNING', 'Round deadline has passed');
     }
     round = session.round;
     attemptNo = session.attemptNo;
   } else {
-    const state = getRunningRound();
-    if (!state || !state.deadline || state.deadline.getTime() <= Date.now()) {
+    const gameRound = (game === 'circuit' || game === 'maze' || game === 'runner') ? 1 : (game === 'hiddenclue' ? 2 : (game === 'round3' ? 3 : null));
+    let state = gameRound ? getRoundState(gameRound) : getRunningRound();
+    if (!state) {
+      state = getRunningRound();
+    }
+    if (!state) {
+      throw new ScoringError('ROUND_NOT_RUNNING', 'Round is not running');
+    }
+    const now = Date.now();
+    if (state.status === 'running') {
+      const deadlineMs = state.deadline ? new Date(state.deadline).getTime() : 0;
+      if (deadlineMs && deadlineMs + 2000 < now) {
+        throw new ScoringError('ROUND_NOT_RUNNING', 'Round deadline has passed');
+      }
+    } else if (state.status === 'paused') {
+      // allow while paused
+    } else if (state.status === 'ended') {
+      const endedMs = state.endedAt ? new Date(state.endedAt).getTime() : (state.deadline ? new Date(state.deadline).getTime() : 0);
+      if (!endedMs || now > endedMs + 5000) {
+        throw new ScoringError('ROUND_NOT_RUNNING', 'Round deadline has passed');
+      }
+    } else {
       throw new ScoringError('ROUND_NOT_RUNNING', 'Round is not running');
     }
     round = state.round;

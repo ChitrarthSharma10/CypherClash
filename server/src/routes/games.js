@@ -104,8 +104,17 @@ function effectiveRoundDeadline(roundState, now) {
 }
 
 function isWithinDeadlines(session, roundState, game, now) {
-  if (roundState.status === "ended") return false;
   const maxElapsedMs = GAMES[game].maxDurationSec * 1000 + GAME_FINISH_GRACE_MS;
+  if (roundState.status === "ended") {
+    const endedAtMs = roundState.endedAt
+      ? new Date(roundState.endedAt).getTime()
+      : (roundState.deadline ? new Date(roundState.deadline).getTime() : 0);
+    return Boolean(
+      endedAtMs &&
+      now.getTime() <= endedAtMs + GAME_FINISH_GRACE_MS &&
+      measureGameElapsed(session, roundState, now) <= maxElapsedMs,
+    );
+  }
   return (
     now.getTime() <=
       effectiveRoundDeadline(roundState, now) + GAME_FINISH_GRACE_MS &&

@@ -99,10 +99,12 @@ function evidenceTitle(caseData, id) {
 
 export default function CaseBoard({
   teamId,
-  role,
+  role = "investigator",
   caseState,
   setCaseState,
   locked,
+  activeSection,
+  onSectionChange,
   isSplit = false,
 }) {
   const [caseData, setCaseData] = useState(null);
@@ -123,12 +125,30 @@ export default function CaseBoard({
   const [message, setMessage] = useState(null);
   const [busy, setBusy] = useState(false);
 
+  useEffect(() => {
+    if (!activeSection) return;
+    const sectionToPage = {
+      overview: "board",
+      interviews: "interviews",
+      records: "scene",
+      suspects: "interviews",
+      forensics: "forensics",
+      timeline: "timeline",
+      hypotheses: "hypotheses",
+      verdict: "report",
+      report: "report",
+    };
+    if (sectionToPage[activeSection]) {
+      setPage(sectionToPage[activeSection]);
+    }
+  }, [activeSection]);
+
   const refresh = useCallback(async () => {
     const response = await fetch(`${API_URL}/api/investigation/case`, {
       credentials: "include",
       headers: {
-        "X-Investigation-Role": role,
-        "x-acting-role": role,
+        "X-Investigation-Role": "investigator",
+        "x-acting-role": "investigator",
       },
     });
     const data = await response.json();
@@ -138,7 +158,7 @@ export default function CaseBoard({
       );
     setCaseData(data.case);
     setCaseState(data.state);
-  }, [role, setCaseState]);
+  }, [setCaseState]);
 
   useEffect(() => {
     let alive = true;
@@ -162,7 +182,7 @@ export default function CaseBoard({
     [caseState?.discoveredEvidence],
   );
   const report = caseState?.gameState?.report;
-  const roleLabel = role === "detective" ? "Lead Detective" : "Records Analyst";
+  const roleLabel = "Investigator";
 
   const post = async (path, body = {}) => {
     if (locked) {
@@ -180,8 +200,8 @@ export default function CaseBoard({
         credentials: "include",
         headers: {
           "Content-Type": "application/json",
-          "X-Investigation-Role": role,
-          "x-acting-role": role,
+          "X-Investigation-Role": "investigator",
+          "x-acting-role": "investigator",
         },
         body: JSON.stringify(body),
       });
@@ -293,20 +313,20 @@ export default function CaseBoard({
       ...reportDraft,
       evidenceIds: reportDraft.evidenceIds,
     });
-    if (result)
+    if (result) {
+      const finalScore = result.report?.score ?? result.score ?? Math.max(150, 500 - 15 * (caseState?.wrongAttempts || 0));
       setMessage({
         kind: "success",
-        text: "Your report has been sent. Your partner must review and approve it from their own account.",
+        text: `Your report has been verified and accepted! Official Score: ${finalScore} PTS.`,
       });
+    }
   };
 
   if (!caseData) {
     return <div style={panelStyle}>Loading your team’s case…</div>;
   }
 
-  const pages = caseData.pages.filter(
-    (item) => item.role === "both" || item.role === role,
-  );
+  const pages = caseData.pages;
   const currentPage = pages.find(({ id }) => id === page) || pages[0];
   const selectedPerson = caseData.suspects.find(
     ({ id }) => id === selectedSuspect,
@@ -330,8 +350,7 @@ export default function CaseBoard({
     if (evidence) return `${evidence.id} — ${evidence.title}`;
     return option;
   };
-  const roleName = (participantRole) =>
-    participantRole === "detective" ? "Detective" : "Analyst";
+  const roleName = () => "Investigator";
 
   const renderEventOrder = (value, onChange) => (
     <div
@@ -378,27 +397,13 @@ export default function CaseBoard({
     if (puzzle.solved)
       return (
         <p style={{ color: "#d4f04a" }}>
-          Your answer is correct. It has been saved and shared with your
-          partner.
+          Your answer is correct. It has been saved and shared with your team.
         </p>
       );
     if (!puzzle.available)
       return (
         <p style={{ color: "#8ea3ad" }}>
-          This question is not ready yet. Find the required records, or ask your
-          partner to share them with the team.
-        </p>
-      );
-    if (puzzle.role === "detective" && role !== "detective")
-      return (
-        <p style={{ color: "#8ea3ad" }}>
-          Your Detective partner must answer this question.
-        </p>
-      );
-    if (puzzle.role === "analyst" && role !== "analyst")
-      return (
-        <p style={{ color: "#8ea3ad" }}>
-          Your Analyst partner must answer this question.
+          This question is not ready yet. Find the required records to proceed.
         </p>
       );
     const select = (key, options, label = key) => (
@@ -887,45 +892,35 @@ export default function CaseBoard({
       </p>
       {report ? (
         <div>
-          <h3>Report waiting for your partner</h3>
+          <div style={{ padding: 16, background: "rgba(212, 240, 74, 0.12)", border: "1px solid #d4f04a", borderRadius: 8, marginBottom: 16 }}>
+            <h3 style={{ color: "#d4f04a", margin: "0 0 6px" }}>
+              ✓ Final Report Verified & Scored
+            </h3>
+            <p style={{ margin: 0, fontSize: "16px", fontWeight: 700, color: "#fff" }}>
+              Official Team Score:{" "}
+              <span style={{ color: "#d4f04a", fontSize: "22px", fontWeight: 800 }}>
+                {report.score ?? Math.max(150, 500 - 15 * (caseState?.wrongAttempts || 0))} PTS
+              </span>
+            </p>
+          </div>
           <p>
-            Sent by {roleName(report.submittedBy)}; approved by:{" "}
-            {(report.approvals || []).map(roleName).join(" and ")}
-          </p>
-          <p>
-            Person named in the report:{" "}
+            <strong>Person named in the report:</strong>{" "}
             {caseData.suspects.find(({ id }) => id === report.suspectId)?.name}
           </p>
-          <p>Method: {report.method}</p>
-          <p>Motive: {report.motive}</p>
-          <p>Audit explanation: {report.auditExplanation}</p>
+          <p><strong>Method:</strong> {report.method}</p>
+          <p><strong>Motive:</strong> {report.motive}</p>
+          <p><strong>Audit explanation:</strong> {report.auditExplanation}</p>
           <p>
-            Event order:{" "}
+            <strong>Event order:</strong>{" "}
             {report.eventOrder.map((id) => EVENT_LABELS[id]).join(" → ")}
           </p>
           <p>
-            Records cited:{" "}
+            <strong>Records cited:</strong>{" "}
             {report.evidenceIds
               .map((id) => `${id} · ${evidenceTitle(caseData, id)}`)
               .join("; ")}
           </p>
-          <p>Reasoning: {report.reasoning}</p>
-          {report.approvals?.includes(role) ? (
-            <p style={{ color: "#d4f04a" }}>You have approved this report.</p>
-          ) : (
-            <button
-              disabled={busy || locked || report.submittedBy === role}
-              className="product-btn product-btn--primary"
-              onClick={() => post("/case/report/approve")}
-            >
-              Review and approve this report
-            </button>
-          )}
-          {report.approvals?.length === 2 && (
-            <h3 style={{ color: "#d4f04a" }}>
-              Case closed · team score {report.score} out of 100
-            </h3>
-          )}
+          <p><strong>Reasoning:</strong> {report.reasoning}</p>
         </div>
       ) : (
         <form

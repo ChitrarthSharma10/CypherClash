@@ -58,6 +58,76 @@ export default function ResultsModal({ result, onRestart, onBack }) {
         <p className="product-eyebrow">GAME COMPLETE</p>
         <h2>{result.completed ? 'Vault exit reached.' : 'Run completed.'}</h2>
         <strong>{score} POINTS</strong>
+
+        {result.breakdown && (
+          <div
+            style={{
+              width: '100%',
+              margin: '18px 0',
+              padding: '16px',
+              borderRadius: '14px',
+              background: 'rgba(255, 255, 255, 0.04)',
+              border: '1px solid rgba(255, 255, 255, 0.1)',
+              fontSize: '13px',
+              textAlign: 'left',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '6px',
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', color: '#2ecc71', fontWeight: 600 }}>
+              <span>💎 Collectibles ({result.rawStats?.collectibles ?? 0})</span>
+              <span>+{result.breakdown.collectiblesPoints ?? 0} pts</span>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', color: '#2ecc71', fontWeight: 600 }}>
+              <span>🧭 Checkpoints ({result.rawStats?.checkpoints ?? 0})</span>
+              <span>+{result.breakdown.checkpointsPoints ?? 0} pts</span>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', color: '#2ecc71', fontWeight: 600 }}>
+              <span>⚡ Switches Activated</span>
+              <span>+{result.breakdown.switchesPoints ?? 0} pts</span>
+            </div>
+            {result.breakdown.completionBonus > 0 && (
+              <div style={{ display: 'flex', justifyContent: 'space-between', color: '#00c8e9', fontWeight: 600 }}>
+                <span>🏆 Vault Escape Bonus</span>
+                <span>+{result.breakdown.completionBonus} pts</span>
+              </div>
+            )}
+            {result.breakdown.timePoints > 0 && (
+              <div style={{ display: 'flex', justifyContent: 'space-between', color: '#00c8e9', fontWeight: 600 }}>
+                <span>⏱️ Speed Bonus</span>
+                <span>+{result.breakdown.timePoints} pts</span>
+              </div>
+            )}
+            {(result.breakdown.hunterCatchPenalties > 0 || (result.rawStats?.hunterCatches ?? 0) > 0) && (
+              <div style={{ display: 'flex', justifyContent: 'space-between', color: '#ff4d5e', fontWeight: 600 }}>
+                <span>👾 Hunter Catch Penalty</span>
+                <span>-{result.breakdown.hunterCatchPenalties} pts</span>
+              </div>
+            )}
+            {(result.breakdown.pitFallPenalties > 0 || result.breakdown.hazardPenalties > 0) && (
+              <div style={{ display: 'flex', justifyContent: 'space-between', color: '#ff4d5e', fontWeight: 600 }}>
+                <span>⚠️ Hazard / Pit Penalty</span>
+                <span>-{(result.breakdown.pitFallPenalties || 0) + (result.breakdown.hazardPenalties || 0)} pts</span>
+              </div>
+            )}
+            <div
+              style={{
+                marginTop: '6px',
+                paddingTop: '6px',
+                borderTop: '1px solid rgba(255, 255, 255, 0.12)',
+                display: 'flex',
+                justifyContent: 'space-between',
+                fontWeight: 800,
+                color: '#ffffff',
+              }}
+            >
+              <span>TOTAL (MAX 500)</span>
+              <span style={{ color: '#00c8e9' }}>{score} PTS</span>
+            </div>
+          </div>
+        )}
+
         <p style={{ color: 'rgba(255,255,255,0.75)', fontSize: '14px', lineHeight: 1.6, margin: '6px 0 20px' }}>
           Your score has been verified and recorded on the tournament leaderboard.
         </p>

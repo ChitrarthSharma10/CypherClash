@@ -1,39 +1,13 @@
 import { useState, useEffect, useRef } from 'react';
+import { computeRemainingMs, formatTimeLeft } from '../../shared/roundTimer.js';
+
+export { computeRemainingMs, formatTimeLeft };
 
 /**
- * Computes remaining milliseconds from round state and server time offset.
+ * Hook to manage round timer with clock skew, running/paused/ended transitions,
+ * and critical time alert under 60 seconds.
  */
-export function computeRemainingMs(round, serverOffsetMs = 0) {
-  if (!round || round.status === 'not_started' || (!round.deadline && round.remainingMs == null)) {
-    return null;
-  }
-  if (round.status === 'ended') {
-    return 0;
-  }
-  if (round.status === 'paused') {
-    if (round.pausedAt && round.deadline) {
-      return Math.max(0, new Date(round.deadline).getTime() - new Date(round.pausedAt).getTime());
-    }
-    return round.remainingMs ?? 0;
-  }
-  // status === 'running'
-  if (!round.deadline) {
-    return round.remainingMs ?? null;
-  }
-  const deadlineMs = new Date(round.deadline).getTime();
-  const estServerNow = Date.now() + serverOffsetMs;
-  return Math.max(0, deadlineMs - estServerNow);
-}
-
-export function formatTimeLeft(ms) {
-  if (ms == null) return '—:—';
-  const totalSec = Math.max(0, Math.floor(ms / 1000));
-  const mins = String(Math.floor(totalSec / 60)).padStart(2, '0');
-  const secs = String(totalSec % 60).padStart(2, '0');
-  return `${mins}:${secs}`;
-}
-
-export default function TimeLeftBanner({ round, serverNow, onEnded }) {
+export function useRoundTimer(round, serverNow) {
   const [, setTick] = useState(0);
   const serverOffsetRef = useRef(0);
 
@@ -54,6 +28,20 @@ export default function TimeLeftBanner({ round, serverNow, onEnded }) {
   const formattedTime = formatTimeLeft(remainingMs);
   const isEnded = round?.status === 'ended' || (remainingMs !== null && remainingMs <= 0);
   const isPaused = round?.status === 'paused';
+  const isCritical = remainingMs !== null && remainingMs > 0 && remainingMs < 60000;
+
+  return {
+    remainingMs,
+    formattedTime,
+    isEnded,
+    isPaused,
+    isCritical,
+    serverOffsetMs: serverOffsetRef.current,
+  };
+}
+
+export default function TimeLeftBanner({ round, serverNow, onEnded, className = '' }) {
+  const { remainingMs, formattedTime, isEnded, isPaused, isCritical } = useRoundTimer(round, serverNow);
 
   useEffect(() => {
     if (isEnded && onEnded) {
@@ -70,7 +58,7 @@ export default function TimeLeftBanner({ round, serverNow, onEnded }) {
 
   return (
     <div
-      className={`cc-time-left-banner ${isEnded ? 'is-ended' : ''} ${isPaused ? 'is-paused' : ''}`}
+      className={`cc-time-left-banner ${isEnded ? 'is-ended' : ''} ${isPaused ? 'is-paused' : ''} ${isCritical ? 'is-critical' : ''} ${className}`.trim()}
       role="timer"
       aria-live="polite"
     >
@@ -79,4 +67,3 @@ export default function TimeLeftBanner({ round, serverNow, onEnded }) {
     </div>
   );
 }
-

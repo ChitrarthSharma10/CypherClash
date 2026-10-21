@@ -3945,7 +3945,16 @@ body {
   color: #d4f04a;
 }
 .cc-time-left-banner.is-ended .cc-time-left-banner__time,
-.cc-time-left-banner.is-paused .cc-time-left-banner__time {
+.cc-time-left-banner.is-paused .cc-time-left-banner__time,
+.cc-time-left-banner.is-critical .cc-time-left-banner__time {
   color: #ff4d5e;
 }
+.cc-time-left-banner.is-critical .cc-time-left-banner__time {
+  animation: pulse-critical 1s infinite alternate;
+}
+@keyframes pulse-critical {
+  from { opacity: 1; }
+  to { opacity: 0.65; }
+}
+
 

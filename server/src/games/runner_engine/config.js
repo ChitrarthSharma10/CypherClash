@@ -3,6 +3,7 @@
  */
 export const GAME_CONFIG = {
   GAME_ID: 'cyber-runner',
+  MAX_GAME_SCORE: 500,        // Hard cap: flawless run scores at most 500
   ROUND_ID: 'round-1',
   ROUND_NAME: 'Round 1 · Mini-Game 2 (Cyber Runner)',
   
@@ -28,15 +29,15 @@ export const GAME_CONFIG = {
   COLLISION_RECOVERY_TIME_SEC: 3.0, // Massive slowdown for 3 seconds on collision
   COLLISION_SLOWDOWN_FACTOR: 0.25,  // Slow to 25% of normal speed on collision
 
-  // Scoring: max 500 total for flawless run (120 distance + 120 checkpoints + ~100 pickups/agility + 100 finish + 60 speed)
+  // Budgeted scoring: max 500 total for flawless run
+  // (Gold pool ~250 max with 2X + 80 checkpoints + 20 vault + 100 finish + 50 speed bonus = 500)
+  // Distance alone yields zero points.
   SCORING: {
-    POINTS_PER_METER: 0.04,      // 3000m * 0.04 = 120 pts for distance
-    GOLD_BAR_VALUE: 5,           // Stolen Gold Bar pickup (+5 pts, or +10 pts with 2X)
-    VAULT_VALUE: 20,             // Stolen Vault chest pickup
-    CHECKPOINT_BONUS: 15,        // Synchronized checkpoint pass (8 checkpoints = 120 pts)
-    AGILITY_BONUS: 5,            // Successfully jumping hurdle or sliding under sign
+    GOLD_POOL: 250,              // Maximum possible gold income pool
+    VAULT_VALUE: 20,             // Stolen Vault chest pickup (1 vault = 20 pts)
+    CHECKPOINT_BONUS: 10,        // Synchronized checkpoint pass (8 checkpoints = 80 pts)
     BASE_COMPLETION_BONUS: 100,  // Crossing the 3000m Finish Line
-    TIME_POINTS_DIVIDEND: 8000,  // Speed bonus up to ~60 pts: Math.min(60, Math.round(8000 / finishTimeSec))
+    MAX_SPEED_BONUS: 50,         // Speed bonus up to 50 pts based on par time
     COLLISION_PENALTY: 25,       // Collision stumble deduction (-25 pts & 3s slowdown)
   },
 

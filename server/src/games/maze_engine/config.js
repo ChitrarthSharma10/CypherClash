@@ -6,6 +6,7 @@
 
 export const GAME_CONFIG = {
   GAME_ID: 'treasure-hunt',
+  MAX_GAME_SCORE: 500,             // Hard cap: flawless run scores at most 500
   TICK_RATE_HZ: 20,                // 20 updates per second (50ms interval)
   SPEED: 2.2,                      // Deliberate explorer speed: 132+ step 4-door maze lasts 3-4 min
   HUNTER_SPEED_MULTIPLIER: 0.85,   // Hunter speed = 0.85x player speed so pursuit is thrilling but maze is doable
@@ -15,17 +16,22 @@ export const GAME_CONFIG = {
   BARRIER_OPEN_DURATION_MS: 4800,  // Co-op window
   HAZARD_PENALTY: 30,              // EMP shockwave point deduction
 
-  // Scoring table: max 500 total for flawless run (140 collectibles + 60 checkpoints + 60 switches + 140 escape + 100 speed)
-  // Wall collision penalty is 0. Penalty is applied for getting caught by hunter (-50 pts) or falling in a pit (-30 pts).
+  // Category Pools totaling 500 max for a flawless run:
+  // Collectibles: 140, Checkpoints: 60, Switches: 60, Completion: 140, Speed bonus: 100
+  POOLS: {
+    COLLECTIBLES: 140,
+    CHECKPOINTS: 60,
+    SWITCHES: 60,
+    COMPLETION: 140,
+    SPEED_BONUS: 100,
+  },
   SCORING: {
-    COLLECTIBLE_POINTS: 10,            // 14 Collectibles = 140 pts
-    CHECKPOINT_POINTS: 15,             // 4 Checkpoints = 60 pts
-    SWITCH_POINTS: 15,                 // 4 Switches = 60 pts
     COMPLETION_BONUS: 140,             // Ancient treasure vault escape bonus
-    TIME_POINTS_DIVIDEND: 10000,       // Speed bonus up to 100 pts: Math.min(100, Math.round(10000 / finishTimeSec))
+    MAX_SPEED_BONUS: 100,              // Max speed bonus up to 100 pts
     COLLISION_SCORE_PENALTY: 0,        // 0 penalty: wall collision does NOT reduce points
     HUNTER_CATCH_PENALTY: 50,          // -50 pts penalty deduction when caught by hunter
     PIT_FALL_PENALTY: 30,              // -30 pts penalty deduction when falling in pit trap
+    EMP_HAZARD_PENALTY: 30,            // -30 pts penalty deduction when hitting EMP hazard
   },
 };
 

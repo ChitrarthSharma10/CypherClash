@@ -58,6 +58,72 @@ export default function ResultsModal({ result, onRestart, onBack }) {
         <p className="product-eyebrow">GAME COMPLETE</p>
         <h2>{result.completed ? 'Finish line crossed.' : 'Run completed.'}</h2>
         <strong>{score} POINTS</strong>
+
+        {result.breakdown && (
+          <div
+            style={{
+              width: '100%',
+              margin: '18px 0',
+              padding: '16px',
+              borderRadius: '14px',
+              background: 'rgba(255, 255, 255, 0.04)',
+              border: '1px solid rgba(255, 255, 255, 0.1)',
+              fontSize: '13px',
+              textAlign: 'left',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '6px',
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', color: '#ffd700', fontWeight: 600 }}>
+              <span>🪙 Gold Bullion ({result.rawStats?.goldBarsCollected ?? result.rawStats?.coinsCollected ?? 0})</span>
+              <span>+{result.breakdown.goldPoints ?? result.breakdown.coinPoints ?? 0} pts</span>
+            </div>
+            {(result.breakdown.vaultPoints > 0 || (result.rawStats?.vaultsCollected ?? 0) > 0) && (
+              <div style={{ display: 'flex', justifyContent: 'space-between', color: '#2ecc71', fontWeight: 600 }}>
+                <span>📦 Vault Recovery ({result.rawStats?.vaultsCollected ?? 1})</span>
+                <span>+{result.breakdown.vaultPoints ?? 20} pts</span>
+              </div>
+            )}
+            <div style={{ display: 'flex', justifyContent: 'space-between', color: '#2ecc71', fontWeight: 600 }}>
+              <span>🏁 Checkpoint Gates ({result.rawStats?.checkpointsCleared ?? 0}/{result.rawStats?.totalCheckpoints ?? 8})</span>
+              <span>+{result.breakdown.checkpointPoints ?? 0} pts</span>
+            </div>
+            {result.breakdown.completionBonus > 0 && (
+              <div style={{ display: 'flex', justifyContent: 'space-between', color: '#00c8e9', fontWeight: 600 }}>
+                <span>🏆 3000m Finish Line Bonus</span>
+                <span>+{result.breakdown.completionBonus} pts</span>
+              </div>
+            )}
+            {result.breakdown.timePoints > 0 && (
+              <div style={{ display: 'flex', justifyContent: 'space-between', color: '#00c8e9', fontWeight: 600 }}>
+                <span>⏱️ Par Speed Bonus</span>
+                <span>+{result.breakdown.timePoints} pts</span>
+              </div>
+            )}
+            {result.breakdown.collisionPenalties < 0 && (
+              <div style={{ display: 'flex', justifyContent: 'space-between', color: '#ff4d5e', fontWeight: 600 }}>
+                <span>💥 Collision Deductions ({result.rawStats?.collisions ?? 0} crashes)</span>
+                <span>{result.breakdown.collisionPenalties} pts</span>
+              </div>
+            )}
+            <div
+              style={{
+                marginTop: '6px',
+                paddingTop: '6px',
+                borderTop: '1px solid rgba(255, 255, 255, 0.12)',
+                display: 'flex',
+                justifyContent: 'space-between',
+                fontWeight: 800,
+                color: '#ffffff',
+              }}
+            >
+              <span>TOTAL (MAX 500)</span>
+              <span style={{ color: '#00c8e9' }}>{score} PTS</span>
+            </div>
+          </div>
+        )}
+
         <p style={{ color: 'rgba(255,255,255,0.75)', fontSize: '14px', lineHeight: 1.6, margin: '6px 0 20px' }}>
           Your score has been verified and recorded on the tournament leaderboard.
         </p>

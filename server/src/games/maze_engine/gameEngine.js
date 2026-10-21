@@ -1,4 +1,5 @@
 import { GAME_CONFIG, MAZE_LAYOUTS } from './config.js';
+import { calculateLayoutSolution } from './validateLayout.js';
 
 export class MazeGameEngine {
   constructor(sessionData, repository, onStateUpdate, onGameOver) {
@@ -32,23 +33,59 @@ export class MazeGameEngine {
       active: false,
     };
 
-    this.collectibles = this.layout.collectibles.map((c) => ({ ...c, collected: false }));
-    this.checkpoints = this.layout.checkpoints.map((cp) => ({ ...cp, passed: false }));
-    this.switches = this.layout.switches.map((sw) => ({ ...sw, active: false, activatedCount: 0 }));
-    this.barriers = this.layout.barriers.map((b) => ({ ...b, open: false, openUntil: 0 }));
+    // Distribute category pools evenly across layout items
+    const numCollectibles = (this.layout.collectibles || []).length;
+    const cBase = numCollectibles > 0 ? Math.floor(GAME_CONFIG.POOLS.COLLECTIBLES / numCollectibles) : 0;
+    const cRem = numCollectibles > 0 ? GAME_CONFIG.POOLS.COLLECTIBLES % numCollectibles : 0;
+    this.collectibles = (this.layout.collectibles || []).map((c, idx) => ({
+      ...c,
+      points: cBase + (idx < cRem ? 1 : 0),
+      collected: false,
+    }));
+
+    const numCheckpoints = (this.layout.checkpoints || []).length;
+    const cpBase = numCheckpoints > 0 ? Math.floor(GAME_CONFIG.POOLS.CHECKPOINTS / numCheckpoints) : 0;
+    const cpRem = numCheckpoints > 0 ? GAME_CONFIG.POOLS.CHECKPOINTS % numCheckpoints : 0;
+    this.checkpoints = (this.layout.checkpoints || []).map((cp, idx) => ({
+      ...cp,
+      points: cpBase + (idx < cpRem ? 1 : 0),
+      passed: false,
+    }));
+
+    const numSwitches = (this.layout.switches || []).length;
+    const swBase = numSwitches > 0 ? Math.floor(GAME_CONFIG.POOLS.SWITCHES / numSwitches) : 0;
+    const swRem = numSwitches > 0 ? GAME_CONFIG.POOLS.SWITCHES % numSwitches : 0;
+    this.switches = (this.layout.switches || []).map((sw, idx) => ({
+      ...sw,
+      points: swBase + (idx < swRem ? 1 : 0),
+      active: false,
+      awarded: false,
+      activatedCount: 0,
+    }));
+
+    this.barriers = (this.layout.barriers || []).map((b) => ({ ...b, open: false, openUntil: 0 }));
     this.hazards = (this.layout.hazards || []).map((h) => ({ ...h, active: true }));
+
+    // Precompute par time from layout shortest solution
+    try {
+      const sol = calculateLayoutSolution(this.layout, false);
+      this.parTimeSec = Math.max(10, Math.round(sol.estimatedSeconds));
+    } catch {
+      this.parTimeSec = 60;
+    }
 
     this.score = 0;
     this.penalties = 0;
     this.collisionsCount = 0;
     this.hunterCatchesCount = 0;
     this.pitFallsCount = 0;
+    this.hazardHitsCount = 0;
     this.restartsCount = 0;
     this.respawnNotice = null;
     this.portalAlertCount = 0;
     this.portalNotice = null;
-    this.timePenaltySeconds = 0;
     this.lastCollisionTime = 0;
+    this.hunterGraceUntil = 0;
 
     this.timeElapsedMs = 0;
     this.startedAt = null;
@@ -57,6 +94,12 @@ export class MazeGameEngine {
     this.recentEvents = [];
     this.tickInterval = null;
     this.lastTickTime = null;
+
+    this.pathCache = new Map();
+  }
+
+  clearPathCache() {
+    this.pathCache.clear();
   }
 
   setPlayerConnected(playerId, socketId) {
@@ -67,7 +110,6 @@ export class MazeGameEngine {
       this.players[normRole].lastPing = Date.now();
       this.players[normRole].joinedAt = new Date();
     }
-    // Single system play: Both participant roles are immediately active
     this.players.P1.connected = true;
     this.players.P2.connected = true;
 
@@ -97,7 +139,6 @@ export class MazeGameEngine {
       return { valid: false, reason: 'Game finished' };
     }
 
-    // Auto-start or resume so players are never blocked with 'Game not running'
     if (this.status !== 'RUNNING') {
       this.players.P1.connected = true;
       this.players.P2.connected = true;
@@ -109,7 +150,6 @@ export class MazeGameEngine {
       return { valid: false, reason: 'Invalid direction' };
     }
 
-    // Process Movement Input along X (Left/Right) and Y (Up/Down) axes simultaneously
     if (axis === 'Y') {
       this.character.vy = cleanDir;
       return { valid: true };
@@ -151,21 +191,26 @@ export class MazeGameEngine {
     }
 
     const now = Date.now();
-    const dt = (now - (this.lastTickTime || now)) / 1000;
+    // Clamp dt to max 0.05 s to guard against lag spikes
+    const rawDt = (now - (this.lastTickTime || now)) / 1000;
+    const dt = Math.min(rawDt, 0.05);
     this.lastTickTime = now;
 
-    // Elapsed Stopwatch Timer (Counting UP)
-    this.timeElapsedMs += dt * 1000;
+    // Elapsed Stopwatch Timer
+    this.timeElapsedMs += rawDt * 1000;
 
     // Update Barriers
     this.barriers.forEach((b) => {
       if (b.open && b.openUntil !== Infinity && now > b.openUntil) {
         b.open = false;
         this.addEvent('BARRIER_CLOSED', `${b.label} closed.`);
+        this.clearPathCache();
+        // If player is inside closing barrier cell, push them out safely
+        this.resolveBarrierOverlap(b);
       }
     });
 
-    // Character Movement with Server-Side Collision Detection
+    // Character Movement with Sub-Stepped Circle-Grid Collision Detection
     const speed = GAME_CONFIG.SPEED;
     const moveX = this.character.vx * speed * dt;
     const moveY = this.character.vy * speed * dt;
@@ -174,7 +219,7 @@ export class MazeGameEngine {
       this.moveWithCollision(moveX, moveY, now);
     }
 
-    // Check Trigger Interactions (Collectibles, Switches, Checkpoints, Exit)
+    // Check Trigger Interactions
     this.checkTriggers(now);
 
     // Authoritative Server Hunter Update
@@ -185,83 +230,194 @@ export class MazeGameEngine {
       this.onStateUpdate(this.getStatePayload());
     }
 
-    // Periodic repository save (every 2 seconds)
+    // Periodic repository save
     if (!this.lastSaveTime || now - this.lastSaveTime > 2000) {
       this.lastSaveTime = now;
       this.repository.saveProgress(this.sessionId, this.getStatePayload());
     }
   }
 
-  moveWithCollision(moveX, moveY, now) {
-    const r = GAME_CONFIG.CHARACTER_RADIUS;
-    const testR = r * 0.85;
-    let newX = this.character.x + moveX;
-    let newY = this.character.y + moveY;
-    let collided = false;
-
-    // Test X Axis movement
-    if (moveX !== 0) {
-      const topBlocked = this.isWallAt(newX + (moveX > 0 ? r : -r), this.character.y - testR);
-      const bottomBlocked = this.isWallAt(newX + (moveX > 0 ? r : -r), this.character.y + testR);
-
-      if (topBlocked || bottomBlocked) {
-        collided = true;
-        // Corner-glide assistance: nudge towards open corridor center
-        if (topBlocked && !bottomBlocked) {
-          newY += 0.05;
-        } else if (bottomBlocked && !topBlocked) {
-          newY -= 0.05;
-        }
-        newX = this.character.x; // Block movement along X
-      }
-    }
-
-    // Test Y Axis movement (independent of newX to prevent sticky corner deadlock)
-    if (moveY !== 0) {
-      const leftBlocked = this.isWallAt(this.character.x - testR, newY + (moveY > 0 ? r : -r));
-      const rightBlocked = this.isWallAt(this.character.x + testR, newY + (moveY > 0 ? r : -r));
-
-      if (leftBlocked || rightBlocked) {
-        collided = true;
-        // Corner-glide assistance: nudge towards open corridor center
-        if (leftBlocked && !rightBlocked) {
-          newX += 0.05;
-        } else if (rightBlocked && !leftBlocked) {
-          newX -= 0.05;
-        }
-        newY = this.character.y; // Block movement along Y
-      }
-    }
-
-    this.character.x = Math.max(r, Math.min(this.layout.width - r, newX));
-    this.character.y = Math.max(r, Math.min(this.layout.height - r, newY));
-
-    if (collided) {
-      this.handleCollision(now);
-    }
-  }
-
-  isWallAt(x, y) {
-    const col = Math.floor(x);
-    const row = Math.floor(y);
-
-    if (row < 0 || row >= this.layout.height || col < 0 || col >= this.layout.width) {
+  isCellSolid(col, row) {
+    if (col < 0 || col >= this.layout.width || row < 0 || row >= this.layout.height) {
       return true;
     }
-
-    // Check maze grid walls
     if (this.layout.grid[row][col] === 1) {
       return true;
     }
-
-    // Check active (closed) barriers
     for (const b of this.barriers) {
       if (!b.open && b.x === col && b.y === row) {
         return true;
       }
     }
-
     return false;
+  }
+
+  /**
+   * Continuous circle-vs-grid resolution
+   */
+  resolveCircleGridCollision(entity, radius) {
+    const r = radius;
+    let collided = false;
+
+    // Run up to 4 relaxation iterations to resolve multi-cell / corner contacts
+    for (let iter = 0; iter < 4; iter++) {
+      let resolvedInIter = false;
+      const minCol = Math.floor(entity.x - r);
+      const maxCol = Math.floor(entity.x + r);
+      const minRow = Math.floor(entity.y - r);
+      const maxRow = Math.floor(entity.y + r);
+
+      for (let row = minRow; row <= maxRow; row++) {
+        for (let col = minCol; col <= maxCol; col++) {
+          if (!this.isCellSolid(col, row)) continue;
+
+          // Closest point on the solid cell [col, col + 1] x [row, row + 1]
+          const qx = Math.max(col, Math.min(col + 1, entity.x));
+          const qy = Math.max(row, Math.min(row + 1, entity.y));
+          const dx = entity.x - qx;
+          const dy = entity.y - qy;
+          const dist = Math.hypot(dx, dy);
+
+          if (dist < r) {
+            collided = true;
+            resolvedInIter = true;
+            if (dist > 1e-5) {
+              const overlap = r - dist;
+              entity.x += (dx / dist) * overlap;
+              entity.y += (dy / dist) * overlap;
+            } else {
+              // Center is inside solid cell: push out to nearest edge
+              const toLeft = entity.x - col;
+              const toRight = (col + 1) - entity.x;
+              const toTop = entity.y - row;
+              const toBottom = (row + 1) - entity.y;
+              const minEdge = Math.min(toLeft, toRight, toTop, toBottom);
+
+              if (minEdge === toLeft) entity.x = col - r - 1e-4;
+              else if (minEdge === toRight) entity.x = col + 1 + r + 1e-4;
+              else if (minEdge === toTop) entity.y = row - r - 1e-4;
+              else entity.y = row + 1 + r + 1e-4;
+            }
+          }
+        }
+      }
+
+      if (!resolvedInIter) break;
+    }
+
+    return collided;
+  }
+
+  isCircleValid(x, y, radius) {
+    const r = radius;
+    const minCol = Math.floor(x - r);
+    const maxCol = Math.floor(x + r);
+    const minRow = Math.floor(y - r);
+    const maxRow = Math.floor(y + r);
+
+    for (let row = minRow; row <= maxRow; row++) {
+      for (let col = minCol; col <= maxCol; col++) {
+        if (!this.isCellSolid(col, row)) continue;
+        const qx = Math.max(col, Math.min(col + 1, x));
+        const qy = Math.max(row, Math.min(row + 1, y));
+        if (Math.hypot(x - qx, y - qy) < r - 1e-4) {
+          return false;
+        }
+      }
+    }
+    return true;
+  }
+
+  moveWithCollision(moveX, moveY, now) {
+    const r = GAME_CONFIG.CHARACTER_RADIUS || 0.35;
+    const totalDist = Math.hypot(moveX, moveY);
+    // Sub-step so no step moves more than 0.20 cell (strictly < 0.25)
+    const steps = Math.max(1, Math.ceil(totalDist / 0.20));
+    const stepX = moveX / steps;
+    const stepY = moveY / steps;
+    let anyCollision = false;
+
+    for (let s = 0; s < steps; s++) {
+      // 1. Move X axis independently
+      if (stepX !== 0) {
+        this.character.x += stepX;
+        const hitX = this.resolveCircleGridCollision(this.character, r);
+        if (hitX) {
+          anyCollision = true;
+          // Corner-glide assistance: gently nudge towards corridor center ONLY if verified collision-free
+          if (moveY === 0) {
+            const yCenter = Math.floor(this.character.y) + 0.5;
+            const diff = yCenter - this.character.y;
+            if (Math.abs(diff) > 0.02) {
+              const nudgeY = this.character.y + Math.sign(diff) * 0.04;
+              if (this.isCircleValid(this.character.x, nudgeY, r)) {
+                this.character.y = nudgeY;
+              }
+            }
+          }
+        }
+      }
+
+      // 2. Move Y axis independently
+      if (stepY !== 0) {
+        this.character.y += stepY;
+        const hitY = this.resolveCircleGridCollision(this.character, r);
+        if (hitY) {
+          anyCollision = true;
+          // Corner-glide assistance: gently nudge towards corridor center ONLY if verified collision-free
+          if (moveX === 0) {
+            const xCenter = Math.floor(this.character.x) + 0.5;
+            const diff = xCenter - this.character.x;
+            if (Math.abs(diff) > 0.02) {
+              const nudgeX = this.character.x + Math.sign(diff) * 0.04;
+              if (this.isCircleValid(nudgeX, this.character.y, r)) {
+                this.character.x = nudgeX;
+              }
+            }
+          }
+        }
+      }
+    }
+
+    // Boundary constraints
+    this.character.x = Math.max(r, Math.min(this.layout.width - r, this.character.x));
+    this.character.y = Math.max(r, Math.min(this.layout.height - r, this.character.y));
+
+    if (anyCollision) {
+      this.handleCollision(now);
+    }
+  }
+
+  resolveBarrierOverlap(barrier) {
+    const r = GAME_CONFIG.CHARACTER_RADIUS || 0.35;
+    const bx = barrier.x;
+    const by = barrier.y;
+
+    // Check if character overlaps barrier cell
+    const qx = Math.max(bx, Math.min(bx + 1, this.character.x));
+    const qy = Math.max(by, Math.min(by + 1, this.character.y));
+    if (Math.hypot(this.character.x - qx, this.character.y - qy) < r) {
+      // Find nearest open neighbor cell to push player into safely
+      const candidates = [
+        [bx - 1, by],
+        [bx + 1, by],
+        [bx, by - 1],
+        [bx, by + 1],
+      ].filter(([c, row]) => !this.isCellSolid(c, row));
+
+      if (candidates.length > 0) {
+        candidates.sort(([c1, r1], [c2, r2]) => {
+          const d1 = Math.hypot(this.character.x - (c1 + 0.5), this.character.y - (r1 + 0.5));
+          const d2 = Math.hypot(this.character.x - (c2 + 0.5), this.character.y - (r2 + 0.5));
+          return d1 - d2;
+        });
+
+        const [bestC, bestR] = candidates[0];
+        this.character.x = bestC + 0.5;
+        this.character.y = bestR + 0.5;
+        this.resolveCircleGridCollision(this.character, r);
+      }
+    }
   }
 
   handleCollision(now) {
@@ -271,7 +427,6 @@ export class MazeGameEngine {
     this.lastCollisionTime = now;
     this.collisionsCount++;
 
-    // Wall collision does NOT reduce points as per user requirements
     const scorePenalty = GAME_CONFIG.SCORING.COLLISION_SCORE_PENALTY || 0;
     if (scorePenalty > 0) {
       this.score = Math.max(0, this.score - scorePenalty);
@@ -291,7 +446,7 @@ export class MazeGameEngine {
   checkTriggers(now) {
     const cx = this.character.x;
     const cy = this.character.y;
-    const r = GAME_CONFIG.CHARACTER_RADIUS;
+    const r = GAME_CONFIG.CHARACTER_RADIUS || 0.35;
 
     // 1. Collectibles
     for (const c of this.collectibles) {
@@ -299,7 +454,7 @@ export class MazeGameEngine {
         const dist = Math.hypot(cx - c.x, cy - c.y);
         if (dist < r + 0.38) {
           c.collected = true;
-          const pts = GAME_CONFIG.SCORING.COLLECTIBLE_POINTS;
+          const pts = c.points;
           this.score += pts;
           this.addEvent('COLLECT', `Data Packet collected! +${pts} pts`);
           this.repository.logEvent(this.sessionId, 'COLLECTIBLE_COLLECTED', { id: c.id, score: this.score });
@@ -313,7 +468,7 @@ export class MazeGameEngine {
         const dist = Math.hypot(cx - cp.x, cy - cp.y);
         if (dist < r + 0.45) {
           cp.passed = true;
-          const pts = GAME_CONFIG.SCORING.CHECKPOINT_POINTS;
+          const pts = cp.points;
           this.score += pts;
           this.addEvent('CHECKPOINT', `Checkpoint cleared: ${cp.name}! +${pts} pts`);
           this.repository.logEvent(this.sessionId, 'CHECKPOINT_PASSED', { id: cp.id, score: this.score });
@@ -321,7 +476,7 @@ export class MazeGameEngine {
       }
     }
 
-    // 3. Switches & Barriers (Switches permanently unlock shortcut gates)
+    // 3. Switches & Barriers
     for (const sw of this.switches) {
       const dist = Math.hypot(cx - sw.x, cy - sw.y);
       if (dist < r + 0.45) {
@@ -329,13 +484,18 @@ export class MazeGameEngine {
         if (target) {
           const wasOpen = target.open;
           target.open = true;
-          target.openUntil = Infinity; // Permanently unlocked shortcut gate!
+          target.openUntil = Infinity;
+          this.clearPathCache();
 
           if (!wasOpen) {
             sw.active = true;
             sw.activatedCount++;
-            const pts = GAME_CONFIG.SCORING.SWITCH_POINTS;
-            this.score += pts;
+            let pts = 0;
+            if (!sw.awarded) {
+              sw.awarded = true;
+              pts = sw.points;
+              this.score += pts;
+            }
             this.portalAlertCount = (this.portalAlertCount || 0) + 1;
             this.portalNotice = `⚡ ${sw.label.toUpperCase()} ACTIVATED · ${target.label.toUpperCase()} UNLOCKED!`;
             this.addEvent('SWITCH', `${sw.label} activated! ${target.label} unlocked! (+${pts} pts)`);
@@ -345,14 +505,13 @@ export class MazeGameEngine {
       }
     }
 
-    // 4. Dig Pit Traps (Sunken Spike Excavations)
-    // Character falls into the pit: cannot move ahead of the dig, resets to start and restarts!
+    // 4. Hazards (Pits & EMP)
     if (this.hazards) {
-      for (const pit of this.hazards) {
-        const dist = Math.hypot(cx - pit.x, cy - pit.y);
-        if (dist < r + (pit.radius || 0.42)) {
-          this.handlePitFall(pit, now);
-          return; // Stop processing triggers for this tick since game restarted
+      for (const hazard of this.hazards) {
+        const dist = Math.hypot(cx - hazard.x, cy - hazard.y);
+        if (dist < r + (hazard.radius || 0.42)) {
+          this.handleHazardHit(hazard, now);
+          return;
         }
       }
     }
@@ -364,22 +523,36 @@ export class MazeGameEngine {
     }
   }
 
-  handlePitFall(pit, now) {
+  handleHazardHit(hazard, now) {
     this.restartsCount = (this.restartsCount || 0) + 1;
-    this.pitFallsCount = (this.pitFallsCount || 0) + 1;
+    const isEmp = hazard.type === 'EMP';
+    if (isEmp) {
+      this.hazardHitsCount = (this.hazardHitsCount || 0) + 1;
+    } else {
+      this.pitFallsCount = (this.pitFallsCount || 0) + 1;
+    }
+
     this.character.x = this.layout.start.x;
     this.character.y = this.layout.start.y;
     this.character.vx = 0;
     this.character.vy = 0;
 
-    const penalty = GAME_CONFIG.SCORING.PIT_FALL_PENALTY || 30;
+    const penalty = isEmp
+      ? (GAME_CONFIG.SCORING.EMP_HAZARD_PENALTY || 30)
+      : (GAME_CONFIG.SCORING.PIT_FALL_PENALTY || 30);
+
     this.penalties += penalty;
     this.score = Math.max(0, this.score - penalty);
     this.portalAlertCount = 0;
     this.portalNotice = null;
 
-    // Retain collected state: items and checkpoints already claimed remain removed from map
-    // so users cannot claim them again or increase their points.
+    // Grace period after respawn
+    this.hunterGraceUntil = now + 2000;
+    this.hunter.x = this.layout.start.x;
+    this.hunter.y = this.layout.start.y;
+    this.hunter.active = false;
+
+    // Items and checkpoints already claimed remain collected so they cannot be double-awarded
     this.switches.forEach((sw) => {
       sw.active = false;
       sw.activatedCount = 0;
@@ -388,12 +561,13 @@ export class MazeGameEngine {
       b.open = false;
       b.openUntil = 0;
     });
+    this.clearPathCache();
 
-    this.respawnNotice = `⚠️ FELL INTO PIT TRAP · -${penalty} PTS PENALTY`;
-    this.addEvent('PIT_FALL', `Fell into ${pit.label || 'Pit Trap'}! -${penalty} pts penalty. Reset to start.`);
+    this.respawnNotice = `⚠️ ${hazard.label || 'HAZARD'} · -${penalty} PTS PENALTY`;
+    this.addEvent('HAZARD', `Hit ${hazard.label || 'Hazard'}! -${penalty} pts penalty. Reset to start.`);
 
-    this.repository.logEvent(this.sessionId, 'PIT_FALL', {
-      pitId: pit.id,
+    this.repository.logEvent(this.sessionId, 'HAZARD_HIT', {
+      hazardId: hazard.id,
       penalty,
       penaltiesTotal: this.penalties,
       restartsCount: this.restartsCount,
@@ -402,13 +576,13 @@ export class MazeGameEngine {
     });
   }
 
+  // Alias for backward compatibility
+  handlePitFall(pit, now) {
+    this.handleHazardHit(pit, now);
+  }
+
   isHunterBlocked(col, row) {
-    if (col < 0 || col >= this.layout.width || row < 0 || row >= this.layout.height) return true;
-    if (this.layout.grid[row][col] === 1) return true;
-    for (const b of this.barriers) {
-      if (!b.open && b.x === col && b.y === row) return true;
-    }
-    return false;
+    return this.isCellSolid(col, row);
   }
 
   getPathDistance(x1, y1, x2, y2) {
@@ -431,8 +605,13 @@ export class MazeGameEngine {
     return Infinity;
   }
 
-  getShortestPathNextCell(startX, startY, targetX, targetY) {
+  getCachedShortestPathNextCell(startX, startY, targetX, targetY) {
     if (startX === targetX && startY === targetY) return null;
+    const key = `${startX},${startY}->${targetX},${targetY}`;
+    if (this.pathCache.has(key)) {
+      return this.pathCache.get(key);
+    }
+
     const q = [[targetX, targetY]];
     const parent = new Map();
     const visited = new Set([`${targetX},${targetY}`]);
@@ -443,17 +622,23 @@ export class MazeGameEngine {
       for (const [dx, dy] of [[0, 1], [0, -1], [1, 0], [-1, 0]]) {
         const nx = cx + dx;
         const ny = cy + dy;
-        const key = `${nx},${ny}`;
-        if (!visited.has(key) && !this.isHunterBlocked(nx, ny)) {
-          visited.add(key);
-          parent.set(key, [cx, cy]);
+        const cellKey = `${nx},${ny}`;
+        if (!visited.has(cellKey) && !this.isHunterBlocked(nx, ny)) {
+          visited.add(cellKey);
+          parent.set(cellKey, [cx, cy]);
           q.push([nx, ny]);
         }
       }
     }
 
     const next = parent.get(`${startX},${startY}`);
-    return next ? { x: next[0], y: next[1] } : null;
+    const result = next ? { x: next[0], y: next[1] } : null;
+    this.pathCache.set(key, result);
+    return result;
+  }
+
+  getShortestPathNextCell(startX, startY, targetX, targetY) {
+    return this.getCachedShortestPathNextCell(startX, startY, targetX, targetY);
   }
 
   updateHunter(dt, now) {
@@ -464,7 +649,7 @@ export class MazeGameEngine {
     const charCol = Math.floor(this.character.x);
     const charRow = Math.floor(this.character.y);
 
-    // If hunter is not yet active, activate once player is at least HUNTER_START_DISTANCE cells away
+    // If hunter is not yet active, activate once player is at least HUNTER_START_DISTANCE away
     if (!this.hunter.active) {
       const threshold = GAME_CONFIG.HUNTER_START_DISTANCE ?? 3;
       const distFromStart = this.getPathDistance(startCol, startRow, charCol, charRow);
@@ -476,7 +661,6 @@ export class MazeGameEngine {
     }
 
     if (!this.hunter.active) {
-      // Hunter waits at start position
       return;
     }
 
@@ -497,34 +681,47 @@ export class MazeGameEngine {
         this.hunter.y += (dy / d) * move;
       }
     } else {
-      const nextCell = this.getShortestPathNextCell(hCol, hRow, charCol, charRow);
+      const nextCell = this.getCachedShortestPathNextCell(hCol, hRow, charCol, charRow);
       if (nextCell) {
         const targetX = nextCell.x + 0.5;
         const targetY = nextCell.y + 0.5;
 
+        // Move only along BFS cell-centre path, turning only at cell centres (never diagonally)
         if (nextCell.x !== hCol) {
-          // Horizontal move: nudge Y towards center of current corridor
+          // Horizontal step: align Y to corridor center first
           const yCenter = hRow + 0.5;
           const yDiff = yCenter - this.hunter.y;
-          this.hunter.y += Math.sign(yDiff) * Math.min(Math.abs(yDiff), step * 0.5);
-
-          const xDiff = targetX - this.hunter.x;
-          this.hunter.x += Math.sign(xDiff) * Math.min(Math.abs(xDiff), step);
+          if (Math.abs(yDiff) > 0.02) {
+            this.hunter.y += Math.sign(yDiff) * Math.min(Math.abs(yDiff), step);
+          } else {
+            this.hunter.y = yCenter;
+            const xDiff = targetX - this.hunter.x;
+            this.hunter.x += Math.sign(xDiff) * Math.min(Math.abs(xDiff), step);
+          }
         } else {
-          // Vertical move: nudge X towards center of current corridor
+          // Vertical step: align X to corridor center first
           const xCenter = hCol + 0.5;
           const xDiff = xCenter - this.hunter.x;
-          this.hunter.x += Math.sign(xDiff) * Math.min(Math.abs(xDiff), step * 0.5);
-
-          const yDiff = targetY - this.hunter.y;
-          this.hunter.y += Math.sign(yDiff) * Math.min(Math.abs(yDiff), step);
+          if (Math.abs(xDiff) > 0.02) {
+            this.hunter.x += Math.sign(xDiff) * Math.min(Math.abs(xDiff), step);
+          } else {
+            this.hunter.x = xCenter;
+            const yDiff = targetY - this.hunter.y;
+            this.hunter.y += Math.sign(yDiff) * Math.min(Math.abs(yDiff), step);
+          }
         }
       }
+      // If no path, hunter holds position
     }
 
-    // Check catch condition
+    // Safety circle collision on hunter with radius <= player's
+    const hunterR = (GAME_CONFIG.CHARACTER_RADIUS || 0.35) * 0.85;
+    this.resolveCircleGridCollision(this.hunter, hunterR);
+
+    // Check catch condition with grace period check
+    const inGrace = this.hunterGraceUntil && now < this.hunterGraceUntil;
     const catchDist = Math.hypot(this.character.x - this.hunter.x, this.character.y - this.hunter.y);
-    if (catchDist < 0.55) {
+    if (!inGrace && catchDist < 0.55) {
       this.handleHunterCatch(now);
     }
   }
@@ -541,16 +738,17 @@ export class MazeGameEngine {
     this.penalties += penalty;
     this.score = Math.max(0, this.score - penalty);
 
-    // Hunter back at its start distance (start cell, dormant until player reaches distance)
     this.hunter.x = this.layout.start.x;
     this.hunter.y = this.layout.start.y;
     this.hunter.active = false;
 
+    // 2s grace period after respawn to prevent chain-catch
+    this.hunterGraceUntil = now + 2000;
+
     this.portalAlertCount = 0;
     this.portalNotice = null;
 
-    this.collectibles.forEach((c) => (c.collected = false));
-    this.checkpoints.forEach((cp) => (cp.passed = false));
+    // Items and checkpoints already claimed stay claimed (no double-award, points kept)
     this.switches.forEach((sw) => {
       sw.active = false;
       sw.activatedCount = 0;
@@ -559,8 +757,8 @@ export class MazeGameEngine {
       b.open = false;
       b.openUntil = 0;
     });
+    this.clearPathCache();
 
-    // Game timer must keep running and must not reset. Do not end the game on catch.
     this.respawnNotice = `⚠️ CAUGHT BY HUNTER · -${penalty} PTS PENALTY · TIMER RUNNING`;
     this.addEvent('HUNTER_CATCH', `The hunter caught you! -${penalty} pts penalty. Reset to start, timer continues.`);
 
@@ -584,17 +782,29 @@ export class MazeGameEngine {
     let timePoints = 0;
 
     if (completed) {
-      completionBonus = GAME_CONFIG.SCORING.COMPLETION_BONUS;
-      timePoints = Math.min(100, Math.round(GAME_CONFIG.SCORING.TIME_POINTS_DIVIDEND / finishTimeSec));
-      this.score = Math.max(0, Math.min(500, Math.round(this.score + completionBonus + timePoints)));
-      this.addEvent('COMPLETE', `MAZE ESCAPED in ${finishTimeSec}s! +${completionBonus} completion & +${timePoints} time points!`);
+      completionBonus = GAME_CONFIG.SCORING.COMPLETION_BONUS || 140;
+      const par = this.parTimeSec || 60;
+      if (finishTimeSec <= par) {
+        timePoints = GAME_CONFIG.SCORING.MAX_SPEED_BONUS || 100;
+      } else if (finishTimeSec >= 3 * par) {
+        timePoints = 0;
+      } else {
+        timePoints = Math.max(0, Math.min(100, Math.round(100 * (1 - (finishTimeSec - par) / (2 * par)))));
+      }
+      this.score = Math.max(0, Math.min(GAME_CONFIG.MAX_GAME_SCORE || 500, Math.round(this.score + completionBonus + timePoints)));
+      this.addEvent('COMPLETE', `MAZE ESCAPED in ${finishTimeSec}s! +${completionBonus} completion & +${timePoints} speed bonus!`);
     } else {
+      this.score = Math.max(0, Math.min(GAME_CONFIG.MAX_GAME_SCORE || 500, Math.round(this.score)));
       this.addEvent('TERMINATED', 'Game terminated. Final score recorded.');
     }
 
     const collectedCount = this.collectibles.filter((c) => c.collected).length;
     const passedCheckpoints = this.checkpoints.filter((cp) => cp.passed).length;
-    const switchesActivated = this.switches.reduce((acc, s) => acc + s.activatedCount, 0);
+    const switchesActivated = this.switches.filter((s) => s.awarded).length;
+
+    const collectiblesPoints = this.collectibles.filter((c) => c.collected).reduce((sum, c) => sum + c.points, 0);
+    const checkpointsPoints = this.checkpoints.filter((cp) => cp.passed).reduce((sum, cp) => sum + cp.points, 0);
+    const switchesPoints = this.switches.filter((s) => s.awarded).reduce((sum, s) => sum + s.points, 0);
 
     const standardPayload = {
       gameId: GAME_CONFIG.GAME_ID,
@@ -619,17 +829,21 @@ export class MazeGameEngine {
         reachedExit: completed,
         finishTimeSec,
       },
-      score: Math.max(0, Math.min(500, Math.round(this.score))),
+      score: this.score,
       penalties: this.penalties,
       breakdown: {
-        collectiblesPoints: collectedCount * GAME_CONFIG.SCORING.COLLECTIBLE_POINTS,
-        checkpointsPoints: passedCheckpoints * GAME_CONFIG.SCORING.CHECKPOINT_POINTS,
-        switchesPoints: switchesActivated * GAME_CONFIG.SCORING.SWITCH_POINTS,
+        collectiblesPoints,
+        checkpointsPoints,
+        switchesPoints,
         completionBonus,
         timePoints,
         hunterCatchPenalties: (this.hunterCatchesCount || 0) * (GAME_CONFIG.SCORING.HUNTER_CATCH_PENALTY || 50),
         pitFallPenalties: (this.pitFallsCount || 0) * (GAME_CONFIG.SCORING.PIT_FALL_PENALTY || 30),
+        hazardPenalties: (this.hazardHitsCount || 0) * (GAME_CONFIG.SCORING.EMP_HAZARD_PENALTY || 30),
         penaltiesDeduction: -this.penalties,
+        earnedTotal: collectiblesPoints + checkpointsPoints + switchesPoints + completionBonus + timePoints,
+        deductedTotal: this.penalties,
+        finalScore: this.score,
       },
     };
 
@@ -648,7 +862,6 @@ export class MazeGameEngine {
     if (this.recentEvents.length > 8) this.recentEvents.pop();
   }
 
-  // Admin Controls
   adminAction(action) {
     switch (action) {
       case 'pause':
@@ -678,13 +891,23 @@ export class MazeGameEngine {
         this.score = 0;
         this.penalties = 0;
         this.collisionsCount = 0;
+        this.hunterCatchesCount = 0;
+        this.pitFallsCount = 0;
+        this.hazardHitsCount = 0;
         this.timeElapsedMs = 0;
         this.collectibles.forEach((c) => (c.collected = false));
         this.checkpoints.forEach((cp) => (cp.passed = false));
+        this.switches.forEach((sw) => {
+          sw.active = false;
+          sw.awarded = false;
+          sw.activatedCount = 0;
+        });
         this.barriers.forEach((b) => (b.open = false));
         this.hunter.x = this.layout.start.x;
         this.hunter.y = this.layout.start.y;
         this.hunter.active = false;
+        this.hunterGraceUntil = 0;
+        this.clearPathCache();
         this.status = (this.players.P1.connected && this.players.P2.connected) ? 'RUNNING' : 'WAITING_FOR_PLAYERS';
         this.addEvent('ADMIN', 'Game reset by admin.');
         if (this.status === 'RUNNING') this.startTickLoop();

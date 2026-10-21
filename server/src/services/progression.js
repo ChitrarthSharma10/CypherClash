@@ -131,7 +131,7 @@ export async function getEffectiveProgression(teamId) {
  */
 export async function isTeamEligibleForRound(teamId, roundNumber) {
   if (roundNumber > TOTAL_ROUNDS) return false;
-  if (roundNumber <= 1 || roundNumber === 3) return true;
+  if (roundNumber <= 1) return true;
   const progression = await getEffectiveProgression(teamId);
   return progression.effectiveEligibleRound >= roundNumber;
 }

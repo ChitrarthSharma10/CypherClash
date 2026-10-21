@@ -3,7 +3,11 @@ import mongoose from "mongoose";
 const clueSchema = new mongoose.Schema(
   {
     key: { type: String, required: true, enum: ["ev1", "ev2", "ev3", "ev4"] },
-    addedBy: { type: String, required: true, enum: ["detective", "analyst"] },
+    addedBy: {
+      type: String,
+      required: true,
+      enum: ["detective", "analyst", "investigator", "system"],
+    },
     addedAt: { type: Date, default: Date.now },
   },
   { _id: false },
@@ -15,7 +19,7 @@ const activitySchema = new mongoose.Schema(
     role: {
       type: String,
       required: true,
-      enum: ["detective", "analyst", "system"],
+      enum: ["detective", "analyst", "system", "investigator"],
     },
     at: { type: Date, default: Date.now },
   },
@@ -48,9 +52,13 @@ const accusationSchema = new mongoose.Schema(
     submittedBy: {
       type: String,
       required: true,
-      enum: ["detective", "analyst"],
+      enum: ["detective", "analyst", "investigator"],
     },
-    approvals: { type: [String], enum: ["detective", "analyst"], default: [] },
+    approvals: {
+      type: [String],
+      enum: ["detective", "analyst", "investigator"],
+      default: [],
+    },
     submittedAt: { type: Date, default: Date.now },
   },
   { _id: false },
@@ -82,7 +90,7 @@ const finalAccusationSchema = new mongoose.Schema(
     reasoning: { type: String, default: null },
     initiatedBy: {
       type: String,
-      enum: ["detective", "analyst"],
+      enum: ["detective", "analyst", "investigator"],
       default: null,
     },
     initiatedAt: { type: Date, default: null },

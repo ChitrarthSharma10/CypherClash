@@ -1,9 +1,30 @@
 import { GAME_CONFIG } from './config.js';
 
+export function createRng(seed) {
+  let s = 0;
+  if (typeof seed === 'number') {
+    s = seed | 0;
+  } else {
+    const str = String(seed || 'runner-seed-default');
+    for (let i = 0; i < str.length; i++) {
+      s = (Math.imul(31, s) + str.charCodeAt(i)) | 0;
+    }
+  }
+  return function () {
+    s |= 0;
+    s = (s + 0x6d2b79f5) | 0;
+    let t = Math.imul(s ^ (s >>> 15), 1 | s);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
 export class RunnerGameEngine {
-  constructor({ sessionId, teamId }, repository, onTick, onGameOver) {
+  constructor({ sessionId, teamId, seed }, repository, onTick, onGameOver) {
     this.sessionId = sessionId;
     this.teamId = teamId;
+    this.seed = seed || sessionId || teamId || 'runner-seed-default';
+    this.rng = createRng(this.seed);
     this.repository = repository;
     this.onTick = onTick;
     this.onGameOver = onGameOver;
@@ -31,18 +52,19 @@ export class RunnerGameEngine {
     this.isSliding = false;
     this.slideTimer = 0;
     
-    // Stats & Scoring (Talking Tom Gold Run Spec)
+    // Stats & Scoring (Budgeted strictly <= 500)
     this.score = 0;
+    this.goldPoints = 0;
     this.penalties = 0;
     this.collisionsCount = 0;
     this.coinsCollected = 0;
     this.goldBarsCollected = 0;
     this.vaultsCollected = 0;
     this.checkpointsPassed = 0;
-    this.agilityBonuses = 0;
     this.stunRemainingSec = 0;
     this.slowdownTimer = 0;
     this.recoveryTimer = 1.0;
+    this.goldBarValue = 4; // Computed dynamically during track generation
 
     // Active Power-Ups Timers (Seconds)
     this.activePowerUps = {
@@ -66,12 +88,15 @@ export class RunnerGameEngine {
   }
 
   generateTrack() {
+    this.rng = createRng(this.seed);
+    const rng = this.rng;
+
     this.obstacles = [];
     this.coins = [];
     this.powerUps = [];
     this.checkpoints = [];
 
-    // Checkpoints at 360m intervals
+    // Checkpoints at 375m intervals (8 total up to 3000m)
     for (let cpDist = GAME_CONFIG.CHECKPOINT_INTERVAL_METERS; cpDist <= GAME_CONFIG.COURSE_LENGTH_METERS; cpDist += GAME_CONFIG.CHECKPOINT_INTERVAL_METERS) {
       this.checkpoints.push({
         id: `cp-${cpDist}`,
@@ -80,36 +105,77 @@ export class RunnerGameEngine {
       });
     }
 
-    // Initial friendly run of gold bullion bars at start (28m to 48m in center lane)
-    // Guarantees player gets gold upfront without any obstacle collision
+    // Initial friendly run of gold bullion bars at start (28m to 44m in center lane)
     for (let c = 0; c < 5; c++) {
       this.coins.push({
         id: `gold-start-${c}`,
-        distance: 28 + c * 4.5,
+        distance: 28 + c * 4.0,
         lane: 0,
         collected: false,
       });
     }
 
-    // Procedural Highway Obstacles: Hardened for high-speed intense co-op
-    // Starts early at 35m with tighter spacing, dual-lane blocks, and rapid combos
+    // Fixed deterministic power-up locations across 3000m course
+    // Exactly 1 vault (20 pts), 2 double gold (8s duration = 128m max), 1 magnet, 1 shield
+    this.powerUps.push(
+      { id: 'pu-dg-1', type: 'DOUBLE_GOLD', distance: 480, lane: 0, collected: false },
+      { id: 'pu-mag-1', type: 'MAGNET', distance: 1050, lane: -1, collected: false },
+      { id: 'pu-vault-1', type: 'VAULT', distance: 1520, lane: 0, collected: false },
+      { id: 'pu-dg-2', type: 'DOUBLE_GOLD', distance: 2040, lane: 1, collected: false },
+      { id: 'pu-shield-1', type: 'SHIELD', distance: 2500, lane: 0, collected: false }
+    );
+
+    // 15 gold clusters of 3 coins each, spaced evenly in clear highway gaps
+    // Total coins = 5 start + 15 * 3 = 50 coins
+    for (let i = 0; i < 15; i++) {
+      const clusterDist = 120 + i * 185 + Math.floor(rng() * 20);
+      const clusterLane = Math.floor(rng() * 3) - 1; // -1, 0, or 1
+      for (let c = 0; c < 3; c++) {
+        this.coins.push({
+          id: `gold-${i}-${c}`,
+          distance: clusterDist + c * 4,
+          lane: clusterLane,
+          collected: false,
+        });
+      }
+    }
+
+    // Calculate maximum possible 2X coverage
+    // Double Gold lasts 8s. At max speed (16 m/s), runner covers at most 128m.
+    const dgPowerUps = this.powerUps.filter((p) => p.type === 'DOUBLE_GOLD');
+    let max2xCoins = 0;
+    for (const coin of this.coins) {
+      const in2xWindow = dgPowerUps.some((pu) => coin.distance >= pu.distance && coin.distance <= pu.distance + 128);
+      if (in2xWindow) {
+        max2xCoins++;
+      }
+    }
+
+    const totalGold = this.coins.length; // 50
+    const maxUnits = totalGold + max2xCoins; // e.g. 50 + 6 = 56
+    // GOLD_BAR_VALUE calibrated so that max possible gold points <= 250
+    this.goldBarValue = Math.max(1, Math.floor(GAME_CONFIG.SCORING.GOLD_POOL / maxUnits));
+
+    // Procedural Obstacles placed avoiding power-ups and coin clusters
     let dist = 35;
-    let itemId = 1;
-    let nextPowerUpDist = 80;
+    let obsId = 1;
 
     while (dist < GAME_CONFIG.COURSE_LENGTH_METERS - 40) {
-      const obstacleTypes = ['LOW_HURDLE', 'HIGH_BARRIER', 'TRAIN'];
-      const patternRand = Math.random();
+      // Don't spawn obstacle right on top of a power-up or vault
+      const nearPowerUp = this.powerUps.some((pu) => Math.abs(pu.distance - dist) < 8);
+      if (nearPowerUp) {
+        dist += 20;
+        continue;
+      }
 
+      const patternRand = rng();
       if (patternRand < 0.45) {
-        // DUAL-LANE BLOCK (Two lanes obstructed simultaneously!)
-        // e.g. Left + Center, or Center + Right, or Left + Right
-        const openLane = Math.floor(Math.random() * 3) - 1; // -1, 0, or 1
+        // DUAL-LANE BLOCK
+        const openLane = Math.floor(rng() * 3) - 1;
         const blockedLanes = [-1, 0, 1].filter((l) => l !== openLane);
 
-        // First blocked lane has a solid Truck/Train (P2 must dodge)
         this.obstacles.push({
-          id: `obs-${itemId++}`,
+          id: `obs-${obsId++}`,
           type: 'TRAIN',
           distance: dist,
           lane: blockedLanes[0],
@@ -117,10 +183,9 @@ export class RunnerGameEngine {
           hit: false,
         });
 
-        // Second blocked lane has either a Low Hurdle (P1 Jump) or High Barrier (P1 Slide)
-        const type2 = Math.random() < 0.5 ? 'LOW_HURDLE' : 'HIGH_BARRIER';
+        const type2 = rng() < 0.5 ? 'LOW_HURDLE' : 'HIGH_BARRIER';
         this.obstacles.push({
-          id: `obs-${itemId++}`,
+          id: `obs-${obsId++}`,
           type: type2,
           distance: dist,
           lane: blockedLanes[1],
@@ -128,14 +193,13 @@ export class RunnerGameEngine {
           hit: false,
         });
       } else if (patternRand < 0.75) {
-        // RAPID COMBO SEQUENCE (Two consecutive obstacles 13m apart)
-        // e.g. Low Hurdle (Jump) immediately followed by High Barrier (Slide)
-        const firstType = Math.random() < 0.5 ? 'LOW_HURDLE' : 'HIGH_BARRIER';
+        // RAPID COMBO SEQUENCE
+        const firstType = rng() < 0.5 ? 'LOW_HURDLE' : 'HIGH_BARRIER';
         const secondType = firstType === 'LOW_HURDLE' ? 'HIGH_BARRIER' : 'LOW_HURDLE';
-        const comboLane = Math.floor(Math.random() * 3) - 1;
+        const comboLane = Math.floor(rng() * 3) - 1;
 
         this.obstacles.push({
-          id: `obs-${itemId++}`,
+          id: `obs-${obsId++}`,
           type: firstType,
           distance: dist,
           lane: comboLane,
@@ -144,7 +208,7 @@ export class RunnerGameEngine {
         });
 
         this.obstacles.push({
-          id: `obs-${itemId++}`,
+          id: `obs-${obsId++}`,
           type: secondType,
           distance: dist + 13,
           lane: comboLane,
@@ -152,12 +216,13 @@ export class RunnerGameEngine {
           hit: false,
         });
       } else {
-        // SINGLE HIGHWAY HAZARD (Random lane and type)
-        const type = obstacleTypes[Math.floor(Math.random() * obstacleTypes.length)];
-        const lane = Math.floor(Math.random() * 3) - 1;
+        // SINGLE OBSTACLE
+        const obstacleTypes = ['LOW_HURDLE', 'HIGH_BARRIER', 'TRAIN'];
+        const type = obstacleTypes[Math.floor(rng() * obstacleTypes.length)];
+        const lane = Math.floor(rng() * 3) - 1;
 
         this.obstacles.push({
-          id: `obs-${itemId++}`,
+          id: `obs-${obsId++}`,
           type,
           distance: dist,
           lane,
@@ -166,36 +231,6 @@ export class RunnerGameEngine {
         });
       }
 
-      // Gold Bars: Place gold trails in navigable gaps
-      const goldLane = Math.floor(Math.random() * 3) - 1;
-      const goldCount = 3 + Math.floor(Math.random() * 2);
-      for (let c = 0; c < goldCount; c++) {
-        this.coins.push({
-          id: `gold-${itemId++}`,
-          distance: dist + 8 + c * 4,
-          lane: goldLane,
-          collected: false,
-        });
-      }
-
-      // Spawn Power-Ups / Stolen Vaults periodically
-      if (dist >= nextPowerUpDist && dist < GAME_CONFIG.COURSE_LENGTH_METERS - 80) {
-        const puTypes = ['MAGNET', 'DOUBLE_GOLD', 'SHIELD', 'VAULT'];
-        const puType = puTypes[Math.floor(Math.random() * puTypes.length)];
-        const puLane = Math.floor(Math.random() * 3) - 1;
-
-        this.powerUps.push({
-          id: `pu-${itemId++}`,
-          type: puType,
-          distance: dist + 16,
-          lane: puLane,
-          collected: false,
-        });
-
-        nextPowerUpDist = dist + 130 + Math.random() * 70;
-      }
-
-      // Dense tight spacing: 16m to 26m
       const spacing = Math.max(16, 26 - Math.floor(dist / 140));
       dist += spacing;
     }
@@ -455,7 +490,8 @@ export class RunnerGameEngine {
     // Gold Bars Collection (With Magnet Attraction and 2X Multiplier)
     const isMagnetActive = this.activePowerUps.magnetTimer > 0;
     const is2xActive = this.activePowerUps.doubleGoldTimer > 0;
-    const goldValue = is2xActive ? GAME_CONFIG.SCORING.GOLD_BAR_VALUE * 2 : GAME_CONFIG.SCORING.GOLD_BAR_VALUE;
+    const goldMultiplier = is2xActive ? 2 : 1;
+    const goldValue = this.goldBarValue * goldMultiplier;
 
     for (const coin of this.coins) {
       if (!coin.collected) {
@@ -466,6 +502,7 @@ export class RunnerGameEngine {
           coin.collected = true;
           this.coinsCollected++;
           this.goldBarsCollected++;
+          this.goldPoints += goldValue;
           this.score += goldValue;
         }
       }
@@ -523,20 +560,17 @@ export class RunnerGameEngine {
 
           if (dodged) {
             obs.cleared = true;
-            this.agilityBonuses++;
-            this.score += GAME_CONFIG.SCORING.AGILITY_BONUS;
             this.repository.logEvent(this.sessionId, 'OBSTACLE_DODGED', {
               type: obs.type,
               distance: Math.round(this.distanceMeters),
-              bonus: GAME_CONFIG.SCORING.AGILITY_BONUS,
             });
           } else if (distDiff <= 1.2 && distDiff >= -0.8) {
             // Physical impact occurs when runner reaches the obstacle without dodging
             obs.hit = true;
 
-            // Check if Helmet / Shield absorbs the collision
+            // Check if Shield absorbs the collision without penalty or slowdown
             if (this.activePowerUps.shieldTimer > 0) {
-              this.activePowerUps.shieldTimer = 0; // Shield breaks but saves the team!
+              this.activePowerUps.shieldTimer = 0; // Shield consumed but saves the team!
               this.repository.logEvent(this.sessionId, 'SHIELD_ABSORBED_COLLISION', {
                 obsId: obs.id,
                 type: obs.type,
@@ -544,12 +578,14 @@ export class RunnerGameEngine {
               });
             } else {
               this.collisionsCount++;
-              const penalty = GAME_CONFIG.SCORING.COLLISION_PENALTY || 20;
-              this.penalties += penalty;
-              this.score = Math.max(0, this.score - penalty);
+              const penalty = GAME_CONFIG.SCORING.COLLISION_PENALTY || 25;
+              // Collisions during the 3s recovery window must not stack penalties
+              if (this.slowdownTimer <= 0) {
+                this.penalties += penalty;
+                this.score = Math.max(0, this.score - penalty);
+              }
 
               // On hitting an obstacle, slow runner massively for 3 seconds (to ~25% normal speed)
-              // Obstacles hit while already slowed must not extend or stack beyond a simple refresh
               this.slowdownTimer = GAME_CONFIG.COLLISION_RECOVERY_TIME_SEC;
               this.recoveryTimer = 0;
               this.stunRemainingSec = GAME_CONFIG.COLLISION_RECOVERY_TIME_SEC;
@@ -559,7 +595,7 @@ export class RunnerGameEngine {
                 obsId: obs.id,
                 type: obs.type,
                 distance: Math.round(this.distanceMeters),
-                penalty,
+                penalty: this.slowdownTimer <= 0 ? penalty : 0,
                 score: this.score,
                 collisions: this.collisionsCount,
               });
@@ -569,20 +605,10 @@ export class RunnerGameEngine {
       }
     }
 
-    // Total Score calculation
-    const distancePoints = Math.floor(this.distanceMeters * GAME_CONFIG.SCORING.POINTS_PER_METER);
-    const vaultPoints = this.vaultsCollected * GAME_CONFIG.SCORING.VAULT_VALUE;
-    this.totalCalculatedScore = Math.max(
-      0,
-      distancePoints +
-        this.goldBarsCollected * GAME_CONFIG.SCORING.GOLD_BAR_VALUE +
-        vaultPoints +
-        this.checkpointsPassed * GAME_CONFIG.SCORING.CHECKPOINT_BONUS +
-        this.agilityBonuses * GAME_CONFIG.SCORING.AGILITY_BONUS -
-        this.penalties
-    );
+    // Total Score calculation (strictly no distance points)
+    this.totalCalculatedScore = Math.max(0, this.score);
 
-    // Check Victory (1000m Finish Line Reached)
+    // Check Victory (3000m Finish Line Reached)
     if (this.distanceMeters >= GAME_CONFIG.COURSE_LENGTH_METERS) {
       this.distanceMeters = GAME_CONFIG.COURSE_LENGTH_METERS;
       this.endGame(true, 'FINISH_LINE_CROSSED');
@@ -667,13 +693,25 @@ export class RunnerGameEngine {
     const durationMs = Math.round(this.timeElapsedMs);
     const finishTimeSec = Math.max(1, Math.round(durationMs / 1000));
 
-    // Points divided according to the time taken to finish the game:
-    // Faster completion yields substantially higher score!
-    const timePoints = completed ? Math.min(60, Math.round(GAME_CONFIG.SCORING.TIME_POINTS_DIVIDEND / finishTimeSec)) : 0;
-    const completionBonus = completed ? GAME_CONFIG.SCORING.BASE_COMPLETION_BONUS : 0;
+    // Smooth par-time based speed bonus up to 50 pts
+    const parTimeSec = 200; // ~3.3 min par for 3000m at average max speed
+    let timePoints = 0;
+    let completionBonus = 0;
 
-    const baseScore = this.totalCalculatedScore || 0;
-    const finalScore = Math.max(0, Math.min(500, Math.round(baseScore + timePoints + completionBonus)));
+    if (completed) {
+      completionBonus = GAME_CONFIG.SCORING.BASE_COMPLETION_BONUS || 100;
+      if (finishTimeSec <= parTimeSec) {
+        timePoints = GAME_CONFIG.SCORING.MAX_SPEED_BONUS || 50;
+      } else if (finishTimeSec >= 3 * parTimeSec) {
+        timePoints = 0;
+      } else {
+        timePoints = Math.max(0, Math.min(50, Math.round(50 * (1 - (finishTimeSec - parTimeSec) / (2 * parTimeSec)))));
+      }
+    }
+
+    const baseScore = this.score || 0;
+    const finalScore = Math.max(0, Math.min(GAME_CONFIG.MAX_GAME_SCORE || 500, Math.round(baseScore + timePoints + completionBonus)));
+    this.score = finalScore;
 
     const result = {
       gameId: GAME_CONFIG.GAME_ID,
@@ -696,22 +734,24 @@ export class RunnerGameEngine {
         distanceTraveled: Math.round(this.distanceMeters),
         courseLengthMeters: GAME_CONFIG.COURSE_LENGTH_METERS,
         totalCheckpoints: this.checkpoints.length,
-        timeDividend: GAME_CONFIG.SCORING.TIME_POINTS_DIVIDEND,
         coinsCollected: this.coinsCollected,
+        goldBarsCollected: this.goldBarsCollected,
+        vaultsCollected: this.vaultsCollected,
         collisions: this.collisionsCount,
         checkpointsCleared: this.checkpointsPassed,
-        agilityBonuses: this.agilityBonuses,
         completionReason: reason,
         finishTimeSec,
       },
       breakdown: {
-        distancePoints: Math.floor(this.distanceMeters * GAME_CONFIG.SCORING.POINTS_PER_METER),
-        coinPoints: this.coinsCollected * GAME_CONFIG.SCORING.GOLD_BAR_VALUE,
-        checkpointPoints: this.checkpointsPassed * GAME_CONFIG.SCORING.CHECKPOINT_BONUS,
-        agilityBonusPoints: this.agilityBonuses * GAME_CONFIG.SCORING.AGILITY_BONUS,
-        timePoints,
+        goldPoints: this.goldPoints,
+        vaultPoints: this.vaultsCollected * (GAME_CONFIG.SCORING.VAULT_VALUE || 20),
+        checkpointPoints: this.checkpointsPassed * (GAME_CONFIG.SCORING.CHECKPOINT_BONUS || 10),
         completionBonus,
+        timePoints,
         collisionPenalties: -this.penalties,
+        earnedTotal: this.goldPoints + this.vaultsCollected * (GAME_CONFIG.SCORING.VAULT_VALUE || 20) + this.checkpointsPassed * (GAME_CONFIG.SCORING.CHECKPOINT_BONUS || 10) + completionBonus + timePoints,
+        deductedTotal: this.penalties,
+        finalScore,
       },
     };
 

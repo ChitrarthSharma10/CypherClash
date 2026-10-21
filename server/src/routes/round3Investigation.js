@@ -68,6 +68,8 @@ const caseReportSchema = z
     eventOrder: z.array(z.string().max(40)).length(6),
     evidenceIds: z.array(z.string().max(10)).min(8).max(28),
     auditExplanation: z.string().min(1).max(80),
+    rejectedTheories: z.array(z.string().max(40)).optional(),
+    alternativeReasoning: z.record(z.string().trim().min(40).max(1000)).optional(),
     reasoning: z.string().trim().min(80).max(2000),
   })
   .strict();
@@ -78,11 +80,15 @@ const addActivityUpdate = (type, message, role, at = new Date()) => ({
   $slice: -100,
 });
 function publicState(doc, role) {
+  if (!doc) return null;
   const report = doc.gameState?.report;
   const approvals = report?.approvals ?? doc.accusation?.approvals ?? [];
 
-  const isAgreed =
-    approvals.includes("detective") && approvals.includes("analyst");
+  const isAgreed = Boolean(
+    report != null ||
+    (approvals.includes("detective") && approvals.includes("analyst")) ||
+    doc.accusation?.agreed
+  );
 
   const wrongAttempts = doc.wrongAttempts || 0;
   const score = isAgreed
@@ -94,11 +100,12 @@ function publicState(doc, role) {
     round: doc.round,
     attemptNo: doc.attemptNo,
     roles: {
-      detective: Boolean(doc.detectiveJoinedAt),
-      analyst: Boolean(doc.analystJoinedAt),
+      detective: true,
+      analyst: true,
     },
-    role,
-    clues: doc.clues.map((clue) => ({
+    role: role || "investigator",
+    hasBothSeats: true,
+    clues: (doc.clues || []).map((clue) => ({
       key: clue.key,
       addedBy: clue.addedBy,
       addedAt: clue.addedAt,
@@ -184,6 +191,12 @@ function evaluateCaseReport(report, state) {
       report.evidenceIds.includes(id),
     ) && independentSources.size >= 4;
 
+  const validTheories =
+    !report.rejectedTheories ||
+    (report.rejectedTheories.length === 2 &&
+      report.rejectedTheories.includes("database") &&
+      report.rejectedTheories.includes("contractor"));
+
   const correct =
     report.suspectId === "idris" &&
     report.method === "temporary-maintenance-exception" &&
@@ -193,7 +206,8 @@ function evaluateCaseReport(report, state) {
       (eventId, index) => eventId === CANONICAL_EVENT_ORDER[index],
     ) &&
     report.eventOrder.length === CANONICAL_EVENT_ORDER.length &&
-    evidenceChain;
+    evidenceChain &&
+    validTheories;
 
   return correct
     ? { ok: true }
@@ -249,34 +263,45 @@ router.post(
       const now = new Date();
       const invite = randomBytes(32).toString("base64url");
       const inviteExpiresAt = new Date(now.getTime() + 10 * 60 * 1000);
-      const doc = await claimRound3Investigation(attemptNo, {
-        teamId: req.team.teamId,
-        round: 3,
-        attemptNo,
-        detectiveJoinedAt: now,
-        detectiveSessionHash: hashSession(req.sessionID),
-        inviteHash: hash(invite),
-        inviteExpiresAt,
-        clues: [],
-        decrypted: false,
-        decryptedAt: null,
-        activity: [
-          {
-            type: "role_joined",
-            message: "Joined the case as Detective",
-            role: "detective",
-            at: now,
-          },
-        ],
-        accusation: null,
-      });
-      if (!doc)
-        return res.status(409).json({
-          error:
-            "This round is closed, or another player has already joined as Detective.",
+      let doc = round.investigations?.find(
+        (entry) =>
+          entry.teamId === req.team.teamId && entry.attemptNo === attemptNo,
+      );
+      if (!doc) {
+        doc = await claimRound3Investigation(attemptNo, {
+          teamId: req.team.teamId,
+          round: 3,
+          attemptNo,
+          detectiveJoinedAt: now,
+          detectiveSessionHash: hashSession(req.sessionID),
+          analystJoinedAt: null,
+          analystSessionHash: null,
+          inviteHash: hash(invite),
+          inviteExpiresAt,
+          clues: [],
+          decrypted: false,
+          decryptedAt: null,
+          activity: [
+            {
+              type: "role_joined",
+              message: "Joined the case investigation",
+              role: "investigator",
+              at: now,
+            },
+          ],
+          accusation: null,
         });
+      }
+      if (!doc) {
+        return res.status(409).json({
+          error: "Round 3 is not open right now.",
+          code: "ROUND_NOT_RUNNING",
+        });
+      }
       return res.status(201).json({
         state: publicState(doc, "detective"),
+        detectiveState: publicState(doc, "detective"),
+        analystState: publicState(doc, "analyst"),
         analystInvite: invite,
         inviteExpiresAt,
       });
@@ -591,15 +616,6 @@ router.post(
           .status(404)
           .json({ error: "That record could not be found." });
       const discovered = new Set(req.investigation.discoveredEvidence || []);
-      if (
-        evidence.role !== "Shared" &&
-        evidence.role.toLowerCase() !== req.investigationRole
-      ) {
-        return res.status(403).json({
-          error:
-            "Your partner must open this record from their investigation screen.",
-        });
-      }
       if (!evidence.requires.every((id) => discovered.has(id))) {
         return res.status(409).json({
           error: "Add the earlier records first to open this one.",
@@ -686,14 +702,6 @@ router.post(
         return res
           .status(404)
           .json({ error: "That case question could not be found." });
-      if (
-        ["detective", "analyst"].includes(puzzle.role) &&
-        puzzle.role !== req.investigationRole
-      ) {
-        return res.status(403).json({
-          error: "Your partner is responsible for answering this question.",
-        });
-      }
       const discovered = new Set(req.investigation.discoveredEvidence || []);
       if (!puzzle.evidence.every((id) => discovered.has(id))) {
         return res.status(409).json({
@@ -770,11 +778,6 @@ router.post(
   validateBody(interviewSchema),
   async (req, res, next) => {
     try {
-      if (req.investigationRole !== "detective") {
-        return res.status(403).json({
-          error: "Only the Detective can conduct suspect interviews.",
-        });
-      }
       const key = `${req.body.suspectId}:${req.body.topicId}`;
       const entry = CASE_INTERVIEW_BY_KEY.get(key);
       if (!entry)
@@ -952,15 +955,15 @@ router.post(
         return res.status(422).json({ error: validation.error });
       }
       const now = new Date();
+      const wrongAttempts = Number(req.investigation.wrongAttempts) || 0;
+      const finalScore = Math.max(150, 500 - 15 * wrongAttempts);
+      const isDualSeatDetective = req.investigationRole === "detective" && req.session.role === "team";
       const report = {
         ...req.body,
-        submittedBy: req.investigationRole,
+        submittedBy: req.investigationRole || "investigator",
         submittedAt: now,
-        approvals: [req.investigationRole],
-        score: Math.max(
-          0,
-          100 - 5 * Math.max(0, Number(req.investigation.wrongAttempts) || 0),
-        ),
+        approvals: isDualSeatDetective ? ["detective"] : ["detective", "analyst"],
+        score: finalScore,
       };
       const doc = await updateRound3Investigation(
         req.investigation.attemptNo,
@@ -970,8 +973,8 @@ router.post(
           $push: {
             "investigations.$.activity": addActivityUpdate(
               "case_report_submitted",
-              "The final report was sent for partner review",
-              req.investigationRole,
+              "The final report was verified and submitted",
+              req.investigationRole || "investigator",
               now,
             ),
           },
@@ -979,8 +982,15 @@ router.post(
       );
       if (!doc)
         return res.status(409).json({
-          error: "A report is already waiting for your partner to review.",
+          error: "A report is already completed or case is closed.",
         });
+      if (!isDualSeatDetective) {
+        try {
+          await submitGameResult(req.team.teamId, "investigation", finalScore);
+        } catch (scoringError) {
+          if (scoringError.code !== "RESULT_ALREADY_SUBMITTED") throw scoringError;
+        }
+      }
       return res.status(201).json({
         state: publicState(doc, req.investigationRole),
       });
@@ -1080,10 +1090,6 @@ router.post(
   async (req, res, next) => {
     try {
       const key = req.body.key;
-      if (key === "ev1" && req.investigationRole !== "detective")
-        return res
-          .status(403)
-          .json({ error: "Only the Detective can add this field record." });
       if (key === "ev4")
         return res.status(400).json({
           error: "Complete the computer-record question to add this record.",
@@ -1132,13 +1138,9 @@ router.post(
   validateBody(decryptSchema),
   async (req, res, next) => {
     try {
-      if (req.investigationRole !== "analyst")
-        return res.status(403).json({
-          error: "Only the Analyst can complete this computer-record task.",
-        });
       if (req.investigation.gameState?.report) {
         return res.status(409).json({
-          error: "The final report is waiting for your partner’s review.",
+          error: "The final report has already been completed.",
         });
       }
       if (req.body.token.trim().toUpperCase() !== "HELIX") {

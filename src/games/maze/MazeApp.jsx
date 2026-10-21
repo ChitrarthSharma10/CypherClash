@@ -6,6 +6,7 @@ import MazeCanvas from './components/MazeCanvas.jsx';
 import ResultsModal from './components/ResultsModal.jsx';
 import ConstellationCanvas from './components/ConstellationCanvas.jsx';
 import MapGuidelinesModal from './components/MapGuidelinesModal.jsx';
+import TimeLeftBanner, { computeRemainingMs } from '../../components/TimeLeftBanner.jsx';
 
 function MazeMonitor({
   playerId,
@@ -18,6 +19,8 @@ function MazeMonitor({
   handleRestart,
   handleConnect,
   onBack,
+  round,
+  serverNow,
 }) {
   const isP1 = playerId === 'P1';
   const partnerRole = isP1 ? 'Participant 2 (Horizontal)' : 'Participant 1 (Vertical)';
@@ -107,6 +110,8 @@ function MazeMonitor({
         playerId={playerId}
         rejectedNotice={rejectedNotice}
         teamId={teamId}
+        round={round}
+        serverNow={serverNow}
       />
 
       <div className="canvas-frame-outer" style={{ position: 'relative', width: '100%', display: 'flex', justifyContent: 'center' }}>
@@ -263,8 +268,22 @@ export default function MazeApp({
   const [showGuidelines, setShowGuidelines] = useState(true);
 
   const socketClientRef = useRef(null);
+  const serverOffsetRef = useRef(0);
 
-  const isRoundEnded = round?.status === 'ended' || (round?.deadline && new Date(round.deadline).getTime() <= Date.now());
+  useEffect(() => {
+    if (serverNow) {
+      serverOffsetRef.current = new Date(serverNow).getTime() - Date.now();
+    }
+  }, [serverNow]);
+
+  const [, setTimerTick] = useState(0);
+  useEffect(() => {
+    const timer = setInterval(() => setTimerTick((t) => t + 1), 500);
+    return () => clearInterval(timer);
+  }, []);
+
+  const remainingMs = computeRemainingMs(round, serverOffsetRef.current);
+  const isRoundEnded = round?.status === 'ended' || (remainingMs !== null && remainingMs <= 0);
 
   useEffect(() => {
     setCurrentSlot(playerSlot);
@@ -444,6 +463,7 @@ export default function MazeApp({
           )}
         </div>
       </header>
+      <TimeLeftBanner round={round} serverNow={serverNow} />
       {isRoundEnded && <p className="product-message is-error" role="status" style={{ margin: '12px 24px 0', textAlign: 'center' }}>The round has ended. Inputs are disabled.</p>}
 
       <div className="single-monitor-container" style={{ padding: '20px 24px' }}>
@@ -458,6 +478,8 @@ export default function MazeApp({
           handleRestart={handleRestart}
           handleConnect={handleConnect}
           onBack={onBack}
+          round={round}
+          serverNow={serverNow}
         />
       </div>
 

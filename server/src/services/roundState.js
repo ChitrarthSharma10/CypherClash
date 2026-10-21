@@ -2,7 +2,7 @@ import { EventEmitter } from "node:events";
 import { InvestigationCase } from "../models/InvestigationCase.js";
 import { RoundState } from "../models/RoundState.js";
 import { logEvent } from "../utils/logging.js";
-import { TOTAL_ROUNDS } from "../../../shared/rounds.js";
+import { TOTAL_ROUNDS, ROUND_METADATA } from "../../../shared/rounds.js";
 
 const states = new Map();
 const roundStateEvents = new EventEmitter();
@@ -452,7 +452,9 @@ export async function startRound(round, durationSec, adminId = "system") {
   }
   return withTransitionLock(async () => {
     const effectiveDurationSec =
-      round === 3 ? ROUND3_DURATION_SEC : durationSec;
+      Number.isInteger(durationSec) && durationSec > 0
+        ? durationSec
+        : (ROUND_METADATA[round]?.defaultDurationSec ?? (round === 3 ? ROUND3_DURATION_SEC : 1800));
     const current = states.get(round);
     if (current?.status === "running" || current?.status === "paused") {
       throw new RoundStateError(

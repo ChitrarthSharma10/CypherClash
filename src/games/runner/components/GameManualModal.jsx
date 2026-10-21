@@ -46,16 +46,16 @@ export default function GameManualModal({ isOpen, onClose, onPlay }) {
               <div className="symbol-item-card">
                 <div className="symbol-badge">
                   <span className="sym-icon">🪙</span>
-                  <span className="sym-pts">+25 PTS</span>
+                  <span className="sym-pts" style={{ color: '#ffd700', background: 'rgba(255, 215, 0, 0.15)' }}>GOLD POOL</span>
                 </div>
                 <h4>Gold Bar</h4>
-                <p>Bullion along tracks</p>
+                <p>Main income (~250 pts pool, 2X with Star)</p>
               </div>
 
               <div className="symbol-item-card">
                 <div className="symbol-badge">
                   <span className="sym-icon">📦</span>
-                  <span className="sym-pts">+150 PTS</span>
+                  <span className="sym-pts" style={{ color: '#2ecc71', background: 'rgba(46, 204, 113, 0.15)' }}>+20 PTS</span>
                 </div>
                 <h4>Vault</h4>
                 <p>Bonus safe recovery</p>
@@ -64,10 +64,10 @@ export default function GameManualModal({ isOpen, onClose, onPlay }) {
               <div className="symbol-item-card">
                 <div className="symbol-badge">
                   <span className="sym-icon">🏁</span>
-                  <span className="sym-pts">+100 PTS</span>
+                  <span className="sym-pts" style={{ color: '#2ecc71', background: 'rgba(46, 204, 113, 0.15)' }}>+10 PTS</span>
                 </div>
                 <h4>Sector Gate</h4>
-                <p>Checkpoints every 300m</p>
+                <p>8 checkpoints every 375m (80 pts)</p>
               </div>
 
               <div className="symbol-item-card">
@@ -85,7 +85,7 @@ export default function GameManualModal({ isOpen, onClose, onPlay }) {
                   <span className="sym-timer">10 SECONDS</span>
                 </div>
                 <h4>Shield</h4>
-                <p>Absorbs 1 collision</p>
+                <p>Absorbs 1 collision with 0 penalty</p>
               </div>
 
               <div className="symbol-item-card">
@@ -94,7 +94,7 @@ export default function GameManualModal({ isOpen, onClose, onPlay }) {
                   <span className="sym-timer">8 SECONDS</span>
                 </div>
                 <h4>2X Multiplier</h4>
-                <p>Doubles gold value</p>
+                <p>Doubles gold value (re-pickup refreshes)</p>
               </div>
 
               <div className="symbol-item-card">
@@ -103,7 +103,7 @@ export default function GameManualModal({ isOpen, onClose, onPlay }) {
                   <span className="sym-action">JUMP (W)</span>
                 </div>
                 <h4>Hurdle</h4>
-                <p>P1 Jump</p>
+                <p>Crash: -25 pts & 3s slow</p>
               </div>
 
               <div className="symbol-item-card">
@@ -112,7 +112,7 @@ export default function GameManualModal({ isOpen, onClose, onPlay }) {
                   <span className="sym-action">SLIDE (S)</span>
                 </div>
                 <h4>Sign</h4>
-                <p>P1 Slide</p>
+                <p>Crash: -25 pts & 3s slow</p>
               </div>
 
               <div className="symbol-item-card">
@@ -121,7 +121,7 @@ export default function GameManualModal({ isOpen, onClose, onPlay }) {
                   <span className="sym-action">STEER (A/D)</span>
                 </div>
                 <h4>Truck</h4>
-                <p>P2 Lane Switch</p>
+                <p>Crash: -25 pts & 3s slow</p>
               </div>
             </div>
           </div>

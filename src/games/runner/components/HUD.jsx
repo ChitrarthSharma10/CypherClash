@@ -1,11 +1,14 @@
 import { useState, useEffect, useRef } from 'react';
+import { useRoundTimer } from '../../../components/TimeLeftBanner.jsx';
 
-export default function HUD({ state, gameState, playerId }) {
+export default function HUD({ state, gameState, playerId, round, serverNow }) {
   const current = state || gameState;
   const timeElapsedMs = current?.timeElapsedMs ?? 0;
   const totalSeconds = Math.max(0, Math.floor(timeElapsedMs / 1000));
   const mins = String(Math.floor(totalSeconds / 60)).padStart(2, '0');
   const secs = String(totalSeconds % 60).padStart(2, '0');
+
+  const { formattedTime: roundTimeLeft, isPaused, isCritical } = useRoundTimer(round, serverNow);
 
   const score = current?.score ?? 0;
   const penalties = current?.penalties ?? 0;
@@ -85,9 +88,18 @@ export default function HUD({ state, gameState, playerId }) {
       <div className="hud-grid">
         {/* 1. Time & Speed */}
         <div className="hud-card">
-          <div className="hud-label">TIME (STOPWATCH)</div>
+          <div className="hud-label">
+            {isPaused ? 'ROUND PAUSED' : 'ROUND COUNTDOWN'} · ELAPSED
+          </div>
           <div className="hud-value" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-            <span>{mins}:{secs}</span>
+            <span style={{ fontSize: '26px', fontWeight: 800, color: isCritical || isPaused ? '#ff4d5e' : '#d4f04a' }}>
+              {round ? roundTimeLeft : `${mins}:${secs}`}
+            </span>
+            {round && (
+              <span style={{ fontSize: '15px', color: '#9fb8c2', fontWeight: 700 }}>
+                ⏱ {mins}:{secs}
+              </span>
+            )}
             <span style={{ fontSize: '15px', color: '#ffffff', fontWeight: 700 }}>
               {speed} m/s
             </span>
@@ -127,7 +139,7 @@ export default function HUD({ state, gameState, playerId }) {
             TWO-PLAYER CO-OP
           </div>
           <div className="hud-status-badge" style={{ color: '#ffc933', fontWeight: 700 }}>
-            A=RIGHT · D=LEFT · S=JUMP · W=SLIDE
+            W=JUMP · S=SLIDE · A=LEFT · D=RIGHT
           </div>
         </div>
 

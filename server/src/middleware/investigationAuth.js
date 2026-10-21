@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { Team } from "../models/Team.js";
-import { getRound3State, getRoundState } from "../services/roundState.js";
+import { claimRound3Investigation, getRound3State, getRoundState } from "../services/roundState.js";
 
 const sessionHash = (sessionId) =>
   createHash("sha256").update(sessionId).digest("hex");
@@ -29,10 +29,8 @@ export async function requireInvestigationParticipant(req, res, next) {
     const assignedAttempt = round.investigations?.find(
       (entry) =>
         entry.teamId === teamId &&
-        ((req.session.role === "team" &&
-          entry.detectiveSessionHash === currentSessionHash) ||
-          (req.session.role === "investigation" &&
-            entry.analystSessionHash === currentSessionHash)),
+        (entry.detectiveSessionHash === currentSessionHash ||
+          entry.analystSessionHash === currentSessionHash),
     );
     if (assignedAttempt && assignedAttempt.attemptNo !== attemptNo) {
       return res.status(403).json({
@@ -40,61 +38,73 @@ export async function requireInvestigationParticipant(req, res, next) {
           "This session belongs to an earlier attempt. Rejoin the current case.",
       });
     }
-    const investigation = round.investigations?.find(
+
+    let investigation = round.investigations?.find(
       (entry) => entry.teamId === teamId && entry.attemptNo === attemptNo,
     );
+
+    // Auto-initialize case for this team if not yet created and round is running
+    if (!investigation && round.status === "running") {
+      const now = new Date();
+      const currentSessionHash = sessionHash(req.sessionID);
+      investigation = await claimRound3Investigation(attemptNo, {
+        teamId,
+        round: 3,
+        attemptNo,
+        detectiveJoinedAt: now,
+        detectiveSessionHash: currentSessionHash,
+        analystJoinedAt: now,
+        analystSessionHash: currentSessionHash,
+        clues: [],
+        decrypted: false,
+        decryptedAt: null,
+        activity: [
+          {
+            type: "role_joined",
+            message: "Joined the case workspace",
+            role: "investigator",
+            at: now,
+          },
+        ],
+        accusation: null,
+      });
+    }
+
     if (!investigation) {
       return res
         .status(409)
         .json({ error: "Join the case before opening this page." });
     }
 
-    const hasDetectiveSeat =
-      investigation.detectiveSessionHash === currentSessionHash;
-    const hasAnalystSeat =
-      investigation.analystSessionHash === currentSessionHash;
-
-    const requestedRole =
-      req.headers["x-acting-role"] ||
-      req.headers["x-investigation-role"] ||
-      req.query.role ||
-      req.body?.actingRole;
-
-    let role = null;
-
-    if (hasDetectiveSeat && hasAnalystSeat) {
-      if (requestedRole === "analyst" || requestedRole === "detective") {
-        role = requestedRole;
-      } else {
-        role = req.session.role === "investigation" ? "analyst" : "detective";
-      }
-    } else if (hasDetectiveSeat && req.session.role === "team") {
-      role = "detective";
-
-      if (requestedRole && requestedRole !== "detective") {
-        return res
-          .status(403)
-          .json({ error: "Session is not authorized for requested role" });
-      }
-    } else if (hasAnalystSeat && req.session.role === "investigation") {
-      role = "analyst";
-
-      if (requestedRole && requestedRole !== "analyst") {
-        return res
-          .status(403)
-          .json({ error: "Session is not authorized for requested role" });
-      }
+    if (
+      req.session.role === "investigation" &&
+      investigation.analystSessionHash &&
+      investigation.analystSessionHash !== sessionHash(req.sessionID)
+    ) {
+      return res
+        .status(403)
+        .json({ error: "Session not authorized for this case." });
     }
 
-    if (!role)
-      return res.status(403).json({
-        error: "This session has not joined as Detective or Analyst.",
-      });
+    if (
+      req.session.role === "investigation" &&
+      !investigation.analystSessionHash
+    ) {
+      return res
+        .status(403)
+        .json({ error: "This invitation was not claimed." });
+    }
+
+    const requestedRole =
+      req.headers["x-investigation-role"] ||
+      req.headers["x-acting-role"] ||
+      req.session.investigationRole ||
+      (req.session.role === "team" ? "detective" : "investigator");
     req.team = team;
     req.investigation = investigation;
-    req.investigationRole = role;
+    req.investigationRole = requestedRole;
     req.investigationRound = round;
-    req.investigationHasBothSeats = hasDetectiveSeat && hasAnalystSeat;
+    req.investigationHasBothSeats = true;
     return next();
   } catch (error) {
     return next(error);

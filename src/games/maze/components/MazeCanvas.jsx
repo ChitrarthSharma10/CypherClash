@@ -1092,11 +1092,16 @@ export default function MazeCanvas({ state, gameState, playerId }) {
       targetX = c.x * CELL_SIZE;
       targetZ = c.y * CELL_SIZE;
 
-      // Smooth Position Lerp
+      // Smooth Position Lerp (or instant snap on respawn)
       const dx = targetX - charX;
       const dz = targetZ - charZ;
-      charX += dx * 0.22;
-      charZ += dz * 0.22;
+      if (Math.hypot(dx, dz) > 3 * CELL_SIZE) {
+        charX = targetX;
+        charZ = targetZ;
+      } else {
+        charX += dx * 0.22;
+        charZ += dz * 0.22;
+      }
 
       // Determine movement heading & target yaw angle
       const moveDist = Math.hypot(targetX - prevCharX, targetZ - prevCharZ);
@@ -1142,8 +1147,15 @@ export default function MazeCanvas({ state, gameState, playerId }) {
         hunterMesh.visible = true;
         const targetHX = stateNow.hunter.x * CELL_SIZE;
         const targetHZ = stateNow.hunter.y * CELL_SIZE;
-        hunterX += (targetHX - hunterX) * 0.25;
-        hunterZ += (targetHZ - hunterZ) * 0.25;
+        const hdx = targetHX - hunterX;
+        const hdz = targetHZ - hunterZ;
+        if (Math.hypot(hdx, hdz) > 3 * CELL_SIZE) {
+          hunterX = targetHX;
+          hunterZ = targetHZ;
+        } else {
+          hunterX += hdx * 0.25;
+          hunterZ += hdz * 0.25;
+        }
 
         const hMoveDist = Math.hypot(targetHX - prevHunterX, targetHZ - prevHunterZ);
         if (hMoveDist > 0.01) {
