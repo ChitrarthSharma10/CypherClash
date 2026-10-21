@@ -28,6 +28,7 @@ import {
 import MazeApp from "./games/maze/MazeApp.jsx";
 import RunnerApp from "./games/runner/RunnerApp.jsx";
 import InvestigationApp from "./games/investigation/InvestigationApp.jsx";
+import TimeLeftBanner from "./components/TimeLeftBanner.jsx";
 import {
   TOTAL_ROUNDS,
   ROUND_NUMBERS,

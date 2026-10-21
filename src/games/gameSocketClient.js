@@ -7,7 +7,7 @@ const API_URL = (
 
 export function getSocketConnection() {
   return io(API_URL, {
-    transports: ['websocket', 'polling'],
+    transports: ['polling', 'websocket'],
     withCredentials: true,
     reconnection: true,
     reconnectionAttempts: 30,
