@@ -59,7 +59,6 @@ router.get('/me', async (req, res, next) => {
     return res.json({
       teamId: team.teamId,
       name: team.name,
-      biasPoints: team.biasPoints,
       online: isTeamOnline(team.teamId),
       lastSeenAt: team.lastSeenAt,
       playerSlot: req.session.playerSlot || 'P1',

@@ -1,4 +1,4 @@
-﻿import './bootstrap.js';
+import './bootstrap.js';
 import test, { after, before, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -864,6 +864,8 @@ test('Lead 4 redesign: accepts UNMASKED, rejects invalid answers, and resource p
   const vaultData = await vaultRes.json();
   assert.ok(vaultData.html.includes('The vault has kept the truth in fragments'));
   assert.ok(vaultData.html.includes('Signal Reconstruction'));
+  assert.ok(Array.isArray(vaultData.artifacts), 'Vault response must provide signal reconstruction artifacts');
+  assert.equal(vaultData.artifacts.length, 6, 'Vault response must contain 6 packet artifacts');
 
   // Old answer must be rejected
   const oldRes = await request('/api/rounds/2/investigation/submit', {

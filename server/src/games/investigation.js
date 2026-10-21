@@ -57,6 +57,123 @@ export const STAGE_HINTS = Object.freeze({
   4: 'Filter out decoy and noise artifacts on the console by matching their carrier stream and parity status. Align the surviving authentic fragments in ascending sequence order.',
 });
 
+export const VAULT_SIGNAL_ARTIFACTS = Object.freeze([
+  {
+    id: 'PKT-801-A',
+    name: 'Frame Alpha // Ingress Header',
+    channel: 'CH-8 (PRIMARY BEACON)',
+    isTargetStream: true,
+    seqIndex: 1,
+    epoch: '03:17:01.120 UTC',
+    parity: 'VERIFIED [ODD-ACK]',
+    isParityValid: true,
+    authHash: 'VALID [HASH-8A1]',
+    fragment: 'UN',
+    marker: 'PRE-01 (INGRESS DELIMITER)',
+    badgeClass: 'cc-badge--beacon',
+    status: 'AUTHENTICATED',
+    analystNotes:
+      'Initial transmission burst originating from gateway border node. Frame contains header prefix envelope.',
+    hexDump:
+      '45 00 00 3C 1C 46 40 00 40 06 72 3B 0A 0E 00 01 0A 0E 63 0C 55 4E 20 8A',
+  },
+  {
+    id: 'DECOY-301-E',
+    name: 'Echo Reflection // Tamper Loop',
+    channel: 'CH-3 (REPLAY ECHO)',
+    isTargetStream: false,
+    seqIndex: null,
+    epoch: '03:14:18.040 UTC',
+    parity: 'FAILED [PARITY INVERTED]',
+    isParityValid: false,
+    authHash: 'INVALID [REPLAY-MISMATCH]',
+    fragment: 'OR',
+    marker: 'ECHO-GHOST (LOOPBACK REFLECTION)',
+    badgeClass: 'cc-badge--echo',
+    status: 'REPLAY ECHO',
+    analystNotes:
+      'Reflected packet waveform recorded during the hardware tap installation on switch SW-4. Spurious reflection, not part of primary stream.',
+    hexDump:
+      '45 00 00 24 3A 12 00 00 38 06 1B 94 0A 0E 00 01 0A 0E 00 01 4F 52 00 00',
+  },
+  {
+    id: 'PKT-802-B',
+    name: 'Frame Beta // Core Carrier Burst',
+    channel: 'CH-8 (PRIMARY BEACON)',
+    isTargetStream: true,
+    seqIndex: 2,
+    epoch: '03:17:03.450 UTC',
+    parity: 'VERIFIED [ODD-ACK]',
+    isParityValid: true,
+    authHash: 'VALID [HASH-8A1]',
+    fragment: 'MA',
+    marker: 'MID-02 (CARRIER CONTINUITY)',
+    badgeClass: 'cc-badge--beacon',
+    status: 'AUTHENTICATED',
+    analystNotes:
+      'Secondary carrier envelope captured prior to isolation trigger. Verified hash parity matching primary broadcast.',
+    hexDump:
+      '45 00 00 40 2B 19 40 00 40 06 63 2E 0A 0E 00 01 0A 0E 63 0C 4D 41 9C 14',
+  },
+  {
+    id: 'NOISE-901-X',
+    name: 'Interference Spike // HVAC RF Glitch',
+    channel: 'CH-1 (NOISE INTERFERENCE)',
+    isTargetStream: false,
+    seqIndex: null,
+    epoch: '03:16:40.220 UTC',
+    parity: 'CORRUPTED [CRC-ERR]',
+    isParityValid: false,
+    authHash: 'NONE [UNAUTHENTICATED]',
+    fragment: 'XX',
+    marker: 'NOISE-BURST (ELECTROMAGNETIC JITTER)',
+    badgeClass: 'cc-badge--noise',
+    status: 'NOISE ARTIFACT',
+    analystNotes:
+      'Radio-frequency noise burst coinciding with basement HVAC compressor startup. Lacks authentication wrapper.',
+    hexDump:
+      '00 00 FF FF AA BB CC DD 00 11 22 33 44 55 66 77 58 58 EE FF 00 00 12 34',
+  },
+  {
+    id: 'PKT-803-C',
+    name: 'Frame Gamma // Payload Transition',
+    channel: 'CH-8 (PRIMARY BEACON)',
+    isTargetStream: true,
+    seqIndex: 3,
+    epoch: '03:17:05.880 UTC',
+    parity: 'VERIFIED [ODD-ACK]',
+    isParityValid: true,
+    authHash: 'VALID [HASH-8A1]',
+    fragment: 'SK',
+    marker: 'MID-03 (PAYLOAD TRANSITION)',
+    badgeClass: 'cc-badge--beacon',
+    status: 'AUTHENTICATED',
+    analystNotes:
+      'Tertiary beacon segment transferring internal telemetry across the encrypted socket.',
+    hexDump:
+      '45 00 00 3E 4D 82 40 00 40 06 41 09 0A 0E 00 01 0A 0E 63 0C 53 4B 8B 77',
+  },
+  {
+    id: 'PKT-804-D',
+    name: 'Frame Delta // Terminal Delimiter',
+    channel: 'CH-8 (PRIMARY BEACON)',
+    isTargetStream: true,
+    seqIndex: 4,
+    epoch: '03:17:07.910 UTC',
+    parity: 'VERIFIED [ODD-ACK]',
+    isParityValid: true,
+    authHash: 'VALID [HASH-8A1]',
+    fragment: 'ED',
+    marker: 'FIN-04 (TERMINAL DELIMITER)',
+    badgeClass: 'cc-badge--beacon',
+    status: 'AUTHENTICATED',
+    analystNotes:
+      'Final termination packet signaling teardown of the rogue bridge. Closes transmission sequence.',
+    hexDump:
+      '45 00 00 38 9F 04 40 00 40 06 1A 7C 0A 0E 00 01 0A 0E 63 0C 45 44 FF 00',
+  },
+]);
+
 export const RESOURCE_CONTENTS = Object.freeze({
   'incident-log': Object.freeze({
     stage: 1,
@@ -236,6 +353,7 @@ export const RESOURCE_CONTENTS = Object.freeze({
         Investigative Guidance: Filter out decoy and noise channels. Align verified carrier packets by chronological epoch to reconstruct the terminal signal.
       </div>
     `,
+    artifacts: VAULT_SIGNAL_ARTIFACTS,
   }),
 });
 

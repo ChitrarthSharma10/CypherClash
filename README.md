@@ -156,3 +156,4 @@ npm run build
 - **Single Completion Guarantee**: Once a team completes a game and points are recorded, the game is permanently locked for that round attempt.
 - **Score Cap Enforcement**: All game engines and the authoritative server ledger clamp game scores to `Math.min(500, points)`.
 - **Append-Only Ledger**: Direct mutations to team score records are prohibited. All score updates flow through the immutable `ScoreEntry` ledger with audit logging.
+- **Bias Points Removed**: Bias Points (previously a display field and planned hint currency) have been completely removed from the tournament specification, Team model, leaderboard, and administrative APIs. Leaderboard standings are strictly derived from round scores, with row fields allowlisted to `rank`, `name`, `r1`, `r2`, `r3`, and `total`.

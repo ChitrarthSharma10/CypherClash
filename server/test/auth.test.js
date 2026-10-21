@@ -153,14 +153,13 @@ test('create and reset issue one password without returning hashes', async () =>
   const createResponse = await request('/api/admin/teams', {
     method: 'POST',
     headers: { 'content-type': 'application/json', cookie },
-    body: JSON.stringify({ name: 'One Login Team', biasPoints: 17 }),
+    body: JSON.stringify({ name: 'One Login Team' }),
   });
   assert.equal(createResponse.status, 201);
   assert.equal(createResponse.headers.get('cache-control'), 'no-store');
   const created = await createResponse.json();
   createdTeamId = created.team.teamId;
   assert.deepEqual(Object.keys(created).sort(), ['password', 'team']);
-  assert.equal(created.team.biasPoints, 17);
   assert.match(created.password, /^[ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789]{12}$/);
   assertNoCredentialFields(created.team);
 
@@ -198,7 +197,7 @@ test('team creation rolls back if audit logging fails', async () => {
     const response = await request('/api/admin/teams', {
       method: 'POST',
       headers: { 'content-type': 'application/json', cookie },
-      body: JSON.stringify({ name: 'Must Roll Back', biasPoints: 0 }),
+      body: JSON.stringify({ name: 'Must Roll Back' }),
     });
     assert.equal(response.status, 500);
     const leakedTeam = await Team.findOne({ name: 'Must Roll Back' });
@@ -208,6 +207,16 @@ test('team creation rolls back if audit logging fails', async () => {
     console.error = originalConsoleError;
   }
   assert.ok(loggedErrors.some(([error]) => error?.message === 'injected audit failure'));
+});
+
+test('creating a team with biasPoints returns 400', async () => {
+  const cookie = await adminCookie();
+  const response = await request('/api/admin/teams', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', cookie },
+    body: JSON.stringify({ name: 'Rejected Bias Team', biasPoints: 50 }),
+  });
+  assert.equal(response.status, 400);
 });
 
 test('team, score and admin listing responses never expose credential fields', async () => {

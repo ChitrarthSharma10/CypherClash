@@ -16,6 +16,7 @@ server/.env.*
 
 # Local QA and testing artifacts
 .local-qa/
+qa-report/
 server/.mongo-data/
 coverage/
 .nyc_output/

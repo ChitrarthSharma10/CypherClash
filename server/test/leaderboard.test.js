@@ -10,7 +10,7 @@ import { RoundState } from '../src/models/RoundState.js';
 import { ScoreEntry } from '../src/models/ScoreEntry.js';
 import { Team } from '../src/models/Team.js';
 import { sessionStore } from '../src/sessionStore.js';
-import { computeTotal, displayBias, rebuildLeaderboard } from '../src/services/leaderboard.js';
+import { computeTotal, rebuildLeaderboard } from '../src/services/leaderboard.js';
 import { initializeRoundStates } from '../src/services/roundState.js';
 import { hashPassword } from '../src/utils/passwords.js';
 
@@ -21,7 +21,7 @@ const teamPassword = 'LeaderboardTeamPassword123';
 const teamIds = Array.from({ length: 65 }, (_, index) => `CC-${suffix}${index}`);
 const teamNames = ['Alpha', 'Bravo', 'Charlie', 'Delta'].map((name) => `LB ${suffix} ${name}`);
 const roundNumbers = [1, 2, 3];
-const allowedRowKeys = ['bias', 'name', 'r1', 'r2', 'r3', 'rank', 'total'];
+const allowedRowKeys = ['name', 'r1', 'r2', 'r3', 'rank', 'total'];
 const originalRounds = new Map();
 let httpServer;
 let baseUrl;
@@ -77,13 +77,11 @@ before(async () => {
   const teams = await Team.create(teamIds.slice(0, 4).map((teamId, index) => ({
     teamId,
     name: teamNames[index],
-    biasPoints: index === 3 ? 99_999 : 0,
     passwordHash,
   })));
   await Team.create(teamIds.slice(4).map((teamId, index) => ({
     teamId,
     name: `Load Team ${String(index).padStart(2, '0')}`,
-    biasPoints: index,
     passwordHash,
   })));
   await Admin.create({
@@ -130,10 +128,9 @@ after(async () => {
   await disconnectDatabase();
 });
 
-test('leaderboard helpers exclude Bias Points from totals', () => {
+test('leaderboard helpers compute totals correctly', () => {
   assert.equal(computeTotal(100, null, 25), 125);
   assert.equal(computeTotal(null, null, null), 0);
-  assert.equal(displayBias({ biasPoints: 700 }), 700);
 });
 
 test('REST leaderboard has an allowlisted public shape and tied round-only ranks', async () => {
@@ -166,14 +163,14 @@ test('REST leaderboard has an allowlisted public shape and tied round-only ranks
     const keys = Object.keys(row).sort();
     return JSON.stringify(keys) === JSON.stringify([...allowedRowKeys].sort());
   }));
-  assert.ok(rows.every((row) => !('teamId' in row) && !('players' in row) && !('username' in row)));
+  assert.ok(rows.every((row) => !('teamId' in row) && !('players' in row) && !('username' in row) && !('bias' in row)));
+  assert.deepEqual(Object.keys(rows[0]).sort(), ['name', 'r1', 'r2', 'r3', 'rank', 'total']);
 
   const byName = new Map(rows.map((row) => [row.name, row]));
   assert.equal(byName.get(teamNames[0]).rank, 1);
   assert.equal(byName.get(teamNames[1]).rank, 2);
   assert.equal(byName.get(teamNames[2]).rank, 2);
   assert.equal(byName.get(teamNames[3]).rank, 4);
-  assert.equal(byName.get(teamNames[3]).bias, 99_999);
   assert.ok(byName.get(teamNames[3]).total < byName.get(teamNames[0]).total);
   assert.equal(byName.get(teamNames[0]).r1, 1000);
   assert.equal(byName.get(teamNames[0]).r2, 0);

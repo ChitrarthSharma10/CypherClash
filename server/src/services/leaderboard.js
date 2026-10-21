@@ -2,7 +2,7 @@ import { Team } from '../models/Team.js';
 import { getAllTotals } from './scoring.js';
 import { listRoundStates, onRoundStateChange } from './roundState.js';
 
-const ALLOWED_ROW_KEYS = ['rank', 'name', 'bias', 'r1', 'r2', 'r3', 'total'];
+const ALLOWED_ROW_KEYS = ['rank', 'name', 'r1', 'r2', 'r3', 'total'];
 let rows = [];
 let updatedAt = null;
 let indexByTeamId = new Map();
@@ -18,17 +18,12 @@ export function computeTotal(r1, r2, r3) {
   ), 0);
 }
 
-// Bias Points are a separate hint currency and do not affect total or rank.
-export function displayBias(team) {
-  return team.biasPoints;
-}
-
 export async function rebuildLeaderboard() {
   if (rebuildPromise) return rebuildPromise;
   const requestedGeneration = generation;
   rebuildPromise = (async () => {
     const [teams, totals] = await Promise.all([
-      Team.find({ active: true }).select('teamId name biasPoints').lean(),
+      Team.find({ active: true }).select('teamId name').lean(),
       getAllTotals(),
     ]);
     const roundStates = new Map(listRoundStates().map((round) => [round.round, round]));
@@ -47,7 +42,6 @@ export async function rebuildLeaderboard() {
         row: {
           rank: 0,
           name: team.name,
-          bias: displayBias(team),
           r1,
           r2,
           r3,

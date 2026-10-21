@@ -113,7 +113,6 @@ const optionalCustomPasswordSchema = z.string()
 const createTeamSchema = z.object({
   name: teamNameSchema,
   password: optionalCustomPasswordSchema,
-  biasPoints: z.number().finite().min(-1000).max(100000).default(0),
   initialProgression: z.number().int().min(1).max(TOTAL_ROUNDS).default(1),
 }).strict().superRefine((data, ctx) => {
   if (data.password && data.password.length > 0) {
@@ -130,7 +129,6 @@ const createTeamSchema = z.object({
 
 const updateTeamSchema = z.object({
   name: teamNameSchema.optional(),
-  biasPoints: z.number().finite().min(-1000).max(100000).optional(),
   active: z.boolean().optional(),
 }).strict().refine((value) => Object.keys(value).length > 0, 'At least one field is required');
 
@@ -343,7 +341,6 @@ router.post('/teams', validateBody(createTeamSchema), async (req, res, next) => 
     team = await Team.create({
       teamId,
       name: req.body.name,
-      biasPoints: req.body.biasPoints,
       passwordHash,
     });
     const initialProgression = req.body.initialProgression || 1;
@@ -366,7 +363,6 @@ router.post('/teams', validateBody(createTeamSchema), async (req, res, next) => 
         team: {
           teamId: team.teamId,
           name: team.name,
-          biasPoints: team.biasPoints,
           active: team.active,
           initialProgression,
         },
@@ -378,7 +374,6 @@ router.post('/teams', validateBody(createTeamSchema), async (req, res, next) => 
       team: {
         teamId: team.teamId,
         name: team.name,
-        biasPoints: team.biasPoints,
         active: team.active,
         initialProgression,
       },
@@ -447,7 +442,6 @@ router.patch('/teams/:teamId', validateBody(updateTeamSchema), async (req, res, 
     }
     const teamChanged = (
       team.name !== previousTeam.name
-      || team.biasPoints !== previousTeam.biasPoints
       || team.active !== previousTeam.active
     );
     if (teamChanged) invalidateLeaderboard();
@@ -469,15 +463,6 @@ router.patch('/teams/:teamId', validateBody(updateTeamSchema), async (req, res, 
         actorId: req.session.adminId,
         teamId: team.teamId,
         details: { oldName: previousTeam.name, newName: team.name },
-      });
-    }
-    if (req.body.biasPoints !== undefined && req.body.biasPoints !== previousTeam.biasPoints) {
-      await logEvent({
-        type: 'bias points changed',
-        actorType: 'admin',
-        actorId: req.session.adminId,
-        teamId: team.teamId,
-        details: { oldValue: previousTeam.biasPoints, newValue: team.biasPoints },
       });
     }
     return res.json({ team });

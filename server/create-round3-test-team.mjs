@@ -25,7 +25,6 @@ const password = generatePassword(12);
 const team = await Team.create({
   teamId,
   name: "Round 3 Test Team",
-  biasPoints: 0,
   passwordHash: await hashPassword(password),
 });
 await getOrCreateProgression(teamId, 1, admin._id);

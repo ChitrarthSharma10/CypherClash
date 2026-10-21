@@ -28,7 +28,6 @@ if (config.seedSampleTeams) {
     await Team.create({
       teamId,
       name: `Sample Team ${index}`,
-      biasPoints: 0,
       passwordHash: await hashPassword(password),
     });
     console.log(`${teamId} seeded; use the admin reset-password action to issue its login password.`);

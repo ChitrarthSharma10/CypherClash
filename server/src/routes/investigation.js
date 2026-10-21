@@ -238,6 +238,7 @@ router.get('/resources/:slug', requireTeam, async (req, res, next) => {
       title: resource.title,
       stage: resource.stage,
       html: resource.html,
+      artifacts: resource.artifacts || null,
       githubUrl: slug === 'terminal' ? (config.investigationLead3GithubUrl || null) : undefined,
     });
   } catch (error) {
