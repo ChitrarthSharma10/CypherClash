@@ -283,11 +283,12 @@ test('Investigation lifecycle, hints, scoring formula, ledger integration, and r
   });
   assert.equal(stage1Res.status, 200);
 
-  // Stage 2 resource is now unlocked
+  // Stage 2 resource is now unlocked (hint is in the SVG image, not directly in HTML)
   const advisoryRes = await request('/api/rounds/2/investigation/resources/advisory', { headers: { cookie: cookieA } });
   assert.equal(advisoryRes.status, 200);
   const advisoryData = await advisoryRes.json();
-  assert.ok(advisoryData.html.includes('FRAME-SHIFT-246'));
+  assert.ok(!advisoryData.html.includes('FRAME-SHIFT-246'), 'Lead 2 card HTML must not leak FRAME-SHIFT-246 text');
+  assert.ok(advisoryData.html.includes('doc-forensic-report.svg'));
   assert.ok(advisoryData.html.includes('Three records describe the same moment, yet their stories refuse to agree'));
 
   // 7. Verify old Lead 2 answer is rejected
@@ -703,7 +704,7 @@ test('Lead 2 redesign: accepts FRAME-SHIFT-246, rejects old SEC-VAULT-909, and r
   });
   assert.equal(advisoryRes.status, 200);
   const advisoryData = await advisoryRes.json();
-  assert.ok(advisoryData.html.includes('FRAME-SHIFT-246'));
+  assert.ok(!advisoryData.html.includes('FRAME-SHIFT-246'), 'Lead 2 card HTML must not expose FRAME-SHIFT-246 directly — it lives only in the SVG image');
   assert.ok(advisoryData.html.includes('Three records describe the same moment'));
   assert.ok(advisoryData.html.includes('DFU-REP-2026-042'));
   assert.ok(advisoryData.html.includes('doc-forensic-report.svg'));

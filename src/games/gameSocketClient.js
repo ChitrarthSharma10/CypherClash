@@ -1,10 +1,13 @@
 import { io } from 'socket.io-client';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
+const API_URL = (
+  import.meta.env.VITE_API_URL ??
+  (import.meta.env.PROD ? '' : 'http://localhost:4000')
+).replace(/\/+$/, '');
 
 export function getSocketConnection() {
   return io(API_URL, {
-    transports: ['websocket', 'polling'],
+    transports: ['polling', 'websocket'],
     withCredentials: true,
     reconnection: true,
     reconnectionAttempts: 30,

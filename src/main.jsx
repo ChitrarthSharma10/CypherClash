@@ -28,6 +28,7 @@ import {
 import MazeApp from "./games/maze/MazeApp.jsx";
 import RunnerApp from "./games/runner/RunnerApp.jsx";
 import InvestigationApp from "./games/investigation/InvestigationApp.jsx";
+import TimeLeftBanner from "./components/TimeLeftBanner.jsx";
 import {
   TOTAL_ROUNDS,
   ROUND_NUMBERS,
@@ -65,7 +66,10 @@ const rounds = [
   },
 ];
 
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:4000";
+const API_URL = (
+  import.meta.env.VITE_API_URL ??
+  (import.meta.env.PROD ? "" : "http://localhost:4000")
+).replace(/\/+$/, "");
 
 async function apiRequest(path, options = {}) {
   const response = await fetch(`${API_URL}${path}`, {
@@ -131,7 +135,7 @@ function App() {
             </a>
           </nav>
           <a className="cc-top__logo" href="#event-brief">
-            <img src="/club-logo.jpg" alt="OsCode club logo" />
+            <img src="/club-logo.jpg" alt="OSCode club logo" />
           </a>
           <a
             className="cc-top__cta"
@@ -367,9 +371,9 @@ function Landing() {
   return (
     <main>
       <section className="cc-hero" id="event-brief">
-        <p className="cc-hero__presenter">OsCode Presents</p>
+        <p className="cc-hero__presenter">OSCode Presents</p>
         <h1 className="cc-hero__title">
-          <span className="cc-hero__w1">Cypher</span>
+          <span className="cc-hero__w1">Cyber </span>
           <span className="cc-hero__w2">Clash</span>
         </h1>
         <p className="cc-hero__tag">
@@ -399,8 +403,12 @@ function Landing() {
             <dd>Zero prerequisites</dd>
           </div>
           <div className="cc-fact">
-            <dt>When / Where</dt>
-            <dd>To be announced</dd>
+            <dt>Venue</dt>
+            <dd>AIML Seminar Hall</dd>
+          </div>
+          <div className="cc-fact">
+            <dt>Time</dt>
+            <dd>2:00 PM – 4:00 PM</dd>
           </div>
         </dl>
         <div className="cc-fan">
@@ -446,7 +454,7 @@ function Landing() {
       </section>
       <LandingScoreboard />
       <footer>
-        <span>CYPHERCLASH / 2026</span>
+        <span>CYBER CLASH / 2026</span>
         <span>Made for curious beginners.</span>
       </footer>
     </main>

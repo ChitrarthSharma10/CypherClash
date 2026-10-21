@@ -1,4 +1,4 @@
-# CypherClash Round 3: Case HELIX Gameplay Guide
+# Cyber Clash Round 3: Case HELIX Gameplay Guide
 
 > **Spoilers ahead.** The first sections explain the rules and recommended play order. The complete solution is in the final section.
 
