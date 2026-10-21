@@ -14,6 +14,7 @@ import { destroyTeamSessions } from '../sessionStore.js';
 import { clearTeamLoginLockout, TEAM_ID_PATTERN } from './auth.js';
 import {
   endRound,
+  extendRound,
   listRoundStates,
   pauseRound,
   resumeRound,
@@ -141,6 +142,12 @@ const emptyBodySchema = z.object({}).strict();
 const startRoundSchema = z.object({
   durationSec: z.number().int().min(1).max(86400),
 }).strict();
+const extendRoundSchema = z.object({
+  extendSec: z.number().int().min(1).max(86400).optional(),
+  additionalSec: z.number().int().min(1).max(86400).optional(),
+}).strict().refine((data) => data.extendSec !== undefined || data.additionalSec !== undefined, {
+  message: 'extendSec or additionalSec is required',
+});
 const adjustmentSchema = z.object({
   round: z.number().int().min(1).max(TOTAL_ROUNDS),
   amount: z.number().int().min(-1000).max(1000),
@@ -190,6 +197,7 @@ function serviceErrorStatus(error) {
     'INVALID_ROUND',
     'INVALID_STATUS',
     'REASON_REQUIRED',
+    'INVALID_DURATION',
   ].includes(error.code)) {
     return 400;
   }
@@ -199,6 +207,18 @@ function serviceErrorStatus(error) {
 router.post('/rounds/:n/start', validateBody(startRoundSchema), async (req, res, next) => {
   try {
     return res.status(201).json(await startRound(req.roundNumber, req.body.durationSec, req.session.adminId));
+  } catch (error) {
+    if (serviceErrorStatus(error) !== 500) {
+      return res.status(serviceErrorStatus(error)).json({ error: error.message });
+    }
+    return next(error);
+  }
+});
+
+router.post('/rounds/:n/extend', validateBody(extendRoundSchema), async (req, res, next) => {
+  try {
+    const extendSec = req.body.extendSec ?? req.body.additionalSec;
+    return res.json(await extendRound(req.roundNumber, extendSec, req.session.adminId));
   } catch (error) {
     if (serviceErrorStatus(error) !== 500) {
       return res.status(serviceErrorStatus(error)).json({ error: error.message });

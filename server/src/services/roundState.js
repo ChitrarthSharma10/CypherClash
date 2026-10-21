@@ -410,10 +410,11 @@ async function updateState(round, changes, actorId, eventType, extraFilter) {
     const saved = await saveState(next, existing, extraFilter);
     states.set(round, saved);
   } catch (error) {
-    if (states.get(round) === next) {
-      if (existing) states.set(round, existing);
+    try {
+      const persisted = await RoundState.findOne({ round }).lean();
+      if (persisted) states.set(round, persisted);
       else states.delete(round);
-    }
+    } catch {}
     throw error;
   }
   const savedState = states.get(round);
@@ -451,6 +452,10 @@ export async function startRound(round, durationSec, adminId = "system") {
     );
   }
   return withTransitionLock(async () => {
+    try {
+      const persisted = await RoundState.findOne({ round }).lean();
+      if (persisted) states.set(round, persisted);
+    } catch {}
     const effectiveDurationSec =
       Number.isInteger(durationSec) && durationSec > 0
         ? durationSec
@@ -502,6 +507,10 @@ export async function pauseRound(round, adminId = "system") {
     );
   }
   return withTransitionLock(async () => {
+    try {
+      const persisted = await RoundState.findOne({ round }).lean();
+      if (persisted) states.set(round, persisted);
+    } catch {}
     const current = states.get(round);
     if (!current || current.status !== "running") {
       throw new RoundStateError("ROUND_NOT_RUNNING", "Round is not running");
@@ -524,6 +533,10 @@ export async function resumeRound(round, adminId = "system") {
     );
   }
   return withTransitionLock(async () => {
+    try {
+      const persisted = await RoundState.findOne({ round }).lean();
+      if (persisted) states.set(round, persisted);
+    } catch {}
     const current = states.get(round);
     if (
       !current ||
@@ -547,6 +560,49 @@ export async function resumeRound(round, adminId = "system") {
   });
 }
 
+export async function extendRound(round, extendSec, adminId = "system") {
+  if (!Number.isInteger(round) || round < 1) {
+    throw new RoundStateError(
+      "INVALID_ROUND",
+      "Round must be a positive integer",
+    );
+  }
+  if (!Number.isInteger(extendSec) || extendSec <= 0) {
+    throw new RoundStateError(
+      "INVALID_DURATION",
+      "Extension duration must be a positive integer in seconds",
+    );
+  }
+  return withTransitionLock(async () => {
+    try {
+      const persisted = await RoundState.findOne({ round }).lean();
+      if (persisted) states.set(round, persisted);
+    } catch {}
+    const current = states.get(round);
+    if (!current || (current.status !== "running" && current.status !== "paused")) {
+      throw new RoundStateError("ROUND_NOT_RUNNING", "Round is not running");
+    }
+    if (!current.deadline) {
+      throw new RoundStateError("ROUND_NOT_RUNNING", "Round has no active deadline");
+    }
+    const currentDeadlineMs = new Date(current.deadline).getTime();
+    if (current.status === "running" && currentDeadlineMs <= Date.now()) {
+      throw new RoundStateError("ROUND_NOT_RUNNING", "Round deadline has already passed");
+    }
+    const newDeadline = new Date(currentDeadlineMs + extendSec * 1000);
+    const newDurationSec = (current.durationSec || 0) + extendSec;
+    return updateState(
+      round,
+      {
+        deadline: newDeadline,
+        durationSec: newDurationSec,
+      },
+      adminId,
+      "round extended",
+    );
+  });
+}
+
 export async function endRound(round, adminId = "system") {
   if (!Number.isInteger(round) || round < 1) {
     throw new RoundStateError(
@@ -555,6 +611,10 @@ export async function endRound(round, adminId = "system") {
     );
   }
   return withTransitionLock(async () => {
+    try {
+      const persisted = await RoundState.findOne({ round }).lean();
+      if (persisted) states.set(round, persisted);
+    } catch {}
     const current = states.get(round);
     if (round === 3) {
       const endedAt = {

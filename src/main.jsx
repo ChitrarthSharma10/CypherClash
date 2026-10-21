@@ -5019,7 +5019,7 @@ function AdminDashboard({ onLogout }) {
           method: "POST",
           body: JSON.stringify(body),
         }),
-      `Round ${round} ${{ start: "started", pause: "paused", resume: "resumed", end: "ended" }[action]}.`,
+      `Round ${round} ${{ start: "started", pause: "paused", resume: "resumed", end: "ended", extend: "extended" }[action]}.`,
     );
 
   const startRound = (roundNumber, previousDurationSec, isRestart) => {
@@ -5051,6 +5051,37 @@ function AdminDashboard({ onLogout }) {
       : `Start round ${roundNumber} for ${durationSec} seconds?`;
     if (!window.confirm(confirmation)) return;
     void changeRound(roundNumber, "start", { durationSec });
+  };
+
+  const extendRound = (roundNumber) => {
+    const rawDuration = window.prompt(
+      `Additional time to add to Round ${roundNumber} (in seconds, or e.g. 5m / 300s):`,
+      "300",
+    );
+    if (rawDuration === null) return;
+    const trimmed = rawDuration.trim().toLowerCase();
+    let extendSec = 0;
+    if (trimmed.endsWith("m")) {
+      extendSec = Math.round(Number(trimmed.slice(0, -1)) * 60);
+    } else if (trimmed.endsWith("s")) {
+      extendSec = Math.round(Number(trimmed.slice(0, -1)));
+    } else {
+      extendSec = Math.round(Number(trimmed));
+    }
+
+    if (!Number.isInteger(extendSec) || extendSec < 1 || extendSec > 86400) {
+      setState((current) => ({
+        ...current,
+        error: "Extension duration must be a whole number between 1 and 86400 seconds (e.g. 300 or 5m).",
+        success: "",
+      }));
+      return;
+    }
+
+    const minFormatted = (extendSec / 60).toFixed(extendSec % 60 === 0 ? 0 : 1);
+    const confirmation = `Extend round ${roundNumber} by ${extendSec} seconds (${minFormatted} min)?`;
+    if (!window.confirm(confirmation)) return;
+    void changeRound(roundNumber, "extend", { extendSec });
   };
 
   const adjustScore = (team) => {
@@ -5319,6 +5350,13 @@ function AdminDashboard({ onLogout }) {
                     onClick={() => void changeRound(round.round, "resume")}
                   >
                     Resume
+                  </button>
+                  <button
+                    className="product-btn product-btn--small product-btn--light"
+                    disabled={round.status !== "running"}
+                    onClick={() => extendRound(round.round)}
+                  >
+                    + Time
                   </button>
                   <button
                     className="product-btn product-btn--small product-btn--light"

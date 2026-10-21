@@ -473,3 +473,84 @@ test('incomplete run points saved at round end, and late results outside grace w
   assert.equal(lateCircuit.status, 409);
 });
 
+test('admin can extend round time while round is running, updating deadline and durationSec', async () => {
+  const aCookie = await adminCookie();
+
+  // Extending when round has not started fails with 409
+  const prematureExtend = await request('/api/admin/rounds/1/extend', {
+    method: 'POST',
+    headers: { cookie: aCookie, 'content-type': 'application/json' },
+    body: JSON.stringify({ extendSec: 300 }),
+  });
+  assert.equal(prematureExtend.status, 409);
+
+  // Start Round 1 for 600s
+  const startRes = await request('/api/admin/rounds/1/start', {
+    method: 'POST',
+    headers: { cookie: aCookie, 'content-type': 'application/json' },
+    body: JSON.stringify({ durationSec: 600 }),
+  });
+  assert.equal(startRes.status, 201);
+  const started = await startRes.json();
+  const initialDeadlineMs = new Date(started.deadline).getTime();
+
+  // Invalid extension requests fail with 400
+  const invalidNegative = await request('/api/admin/rounds/1/extend', {
+    method: 'POST',
+    headers: { cookie: aCookie, 'content-type': 'application/json' },
+    body: JSON.stringify({ extendSec: -10 }),
+  });
+  assert.equal(invalidNegative.status, 400);
+
+  const invalidZero = await request('/api/admin/rounds/1/extend', {
+    method: 'POST',
+    headers: { cookie: aCookie, 'content-type': 'application/json' },
+    body: JSON.stringify({ extendSec: 0 }),
+  });
+  assert.equal(invalidZero.status, 400);
+
+  // Socket client listens for round:update
+  const clientSocket = connectSocketClient();
+  const updatePromise = new Promise((resolve) => {
+    clientSocket.on('round:update', (data) => {
+      if (data?.round === 1) resolve(data);
+    });
+  });
+
+  // Extend round by 300 seconds
+  const extendRes = await request('/api/admin/rounds/1/extend', {
+    method: 'POST',
+    headers: { cookie: aCookie, 'content-type': 'application/json' },
+    body: JSON.stringify({ extendSec: 300 }),
+  });
+  assert.equal(extendRes.status, 200);
+  const extended = await extendRes.json();
+
+  assert.equal(extended.status, 'running');
+  assert.equal(extended.durationSec, 900);
+  const newDeadlineMs = new Date(extended.deadline).getTime();
+  assert.equal(newDeadlineMs, initialDeadlineMs + 300 * 1000);
+
+  // Confirm socket broadcast received
+  const socketData = await updatePromise;
+  clientSocket.disconnect();
+  assert.equal(socketData.round, 1);
+  assert.equal(socketData.durationSec, 900);
+  assert.equal(new Date(socketData.deadline).getTime(), newDeadlineMs);
+
+  // End round
+  await request('/api/admin/rounds/1/end', {
+    method: 'POST',
+    headers: { cookie: aCookie, 'content-type': 'application/json' },
+    body: '{}',
+  });
+
+  // Extending after round is ended fails with 409
+  const postEndExtend = await request('/api/admin/rounds/1/extend', {
+    method: 'POST',
+    headers: { cookie: aCookie, 'content-type': 'application/json' },
+    body: JSON.stringify({ extendSec: 300 }),
+  });
+  assert.equal(postEndExtend.status, 409);
+});
+
