@@ -226,12 +226,25 @@ export function registerMazeHandlers(io, socket) {
     io.to(tId).emit('maze:game_tick', engine.getStatePayload());
   });
 
-  socket.on('maze:admin_action', ({ teamId, action }) => {
+  socket.on('maze:admin_action', async ({ teamId, action }) => {
     const tId = teamId || socket.data.mazeTeamId;
     if (!tId) return;
+    if (action === 'reset') {
+      try {
+        await ScoreEntry.deleteMany({ teamId: tId, round: 1, game: 'maze' });
+      } catch (err) {
+        // ignore
+      }
+    }
     const engine = activeEngines.get(tId);
     if (!engine) return;
     engine.adminAction(action);
+    io.to(tId).emit('maze:room_status', {
+      p1Connected: engine.players.P1.connected,
+      p2Connected: engine.players.P2.connected,
+      status: engine.status,
+    });
+    io.to(tId).emit('maze:game_tick', engine.getStatePayload());
   });
 
   socket.on('disconnect', () => {

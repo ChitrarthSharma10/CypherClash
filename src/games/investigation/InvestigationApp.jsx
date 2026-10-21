@@ -8,7 +8,10 @@ import SharedBoard from "./components/SharedBoard.jsx";
 import PlayerDossier from "./components/PlayerDossier.jsx";
 import { useRoundTimer } from "../../components/TimeLeftBanner.jsx";
 
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:4000";
+const API_URL = (
+  import.meta.env.VITE_API_URL ??
+  (import.meta.env.PROD ? "" : "http://localhost:4000")
+).replace(/\/+$/, "");
 
 const NAV_TABS = [
   { id: "overview", label: "Case Overview", icon: "🔍", desc: "Background & recent findings" },
@@ -194,9 +197,14 @@ export default function InvestigationApp({
     : Math.max(150, 500 - 15 * wrongAttempts);
   const discoveredEvidence = caseState?.discoveredEvidence || [];
   const solvedPuzzles = caseState?.solvedPuzzles || [];
-  const clues = caseState?.clues || [];
-  const isCompleted = Boolean(caseState?.completed || caseState?.gameState?.report?.score);
+  const isCompleted = Boolean(caseState?.completed || caseState?.gameState?.report?.score || caseState?.gameState?.report);
   const mutationsLocked = timer.isEnded || timer.isPaused;
+
+  useEffect(() => {
+    if (isCompleted || timer.isEnded) {
+      setShowResults(true);
+    }
+  }, [isCompleted, timer.isEnded]);
 
   // Evidence cards for SharedBoard
   const boardCards = useMemo(() => {
@@ -244,7 +252,7 @@ export default function InvestigationApp({
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <small style={{ color: "#00c8e9", fontWeight: 800, letterSpacing: 1 }}>
-                CYPHERCLASH · ROUND 3
+                CYBER CLASH · ROUND 3
               </small>
               <span
                 style={{
@@ -466,11 +474,12 @@ export default function InvestigationApp({
                 <div>
                   <div
                     style={{
-                      background: "#0a1620",
-                      border: "1px solid rgba(0, 200, 233, 0.22)",
+                      background: "#070e17",
+                      border: "1px solid rgba(0, 200, 233, 0.35)",
                       borderRadius: 10,
                       padding: 20,
                       marginBottom: 16,
+                      boxShadow: "0 6px 20px rgba(0, 0, 0, 0.7)",
                     }}
                   >
                     <small style={{ color: "#00c8e9", fontWeight: 700 }}>CASE BRIEFING</small>
@@ -819,17 +828,19 @@ export default function InvestigationApp({
         onClose={() => setShowGuidelines(false)}
       />
 
-      <ResultsModal
-        result={caseState?.gameState?.report ? {
-          completed: true,
-          score: currentScore,
-          wrongAttempts,
-          teamId,
-          suspect: caseData?.suspects?.find((s) => s.id === caseState.gameState.report?.suspectId)?.name || "Idris Vance",
-        } : null}
-        onClose={() => setShowResults(false)}
-        onBack={onBack}
-      />
+      {showResults && (
+        <ResultsModal
+          result={{
+            completed: Boolean(isCompleted),
+            score: currentScore,
+            wrongAttempts,
+            teamId,
+            suspect: caseData?.suspects?.find((s) => s.id === caseState?.gameState?.report?.suspectId)?.name || "Idris Vance",
+          }}
+          onClose={() => setShowResults(false)}
+          onBack={onBack}
+        />
+      )}
     </div>
   );
 }

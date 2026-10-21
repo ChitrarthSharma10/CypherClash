@@ -300,6 +300,24 @@ export default function RunnerApp({
     };
   }, [teamId, currentSlot, addTelemetry]);
 
+  useEffect(() => {
+    if (isRoundEnded && !result && gameState) {
+      setResult({
+        completed: Boolean(gameState.distance >= 3000),
+        score: gameState.score || 0,
+        rawStats: {
+          goldBarsCollected: gameState.goldCount || 0,
+          checkpointsCleared: gameState.checkpoint || 0,
+          totalCheckpoints: 8,
+          collisions: gameState.collisionCount || 0,
+        },
+        breakdown: {
+          finalScore: gameState.score || 0,
+        },
+      });
+    }
+  }, [isRoundEnded, result, gameState]);
+
   const handleAction = useCallback((role, action) => {
     if (isRoundEnded || !socketClientRef.current) return;
     socketClientRef.current.sendInput(action, role);

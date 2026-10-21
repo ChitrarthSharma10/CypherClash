@@ -14,7 +14,8 @@ export class MazeGameEngine {
     const layout = MAZE_LAYOUTS.find((m) => m.id === this.mazeId) || MAZE_LAYOUTS[0];
     this.layout = JSON.parse(JSON.stringify(layout)); // deep copy
 
-    this.status = 'WAITING_FOR_PLAYERS'; // WAITING_FOR_PLAYERS | RUNNING | PAUSED | FINISHED | EXPIRED
+    this.status = 'WAITING_FOR_PLAYERS'; // WAITING_FOR_PLAYERS | COUNTDOWN | RUNNING | PAUSED | FINISHED
+    this.countdownSec = 0;
     this.players = {
       P1: { connected: false, socketId: null, lastPing: 0, role: 'VERTICAL_CONTROLS' },
       P2: { connected: false, socketId: null, lastPing: 0, role: 'HORIZONTAL_CONTROLS' },
@@ -139,6 +140,10 @@ export class MazeGameEngine {
       return { valid: false, reason: 'Game finished' };
     }
 
+    if (this.status === 'COUNTDOWN') {
+      return { valid: false, reason: 'Round starting in countdown' };
+    }
+
     if (this.status !== 'RUNNING') {
       this.players.P1.connected = true;
       this.players.P2.connected = true;
@@ -161,8 +166,14 @@ export class MazeGameEngine {
     return { valid: false, reason: 'Unknown axis' };
   }
 
-  startGame() {
-    this.status = 'RUNNING';
+  startGame(skipCountdown = false) {
+    if (!skipCountdown && (GAME_CONFIG.START_COUNTDOWN_SEC || 0) > 0) {
+      this.status = 'COUNTDOWN';
+      this.countdownSec = GAME_CONFIG.START_COUNTDOWN_SEC || 3;
+    } else {
+      this.status = 'RUNNING';
+      this.countdownSec = 0;
+    }
     if (!this.startedAt) {
       this.startedAt = new Date().toISOString();
     }
@@ -185,16 +196,27 @@ export class MazeGameEngine {
   }
 
   tick() {
-    if (this.status !== 'RUNNING') {
-      if (this.onStateUpdate) this.onStateUpdate(this.getStatePayload());
-      return;
-    }
-
     const now = Date.now();
     // Clamp dt to max 0.05 s to guard against lag spikes
     const rawDt = (now - (this.lastTickTime || now)) / 1000;
     const dt = Math.min(rawDt, 0.05);
     this.lastTickTime = now;
+
+    if (this.status === 'COUNTDOWN') {
+      this.countdownSec = Math.max(0, this.countdownSec - dt);
+      if (this.countdownSec <= 0) {
+        this.status = 'RUNNING';
+        this.countdownSec = 0;
+        this.addEvent('SYSTEM', 'GO! Dual-Control Maze active.');
+      }
+      if (this.onStateUpdate) this.onStateUpdate(this.getStatePayload());
+      return;
+    }
+
+    if (this.status !== 'RUNNING') {
+      if (this.onStateUpdate) this.onStateUpdate(this.getStatePayload());
+      return;
+    }
 
     // Elapsed Stopwatch Timer
     this.timeElapsedMs += rawDt * 1000;
@@ -344,15 +366,13 @@ export class MazeGameEngine {
         const hitX = this.resolveCircleGridCollision(this.character, r);
         if (hitX) {
           anyCollision = true;
-          // Corner-glide assistance: gently nudge towards corridor center ONLY if verified collision-free
-          if (moveY === 0) {
-            const yCenter = Math.floor(this.character.y) + 0.5;
-            const diff = yCenter - this.character.y;
-            if (Math.abs(diff) > 0.02) {
-              const nudgeY = this.character.y + Math.sign(diff) * 0.04;
-              if (this.isCircleValid(this.character.x, nudgeY, r)) {
-                this.character.y = nudgeY;
-              }
+          // Corner-glide assistance: gently nudge towards corridor center
+          const yCenter = Math.floor(this.character.y) + 0.5;
+          const diff = yCenter - this.character.y;
+          if (Math.abs(diff) > 0.02) {
+            const nudgeY = this.character.y + Math.sign(diff) * Math.min(Math.abs(diff), 0.08);
+            if (this.isCircleValid(this.character.x, nudgeY, r)) {
+              this.character.y = nudgeY;
             }
           }
         }
@@ -364,15 +384,13 @@ export class MazeGameEngine {
         const hitY = this.resolveCircleGridCollision(this.character, r);
         if (hitY) {
           anyCollision = true;
-          // Corner-glide assistance: gently nudge towards corridor center ONLY if verified collision-free
-          if (moveX === 0) {
-            const xCenter = Math.floor(this.character.x) + 0.5;
-            const diff = xCenter - this.character.x;
-            if (Math.abs(diff) > 0.02) {
-              const nudgeX = this.character.x + Math.sign(diff) * 0.04;
-              if (this.isCircleValid(nudgeX, this.character.y, r)) {
-                this.character.x = nudgeX;
-              }
+          // Corner-glide assistance: gently nudge towards corridor center
+          const xCenter = Math.floor(this.character.x) + 0.5;
+          const diff = xCenter - this.character.x;
+          if (Math.abs(diff) > 0.02) {
+            const nudgeX = this.character.x + Math.sign(diff) * Math.min(Math.abs(diff), 0.08);
+            if (this.isCircleValid(nudgeX, this.character.y, r)) {
+              this.character.x = nudgeX;
             }
           }
         }
@@ -664,7 +682,9 @@ export class MazeGameEngine {
       return;
     }
 
-    const hunterSpeed = GAME_CONFIG.SPEED * (GAME_CONFIG.HUNTER_SPEED_MULTIPLIER ?? 0.85);
+    const hunterSpeed = (GAME_CONFIG.HUNTER_SPEED !== undefined)
+      ? GAME_CONFIG.HUNTER_SPEED
+      : (GAME_CONFIG.SPEED * (GAME_CONFIG.HUNTER_SPEED_MULTIPLIER ?? 0.85));
     const step = hunterSpeed * dt;
 
     const hCol = Math.floor(this.hunter.x);
@@ -908,9 +928,10 @@ export class MazeGameEngine {
         this.hunter.active = false;
         this.hunterGraceUntil = 0;
         this.clearPathCache();
-        this.status = (this.players.P1.connected && this.players.P2.connected) ? 'RUNNING' : 'WAITING_FOR_PLAYERS';
+        this.status = (this.players.P1.connected && this.players.P2.connected) ? 'COUNTDOWN' : 'WAITING_FOR_PLAYERS';
+        this.countdownSec = (GAME_CONFIG.START_COUNTDOWN_SEC || 3);
         this.addEvent('ADMIN', 'Game reset by admin.');
-        if (this.status === 'RUNNING') this.startTickLoop();
+        if (this.status === 'COUNTDOWN') this.startTickLoop();
         return { success: true, status: this.status };
       default:
         return { success: false, reason: 'Invalid admin action' };
@@ -924,6 +945,8 @@ export class MazeGameEngine {
       sessionId: this.sessionId,
       teamId: this.teamId,
       status: this.status,
+      countdownSec: Math.max(0, parseFloat((this.countdownSec || 0).toFixed(1))),
+      countdownDisplay: this.status === 'COUNTDOWN' ? (this.countdownSec > 0.4 ? Math.ceil(this.countdownSec) : 'GO!') : null,
       layout: {
         id: this.layout.id,
         name: this.layout.name,

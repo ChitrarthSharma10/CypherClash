@@ -145,12 +145,12 @@ export default function ResultsModal({ result, onClose, onBack }) {
             type="button"
             className="submit-btn"
             onClick={() => {
-              if (onBack) onBack();
-              else window.location.href = '/';
+              if (typeof onBack === 'function') onBack();
+              else window.location.href = '/dashboard';
             }}
             style={{ background: '#00c8e9', color: '#050d14', border: 0, padding: '10px 24px', fontWeight: 800, borderRadius: '4px', cursor: 'pointer' }}
           >
-            Return to Tournament Dashboard
+            Return to dashboard
           </button>
         </div>
       </div>

@@ -8,14 +8,16 @@ export const GAME_CONFIG = {
   GAME_ID: 'treasure-hunt',
   MAX_GAME_SCORE: 500,             // Hard cap: flawless run scores at most 500
   TICK_RATE_HZ: 20,                // 20 updates per second (50ms interval)
-  SPEED: 2.2,                      // Deliberate explorer speed: 132+ step 4-door maze lasts 3-4 min
-  HUNTER_SPEED_MULTIPLIER: 0.85,   // Hunter speed = 0.85x player speed so pursuit is thrilling but maze is doable
-  HUNTER_START_DISTANCE: 3,        // Hunter starts 3 maze cells behind the player, activating chase immediately once player moves into corridor
-  CHARACTER_RADIUS: 0.35,          // Collision radius (cell is 1.0 x 1.0) ensures clean buffer to walls
+  START_COUNTDOWN_SEC: 3,          // 3-second buffer countdown popup on round start
+  SPEED: 2.6,                      // Agile explorer speed
+  HUNTER_SPEED: 2.18,              // Hunter pace: 2.18 cells/s (reduced by 0.2 cells/s from 2.38)
+  HUNTER_SPEED_MULTIPLIER: 0.84,   // Balanced chase right behind player
+  HUNTER_START_DISTANCE: 2.0,      // Hunter activates quickly once player enters corridor
+  CHARACTER_RADIUS: 0.30,          // Calibrated collision radius (cell is 1.0) ensures butter-smooth corner turns without sticking
   COLLISION_COOLDOWN_MS: 800,      // Minimum time between collision penalties
   BARRIER_OPEN_DURATION_MS: 4800,  // Co-op window
-  HAZARD_PENALTY: 30,              // EMP shockwave point deduction
-
+  HAZARD_PENALTY: 35,              // Higher stakes EMP shockwave point deduction
+ 
   // Category Pools totaling 500 max for a flawless run:
   // Collectibles: 140, Checkpoints: 60, Switches: 60, Completion: 140, Speed bonus: 100
   POOLS: {
@@ -30,8 +32,8 @@ export const GAME_CONFIG = {
     MAX_SPEED_BONUS: 100,              // Max speed bonus up to 100 pts
     COLLISION_SCORE_PENALTY: 0,        // 0 penalty: wall collision does NOT reduce points
     HUNTER_CATCH_PENALTY: 50,          // -50 pts penalty deduction when caught by hunter
-    PIT_FALL_PENALTY: 30,              // -30 pts penalty deduction when falling in pit trap
-    EMP_HAZARD_PENALTY: 30,            // -30 pts penalty deduction when hitting EMP hazard
+    PIT_FALL_PENALTY: 35,              // -35 pts penalty deduction when falling in pit trap
+    EMP_HAZARD_PENALTY: 35,            // -35 pts penalty deduction when hitting EMP hazard
   },
 };
 
@@ -48,22 +50,22 @@ export const MAZE_LAYOUTS = [
     start: { x: 1.5, y: 1.5 },
     exit: { x: 28.5, y: 14.5 },
     // 31x17 wide epic grid: 4 vast sectors separated by 4 Portcullis Gates requiring 4 Rune Portals
-    // Final exit sits cleanly in a 3x3 open chamber (cols 27..29, rows 13..15) with zero wall contact!
+    // With strategic chicane walls forming tricky dead ends while guaranteeing loop escape paths
     grid: [
       [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
       [1, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0, 1],
       [1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1],
-      [1, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0, 1],
+      [1, 0, 0, 0, 1, 0, 1, 1, 1, 0, 0, 0, 1, 0, 1, 1, 1, 0, 0, 0, 1, 0, 1, 1, 1, 0, 0, 0, 1, 0, 1],
       [1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1],
-      [1, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0, 1],
+      [1, 0, 1, 0, 0, 0, 1, 1, 1, 0, 1, 0, 0, 0, 1, 1, 1, 0, 1, 0, 0, 0, 1, 1, 1, 0, 1, 0, 0, 0, 1],
       [1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1],
       [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 0, 1],
       [1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1],
-      [1, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0, 1],
+      [1, 0, 0, 0, 1, 0, 1, 1, 1, 0, 1, 0, 0, 0, 1, 1, 1, 0, 1, 0, 0, 0, 1, 1, 1, 0, 1, 0, 0, 0, 1],
       [1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1],
-      [1, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0, 1],
+      [1, 0, 0, 0, 1, 0, 1, 1, 1, 0, 0, 0, 1, 0, 1, 1, 1, 0, 0, 0, 1, 0, 1, 1, 1, 0, 0, 0, 1, 0, 1],
       [1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1],
-      [1, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0, 1],
+      [1, 0, 1, 0, 0, 0, 1, 1, 1, 0, 1, 0, 0, 0, 1, 1, 1, 0, 1, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0, 1],
       [1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1, 0, 0, 0, 1],
       [1, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0, 1, 1, 1, 0, 1, 0, 0, 0, 1],
       [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],

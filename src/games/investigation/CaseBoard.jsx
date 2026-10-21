@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:4000";
+const API_URL = (
+  import.meta.env.VITE_API_URL ??
+  (import.meta.env.PROD ? "" : "http://localhost:4000")
+).replace(/\/+$/, "");
 const EVENT_IDS = [
   "token-accepted-export",
   "audit-view-changed",
@@ -78,19 +81,20 @@ const BRANCH_LABELS = {
   Correlation: "Connections between records",
 };
 const panelStyle = {
-  background: "#0a1620",
-  border: "1px solid rgba(0,200,233,0.22)",
+  background: "#070e17",
+  border: "1px solid rgba(0, 200, 233, 0.35)",
   borderRadius: "10px",
   padding: "20px",
+  boxShadow: "0 6px 20px rgba(0, 0, 0, 0.7)",
 };
 const inputStyle = {
   width: "100%",
   boxSizing: "border-box",
   padding: "9px 11px",
-  background: "#050d14",
-  border: "1px solid rgba(255,255,255,0.2)",
+  background: "#040910",
+  border: "1px solid rgba(255, 255, 255, 0.25)",
   borderRadius: "5px",
-  color: "#e6f4f8",
+  color: "#f8fafc",
 };
 
 function evidenceTitle(caseData, id) {
@@ -638,7 +642,9 @@ export default function CaseBoard({
             style={{
               ...panelStyle,
               padding: 16,
-              opacity: item.available || item.discovered ? 1 : 0.62,
+              opacity: 1,
+              background: item.discovered ? "#091422" : "#060b12",
+              border: item.discovered ? "1px solid rgba(34, 197, 94, 0.45)" : "1px solid rgba(0, 200, 233, 0.28)",
             }}
           >
             <small style={{ color: "#00c8e9" }}>

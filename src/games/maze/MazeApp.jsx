@@ -89,16 +89,11 @@ function MazeMonitor({
   };
 
   const stopMove = (role, axis) => {
-    const pressDuration = Date.now() - (pressStartRef.current[axis] || 0);
-    if (pressDuration < 160) {
-      if (activeTimersRef.current[axis]) clearTimeout(activeTimersRef.current[axis]);
-      activeTimersRef.current[axis] = setTimeout(() => {
-        sendInput(role, axis, 0);
-        delete activeTimersRef.current[axis];
-      }, 260 - pressDuration);
-    } else {
-      sendInput(role, axis, 0);
+    if (activeTimersRef.current[axis]) {
+      clearTimeout(activeTimersRef.current[axis]);
+      delete activeTimersRef.current[axis];
     }
+    sendInput(role, axis, 0);
   };
 
   return (
@@ -162,6 +157,54 @@ function MazeMonitor({
             </div>
           </div>
         )}
+
+        {gameState?.status === 'COUNTDOWN' && (
+          <div
+            className="countdown-overlay"
+            style={{
+              position: 'absolute',
+              inset: 0,
+              background: 'rgba(5, 8, 14, 0.82)',
+              backdropFilter: 'blur(12px)',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              zIndex: 25,
+            }}
+          >
+            <div style={{ textAlign: 'center' }}>
+              <p
+                style={{
+                  color: '#38bdf8',
+                  letterSpacing: '0.22em',
+                  fontSize: '14px',
+                  fontWeight: 800,
+                  marginBottom: '14px',
+                  textTransform: 'uppercase',
+                }}
+              >
+                DUAL-CONTROL MAZE · GET READY
+              </p>
+              <div
+                className="countdown-number"
+                style={{
+                  fontSize: '110px',
+                  fontWeight: 900,
+                  color: gameState.countdownDisplay === 'GO!' ? '#22c55e' : '#ffffff',
+                  textShadow: '0 0 45px rgba(56, 189, 248, 0.85)',
+                  lineHeight: 1,
+                  fontFamily: 'monospace',
+                }}
+              >
+                {gameState.countdownDisplay || (gameState.countdownSec ? Math.ceil(gameState.countdownSec) : '3')}
+              </div>
+              <p style={{ color: 'rgba(255, 255, 255, 0.85)', fontSize: '13px', marginTop: '16px', fontWeight: 600 }}>
+                P1: Vertical (W/S) · P2: Horizontal (A/D) · Controls live on GO!
+              </p>
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="telemetry-deck-grid" style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '16px', marginTop: '16px' }}>
@@ -170,8 +213,8 @@ function MazeMonitor({
             <h3 style={{ margin: 0, fontSize: '13px', fontWeight: 700, color: '#ffffff' }}>
               COOPERATIVE CONTROLS — {playerId === 'P1' ? 'PLAYER 1 (VERTICAL)' : 'PLAYER 2 (HORIZONTAL)'}
             </h3>
-            <span style={{ fontSize: '11px', color: '#ffc933', fontWeight: 700 }}>
-              TRICKY KEYS: A/←: RIGHT · D/→: LEFT · S/↓: UP · W/↑: DOWN
+            <span style={{ fontSize: '11px', color: '#38bdf8', fontWeight: 700 }}>
+              CONTROLS: W/↑: UP · S/↓: DOWN · A/←: LEFT · D/→: RIGHT
             </span>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px' }}>
@@ -184,7 +227,7 @@ function MazeMonitor({
               onPointerCancel={() => stopMove('P1', 'Y')}
               style={{ height: '48px', fontSize: '12px', fontWeight: 700 }}
             >
-              ▲ UP (S / ↓)
+              ▲ UP (W / ↑)
             </button>
             <button
               id="btn-maze-down"
@@ -195,7 +238,7 @@ function MazeMonitor({
               onPointerCancel={() => stopMove('P1', 'Y')}
               style={{ height: '48px', fontSize: '12px', fontWeight: 700 }}
             >
-              ▼ DOWN (W / ↑)
+              ▼ DOWN (S / ↓)
             </button>
             <button
               id="btn-maze-left"
@@ -206,7 +249,7 @@ function MazeMonitor({
               onPointerCancel={() => stopMove('P2', 'X')}
               style={{ height: '48px', fontSize: '12px', fontWeight: 700 }}
             >
-              ◀ LEFT (D / →)
+              ◀ LEFT (A / ←)
             </button>
             <button
               id="btn-maze-right"
@@ -217,7 +260,7 @@ function MazeMonitor({
               onPointerCancel={() => stopMove('P2', 'X')}
               style={{ height: '48px', fontSize: '12px', fontWeight: 700 }}
             >
-              ▶ RIGHT (A / ←)
+              ▶ RIGHT (D / →)
             </button>
           </div>
         </div>
@@ -310,27 +353,45 @@ export default function MazeApp({
   }, [teamId, currentSlot]);
 
   const sendInput = useCallback((targetRole, axis, dir) => {
-    if (isRoundEnded || !socketClientRef.current) return;
+    if (isRoundEnded || !socketClientRef.current || gameState?.status === 'COUNTDOWN') return;
     socketClientRef.current.sendInput(targetRole, axis, dir);
-  }, [isRoundEnded]);
+  }, [isRoundEnded, gameState?.status]);
+
+  useEffect(() => {
+    if (isRoundEnded && !result && gameState) {
+      setResult({
+        completed: Boolean(gameState.exitReached),
+        score: gameState.score || 0,
+        rawStats: {
+          collectibles: gameState.collectiblesCount || 0,
+          checkpoints: gameState.checkpointsCount || 0,
+          hunterCatches: gameState.hunterCatchesCount || 0,
+          pitFalls: gameState.pitFallsCount || 0,
+        },
+        breakdown: {
+          finalScore: gameState.score || 0,
+        },
+      });
+    }
+  }, [isRoundEnded, result, gameState]);
 
   useEffect(() => {
     const activeKeys = new Set();
 
     function updateMovement() {
-      const triggerRight = activeKeys.has('a') || activeKeys.has('arrowleft');
-      const triggerLeft = activeKeys.has('d') || activeKeys.has('arrowright');
+      const triggerLeft = activeKeys.has('a') || activeKeys.has('arrowleft');
+      const triggerRight = activeKeys.has('d') || activeKeys.has('arrowright');
 
       let vx = 0;
-      if (triggerRight && !triggerLeft) {
-        vx = 1;
-      } else if (triggerLeft && !triggerRight) {
+      if (triggerLeft && !triggerRight) {
         vx = -1;
+      } else if (triggerRight && !triggerLeft) {
+        vx = 1;
       }
       sendInput('P2', 'X', vx);
 
-      const triggerUp = activeKeys.has('s') || activeKeys.has('arrowdown');
-      const triggerDown = activeKeys.has('w') || activeKeys.has('arrowup');
+      const triggerUp = activeKeys.has('w') || activeKeys.has('arrowup');
+      const triggerDown = activeKeys.has('s') || activeKeys.has('arrowdown');
 
       let vy = 0;
       if (triggerUp && !triggerDown) {
@@ -369,10 +430,12 @@ export default function MazeApp({
     window.addEventListener('keydown', handleKeyDown);
     window.addEventListener('keyup', handleKeyUp);
     window.addEventListener('blur', handleBlur);
+    document.addEventListener('visibilitychange', handleBlur);
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
       window.removeEventListener('blur', handleBlur);
+      document.removeEventListener('visibilitychange', handleBlur);
       sendInput('P1', 'Y', 0);
       sendInput('P2', 'X', 0);
     };

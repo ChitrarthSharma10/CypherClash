@@ -342,9 +342,9 @@ export default function MapGuidelinesModal({ isOpen, onClose }) {
       icon: <DigPitTrapIcon />,
       name: 'Dig / Spike Pit',
       category: 'Sunken Hazard Excavation',
-      effect: 'Sunken spike pit / EMP hazard · Impact incurs -30 PTS deduction and restarts from beginning. (Wall collisions have 0 penalty).',
+      effect: 'Sunken spike pit / EMP hazard · Impact incurs -35 PTS deduction and restarts from beginning. (Wall collisions have 0 penalty).',
       badgeType: 'badge-reduce',
-      badgeText: '-30 PTS (Hazard Penalty)',
+      badgeText: '-35 PTS (Hazard Penalty)',
     },
     {
       icon: <TreasureVaultIcon />,
