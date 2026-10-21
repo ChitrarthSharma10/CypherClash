@@ -1,5 +1,11 @@
 # CypherClash Round 3 integration handover
 
+## Current implementation status
+
+This handover contains historical instructions for the standalone prototype. The supported Round 3 experience is the React route at `/dashboard/round3`, mounted by `src/main.jsx` and implemented in `src/games/investigation/InvestigationApp.jsx` and `CaseBoard.jsx`. Its API is mounted from `server/src/routes/round3Investigation.js`; `server/src/routes/investigation.js` is the Round 2 game.
+
+The standalone files under `round3_investigation/` still target retired four-clue endpoints and are not copied into production. The root `npm run build` bundles the supported React route into the main SPA; there is no `dist/round3_investigation/` directory. Do not follow the older standalone walkthrough below for current gameplay. Round 3 report scoring is capped at 100 points, and the server-controlled duration is 45 minutes.
+
 This document is the technical handover for the approved Round 3 submission scope in this checkout. It is intended to complement the authoritative server documentation in `server/README.md` and to explain how the current Round 3 implementation is wired into the repository.
 
 ## 1. Project overview and current status

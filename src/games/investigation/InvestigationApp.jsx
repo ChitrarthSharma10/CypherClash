@@ -1,961 +1,464 @@
-﻿import { useState, useEffect, useRef, useCallback } from 'react';
-import './styles.css';
-import ConstellationCanvas from './components/ConstellationCanvas.jsx';
-import InvestigationGuidelinesModal from './components/InvestigationGuidelinesModal.jsx';
+import { useCallback, useEffect, useRef, useState } from "react";
+import "./styles.css";
+import ConstellationCanvas from "./components/ConstellationCanvas.jsx";
+import InvestigationGuidelinesModal from "./components/InvestigationGuidelinesModal.jsx";
+import CaseBoard from "./CaseBoard.jsx";
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
+const API_URL = import.meta.env.VITE_API_URL || "http://localhost:4000";
 
-function investigationRoleHeaders(teamId, role) {
+function roleHeaders(teamId, role) {
   let participantRole = role;
   if (!participantRole) {
     try {
       participantRole = sessionStorage.getItem(`investigation_role_${teamId}`);
     } catch {}
   }
-  return participantRole ? { 'X-Investigation-Role': participantRole } : {};
+  return participantRole ? { "X-Investigation-Role": participantRole } : {};
 }
 
-const EVIDENCE_ITEMS = {
-  ev1: {
-    key: 'ev1',
-    id: 'EV-001',
-    title: 'Server Room Access Log',
-    source: 'Badge Reader Audit',
-    detail: 'Badge H-204 opened the archive corridor at 02:11:48.',
-    hint: 'Physical security telemetry confirms badge swipe just 74 seconds prior to archive breach.',
-  },
-  ev2: {
-    key: 'ev2',
-    id: 'EV-002',
-    title: 'Night Technician Statement',
-    source: 'Security Debrief Log',
-    detail: 'Witness heard the archive electronic door latch release near 02:20.',
-    hint: 'Confirms unexpected auxiliary presence in the eastern wing during off-hours maintenance.',
-  },
-  ev3: {
-    key: 'ev3',
-    id: 'EV-003',
-    title: 'East Corridor CCTV Motion Trace',
-    source: 'CCTV Frame 9481',
-    detail: 'Motion detected at 02:12:51; face concealed by low-profile hood.',
-    hint: 'Proves presence between perimeter ingress and the secure core server bay.',
-  },
-  ev4: {
-    key: 'ev4',
-    id: 'EV-004',
-    title: 'Decrypted Network Token Payload',
-    source: 'Packet Capture #884',
-    detail: 'Recovered token: HELIX. Packet accepted at 02:13:02.',
-    hint: 'Critical cryptographic proof that matches the internal repository master session key.',
-  },
-};
+function readSessionValue(key) {
+  try {
+    return sessionStorage.getItem(key) || "";
+  } catch {
+    return "";
+  }
+}
 
-const SUSPECTS = [
-  {
-    name: 'Mara Chen',
-    role: 'Lead Research Scientist',
-    badge: 'H-204',
-    access: 'Level 4 Archives & Bio-Vault',
-    alibi: 'Claims to have left campus at 21:00; badge logs indicate otherwise.',
-    risk: 'HIGH',
-  },
-  {
-    name: 'Idris Khan',
-    role: 'Infrastructure Security Engineer',
-    badge: 'SEC-09',
-    access: 'Core Routers & SIEM Gateway',
-    alibi: 'On-call remote monitoring from home terminal during the incident.',
-    risk: 'MEDIUM',
-  },
-  {
-    name: 'Sofia Laurent',
-    role: 'Database Administrator',
-    badge: 'DB-88',
-    access: 'PostgreSQL Relays & Cold Storage',
-    alibi: 'Scheduled maintenance script running on database mirror.',
-    risk: 'LOW',
-  },
-  {
-    name: 'Evan Walsh',
-    role: 'Network Operations Technician',
-    badge: 'NET-12',
-    access: 'Wiring Closets & Patch Panels',
-    alibi: 'Conducting routine fiber checks in the West Engineering building.',
-    risk: 'MEDIUM',
-  },
-];
+function writeSessionValue(key, value) {
+  try {
+    if (value) sessionStorage.setItem(key, value);
+    else sessionStorage.removeItem(key);
+  } catch {}
+}
 
 export default function InvestigationApp({
-  teamId = 'CC-001',
+  teamId = "CC-001",
   onBack,
   onLogout,
 }) {
-  const [role, setRole] = useState(() => {
-    try {
-      return sessionStorage.getItem(`investigation_role_${teamId}`) || null;
-    } catch {
-      return null;
-    }
-  }); // 'detective' | 'analyst' | null
+  const [role, setRole] = useState(
+    () => readSessionValue(`investigation_role_${teamId}`) || null,
+  );
   const [caseState, setCaseState] = useState(null);
   const [deadline, setDeadline] = useState(null);
-  const serverOffsetRef = useRef(0);
-  const [roundStatus, setRoundStatus] = useState('running');
-  const [activeTab, setActiveTab] = useState('overview'); // 'overview' | 'evidence' | 'forensics' | 'suspects' | 'accusation'
-  const [analystInviteCode, setAnalystInviteCode] = useState(() => {
-    try {
-      return sessionStorage.getItem(`analyst_invite_${teamId}`) || '';
-    } catch {
-      return '';
-    }
-  });
-  const [analystInviteExpiresAt, setAnalystInviteExpiresAt] = useState(() => {
-    try {
-      return sessionStorage.getItem(`analyst_invite_expires_${teamId}`) || '';
-    } catch {
-      return '';
-    }
-  });
-  const [inviteInput, setInviteInput] = useState('');
-  const [decryptToken, setDecryptToken] = useState('');
-  const [toastMessage, setToastMessage] = useState(null);
+  const [pausedAt, setPausedAt] = useState(null);
+  const [remainingTime, setRemainingTime] = useState("--:--");
+  const [serverOffset, setServerOffset] = useState(0);
+  const [roundStatus, setRoundStatus] = useState("running");
+  const [analystInvite, setAnalystInvite] = useState(() =>
+    readSessionValue(`analyst_invite_${teamId}`),
+  );
+  const [inviteExpiresAt, setInviteExpiresAt] = useState(() =>
+    readSessionValue(`analyst_invite_expires_${teamId}`),
+  );
+  const [inviteInput, setInviteInput] = useState("");
   const [showGuidelines, setShowGuidelines] = useState(true);
   const [loading, setLoading] = useState(true);
-  const [errorNotice, setErrorNotice] = useState(null);
-  const [remainingTime, setRemainingTime] = useState('—:—');
+  const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
+  const [busy, setBusy] = useState(false);
+  const serverOffsetRef = useRef(0);
 
-  // Accusation Form State
-  const [accusedSuspect, setAccusedSuspect] = useState('Mara Chen');
-  const [accusedEvidence, setAccusedEvidence] = useState('ev1');
-  const [accusedReasoning, setAccusedReasoning] = useState('');
-
-  const toastTimerRef = useRef(null);
-
-  const showToast = useCallback((msg, type = 'info') => {
-    setToastMessage({ msg, type, id: Date.now() });
-    clearTimeout(toastTimerRef.current);
-    toastTimerRef.current = setTimeout(() => setToastMessage(null), 3200);
-  }, []);
-
-  // Fetch Case State Helper
   const fetchState = useCallback(async () => {
     try {
-      const res = await fetch(`${API_URL}/api/investigation/state`, {
-        credentials: 'include',
-        headers: investigationRoleHeaders(teamId, role),
+      const response = await fetch(`${API_URL}/api/investigation/state`, {
+        credentials: "include",
+        headers: roleHeaders(teamId, role),
       });
-      if (res.status === 401) {
+      const data = await response.json();
+      if (response.status === 401) {
         setRole(null);
         setCaseState(null);
-        try {
-          sessionStorage.removeItem(`investigation_role_${teamId}`);
-        } catch {}
-        setLoading(false);
+        writeSessionValue(`investigation_role_${teamId}`, "");
+        setError("");
         return null;
       }
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        setErrorNotice(data.error || `Round 3 state request failed (${res.status})`);
-        setLoading(false);
-        return null;
+      if (!response.ok) {
+        throw new Error(
+          data.error || "We could not load your case status. Please try again.",
+        );
       }
-      const data = await res.json();
       setCaseState(data.state);
       setRole(data.state?.role || null);
-      if (data.state?.role) {
-        try {
-          sessionStorage.setItem(`investigation_role_${teamId}`, data.state.role);
-        } catch {}
-      }
+      writeSessionValue(`investigation_role_${teamId}`, data.state?.role || "");
       if (data.state?.roles?.analyst) {
-        setAnalystInviteCode('');
-        setAnalystInviteExpiresAt('');
-        try {
-          sessionStorage.removeItem(`analyst_invite_${teamId}`);
-          sessionStorage.removeItem(`analyst_invite_expires_${teamId}`);
-        } catch {}
+        setAnalystInvite("");
+        setInviteExpiresAt("");
+        writeSessionValue(`analyst_invite_${teamId}`, "");
+        writeSessionValue(`analyst_invite_expires_${teamId}`, "");
       }
       if (data.deadline) {
-        const deadlineMs = Date.parse(data.deadline);
-        const serverNowMs = Date.parse(data.serverNow);
-        if (Number.isFinite(serverNowMs)) {
-          serverOffsetRef.current = serverNowMs - Date.now();
-        }
-        setDeadline((current) => current === deadlineMs ? current : deadlineMs);
+        const parsedDeadline = Date.parse(data.deadline);
+        if (Number.isFinite(parsedDeadline)) setDeadline(parsedDeadline);
+      }
+      const parsedPausedAt = Date.parse(data.pausedAt);
+      setPausedAt(Number.isFinite(parsedPausedAt) ? parsedPausedAt : null);
+      const parsedServerNow = Date.parse(data.serverNow);
+      if (Number.isFinite(parsedServerNow)) {
+        serverOffsetRef.current = parsedServerNow - Date.now();
+        setServerOffset(serverOffsetRef.current);
       }
       if (data.roundStatus) setRoundStatus(data.roundStatus);
-      setErrorNotice(null);
-      setLoading(false);
+      setError("");
       return data;
-    } catch {
-      setErrorNotice(`Unable to reach the Round 3 API at ${API_URL}`);
-      setLoading(false);
+    } catch (requestError) {
+      setError(
+        requestError.message ||
+          "We could not reach the game server. Check your connection and try again.",
+      );
       return null;
+    } finally {
+      setLoading(false);
     }
   }, [role, teamId]);
 
-  // Initial Load & Continuous Polling
   useEffect(() => {
-    fetchState();
+    void fetchState();
     if (!role) return undefined;
-    const interval = setInterval(fetchState, 1800);
+    const interval = setInterval(() => void fetchState(), 2500);
     return () => clearInterval(interval);
   }, [fetchState, role]);
 
-  // Case Timer Loop
   useEffect(() => {
     if (!deadline) {
-      setRemainingTime('—:—');
-      return;
+      setRemainingTime("--:--");
+      return undefined;
     }
     const tick = () => {
-      const now = Date.now() + serverOffsetRef.current;
-      const diff = Math.max(0, deadline - now);
-      const totalSec = Math.floor(diff / 1000);
-      const mins = String(Math.floor(totalSec / 60)).padStart(2, '0');
-      const secs = String(totalSec % 60).padStart(2, '0');
-      setRemainingTime(`${mins}:${secs}`);
+      const serverNow = Date.now() + serverOffsetRef.current;
+      const effectiveDeadline =
+        roundStatus === "paused" && pausedAt
+          ? deadline + Math.max(0, serverNow - pausedAt)
+          : deadline;
+      const seconds = Math.max(
+        0,
+        Math.floor((effectiveDeadline - serverNow) / 1000),
+      );
+      setRemainingTime(
+        `${String(Math.floor(seconds / 60)).padStart(2, "0")}:${String(seconds % 60).padStart(2, "0")}`,
+      );
     };
     tick();
     const timer = setInterval(tick, 1000);
     return () => clearInterval(timer);
-  }, [deadline]);
+  }, [deadline, pausedAt, roundStatus, serverOffset]);
 
-  // Claim Detective Role
-  const handleJoinDetective = async () => {
+  const claimRole = async (path, body, assignedRole) => {
+    setBusy(true);
+    setError("");
+    setNotice("");
     try {
-      setLoading(true);
-      const res = await fetch(`${API_URL}/api/investigation/join`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({}),
+      const response = await fetch(`${API_URL}/api/investigation${path}`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Failed to claim Lead Detective');
+      const data = await response.json();
+      if (!response.ok)
+        throw new Error(
+          data.error || "We could not reserve this role. Try again.",
+        );
+      setRole(assignedRole);
       setCaseState(data.state);
-      setRole('detective');
-      try {
-        sessionStorage.setItem(`investigation_role_${teamId}`, 'detective');
-      } catch {}
+      writeSessionValue(`investigation_role_${teamId}`, assignedRole);
       if (data.analystInvite) {
-        setAnalystInviteCode(data.analystInvite);
-        setAnalystInviteExpiresAt(data.inviteExpiresAt || '');
-        try {
-          sessionStorage.setItem(`analyst_invite_${teamId}`, data.analystInvite);
-          sessionStorage.setItem(`analyst_invite_expires_${teamId}`, data.inviteExpiresAt || '');
-        } catch {}
+        setAnalystInvite(data.analystInvite);
+        setInviteExpiresAt(data.inviteExpiresAt || "");
+        writeSessionValue(`analyst_invite_${teamId}`, data.analystInvite);
+        writeSessionValue(
+          `analyst_invite_expires_${teamId}`,
+          data.inviteExpiresAt || "",
+        );
       }
-      showToast('Lead Detective station claimed! Share the invite with your analyst.', 'success');
+      setNotice(
+        assignedRole === "detective"
+          ? "You joined as Detective. Send the invitation code to your partner so they can join as Analyst."
+          : "You joined as Analyst. You and your partner now share the same case file.",
+      );
       await fetchState();
-    } catch (err) {
-      showToast(err.message, 'error');
+    } catch (requestError) {
+      setError(requestError.message);
     } finally {
-      setLoading(false);
+      setBusy(false);
     }
   };
 
-  // Claim Analyst Role via Invite
-  const handleJoinAnalyst = async () => {
-    const code = inviteInput.trim();
-    if (!code) {
-      showToast('Please enter an analyst invite code', 'error');
-      return;
-    }
+  const renewInvite = async () => {
+    setBusy(true);
+    setError("");
     try {
-      setLoading(true);
-      const res = await fetch(`${API_URL}/api/investigation/join/analyst`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ invite: code }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Invalid or expired invitation');
-      setCaseState(data.state);
-      setRole('analyst');
-      try {
-        sessionStorage.setItem(`investigation_role_${teamId}`, 'analyst');
-      } catch {}
-      showToast('Connected as Forensic Analyst! Case workspace unlocked.', 'success');
-      await fetchState();
-    } catch (err) {
-      showToast(err.message, 'error');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleRenewInvite = async () => {
-    try {
-      const res = await fetch(`${API_URL}/api/investigation/invitation/renew`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...investigationRoleHeaders(teamId, 'detective'),
+      const response = await fetch(
+        `${API_URL}/api/investigation/invitation/renew`,
+        {
+          method: "POST",
+          credentials: "include",
+          headers: {
+            "Content-Type": "application/json",
+            ...roleHeaders(teamId, "detective"),
+          },
+          body: JSON.stringify({}),
         },
-        credentials: 'include',
-        body: JSON.stringify({}),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Failed to renew analyst invitation');
+      );
+      const data = await response.json();
+      if (!response.ok)
+        throw new Error(
+          data.error || "We could not create a new partner code. Try again.",
+        );
+      setAnalystInvite(data.analystInvite);
+      setInviteExpiresAt(data.inviteExpiresAt || "");
       setCaseState(data.state);
-      setAnalystInviteCode(data.analystInvite);
-      setAnalystInviteExpiresAt(data.inviteExpiresAt || '');
-      try {
-        sessionStorage.setItem(`analyst_invite_${teamId}`, data.analystInvite);
-        sessionStorage.setItem(`analyst_invite_expires_${teamId}`, data.inviteExpiresAt || '');
-      } catch {}
-      showToast('Analyst invitation renewed.', 'success');
-    } catch (err) {
-      showToast(err.message, 'error');
+      writeSessionValue(`analyst_invite_${teamId}`, data.analystInvite);
+      writeSessionValue(
+        `analyst_invite_expires_${teamId}`,
+        data.inviteExpiresAt || "",
+      );
+    } catch (requestError) {
+      setError(requestError.message);
+    } finally {
+      setBusy(false);
     }
   };
 
-  // Add Evidence Clue
-  const handleAddEvidence = async (key) => {
+  const copyInvite = async () => {
     try {
-      const res = await fetch(`${API_URL}/api/investigation/evidence`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...investigationRoleHeaders(teamId, role) },
-        credentials: 'include',
-        body: JSON.stringify({ key }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Failed to add evidence');
-      setCaseState(data.state);
-      showToast(`${EVIDENCE_ITEMS[key]?.id || key} committed to shared ledger!`, 'success');
-    } catch (err) {
-      showToast(err.message, 'error');
+      await navigator.clipboard.writeText(analystInvite);
+      setNotice("Partner code copied.");
+    } catch {
+      setError(
+        "We could not copy the code. Select it, then copy it to send to your partner.",
+      );
     }
   };
 
-  // Decrypt Forensic Token
-  const handleDecrypt = async (e) => {
-    e.preventDefault();
-    const token = decryptToken.trim();
-    if (!token) return;
-    try {
-      const res = await fetch(`${API_URL}/api/investigation/decrypt`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...investigationRoleHeaders(teamId, role) },
-        credentials: 'include',
-        body: JSON.stringify({ token }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Decryption failed: Token rejected');
-      setCaseState(data.state);
-      setDecryptToken('');
-      showToast('Payload decrypted successfully! Evidence EV-004 unsealed.', 'success');
-    } catch (err) {
-      showToast(err.message, 'error');
-    }
-  };
-
-  // Submit Accusation
-  const handleSubmitAccusation = async (e) => {
-    e.preventDefault();
-    if (accusedReasoning.trim().length < 20) {
-      showToast('Reasoning must be at least 20 characters', 'error');
-      return;
-    }
-    try {
-      const res = await fetch(`${API_URL}/api/investigation/accusation`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...investigationRoleHeaders(teamId, role) },
-        credentials: 'include',
-        body: JSON.stringify({
-          suspect: accusedSuspect,
-          evidenceKey: accusedEvidence,
-          reasoning: accusedReasoning.trim(),
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Failed to submit accusation');
-      setCaseState(data.state);
-      showToast('Formal accusation filed! Awaiting partner approval.', 'success');
-    } catch (err) {
-      showToast(err.message, 'error');
-    }
-  };
-
-  // Approve Accusation
-  const handleApproveAccusation = async () => {
-    try {
-      const res = await fetch(`${API_URL}/api/investigation/accusation/approve`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...investigationRoleHeaders(teamId, role) },
-        credentials: 'include',
-        body: JSON.stringify({}),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Approval failed');
-      setCaseState(data.state);
-      showToast('Accusation approved by both specialists! Case resolved and scored.', 'success');
-    } catch (err) {
-      showToast(err.message, 'error');
-    }
-  };
-
-  const clues = caseState?.clues || [];
-  const cluesMap = new Map(clues.map((c) => [c.key, c]));
-  const isAgreed = caseState?.accusation?.agreed;
-  const isPendingApproval = caseState?.accusation && !isAgreed;
-  const canApprove = isPendingApproval && caseState?.accusation?.submittedBy !== role;
-  const confidencePercent = Math.min(15 + clues.length * 20 + (caseState?.decrypted ? 15 : 0) + (isAgreed ? 10 : 0), 100);
+  const invite = inviteInput.trim();
+  const mutationsLocked =
+    roundStatus !== "running" ||
+    !deadline ||
+    deadline <= Date.now() + serverOffset;
+  const roleLabel =
+    role === "detective"
+      ? "Lead Detective"
+      : role === "analyst"
+        ? "Records Analyst"
+        : "";
 
   return (
-    <div className="investigation-shell" style={{ background: '#050d14', color: '#e6f4f8', minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
+    <div
+      className="investigation-shell"
+      style={{
+        minHeight: "100vh",
+        display: "flex",
+        flexDirection: "column",
+        background: "#050d14",
+        color: "#e6f4f8",
+      }}
+    >
       <ConstellationCanvas />
-
-      {/* Top Header */}
-      <header className="dual-topbar-controls" style={{ padding: '12px 24px', background: '#0a1620', borderBottom: '1px solid rgba(0, 200, 233, 0.28)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', zIndex: 10 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+      <header
+        className="dual-topbar-controls"
+        style={{
+          padding: "12px 24px",
+          background: "#0a1620",
+          borderBottom: "1px solid rgba(0, 200, 233, 0.28)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: 12,
+        }}
+      >
+        <div>
+          <small style={{ color: "#00c8e9" }}>CYPHERCLASH · ROUND 3</small>
+          <h1 style={{ fontSize: 20, margin: "4px 0" }}>
+            CASE HELIX — Who Moved the Files, and Why Was the Record Changed?
+          </h1>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <strong
+            aria-label="Round time remaining"
+            style={{ color: "#d4f04a" }}
+          >
+            {remainingTime}
+          </strong>
           {onBack && (
-            <button className="product-btn product-btn--light" onClick={onBack} style={{ padding: '6px 14px', fontSize: '12px', background: 'transparent', border: '1px solid rgba(255,255,255,0.3)', color: '#fff' }}>
-              ← Dashboard
+            <button className="product-btn product-btn--small" onClick={onBack}>
+              Back
             </button>
           )}
-          <div className="front-brand">
-            <span className="front-tag" style={{ color: '#00c8e9', fontSize: '10px', fontWeight: 700, letterSpacing: '1px' }}>ROUND 03 / COLLABORATIVE INVESTIGATION</span>
-            <h1 className="front-title" style={{ fontSize: '18px', margin: 0, color: '#ffffff', fontWeight: 800 }}>
-              The Ghost Protocol: Incident Investigation
-            </h1>
-          </div>
-
-          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-            <span style={{
-              background: 'rgba(0, 200, 233, 0.1)',
-              border: '1px solid rgba(0, 200, 233, 0.3)',
-              padding: '4px 10px',
-              borderRadius: '4px',
-              fontSize: '11px',
-              color: '#00c8e9',
-              fontWeight: 700,
-            }}>
-              TEAM: {caseState?.teamId || teamId || 'INVITATION REQUIRED'}
-            </span>
-            {role && (
-              <span style={{
-                background: role === 'detective' ? 'rgba(0, 200, 233, 0.2)' : 'rgba(212, 240, 74, 0.2)',
-                border: `1px solid ${role === 'detective' ? '#00c8e9' : '#d4f04a'}`,
-                color: role === 'detective' ? '#00c8e9' : '#d4f04a',
-                padding: '4px 10px',
-                borderRadius: '4px',
-                fontSize: '11px',
-                fontWeight: 800,
-              }}>
-                {role === 'detective' ? '⌕ LEAD DETECTIVE' : '⌘ FORENSIC ANALYST'}
-              </span>
-            )}
-          </div>
-        </div>
-
-        <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
-          <div style={{ textAlign: 'right' }}>
-            <span style={{ fontSize: '10px', color: '#9fb8c2', textTransform: 'uppercase', letterSpacing: '0.8px', display: 'block' }}>CASE CLOCK</span>
-            <strong style={{ fontSize: '18px', fontFamily: 'monospace', color: remainingTime === '00:00' ? '#ff4d5e' : '#d4f04a' }}>
-              {remainingTime}
-            </strong>
-          </div>
-          <button
-            className="product-btn"
-            style={{
-              fontSize: '12px',
-              padding: '6px 14px',
-              color: '#d4f04a',
-              background: 'rgba(212, 240, 74, 0.12)',
-              border: '1px solid rgba(212, 240, 74, 0.4)',
-              cursor: 'pointer',
-            }}
-            onClick={() => setShowGuidelines(true)}
-          >
-            📋 Briefing
-          </button>
           {onLogout && (
             <button
-              className="product-btn"
+              className="product-btn product-btn--small"
               onClick={onLogout}
-              style={{
-                fontSize: '12px',
-                padding: '6px 12px',
-                background: 'transparent',
-                border: '1px solid rgba(255,255,255,0.2)',
-                color: '#9fb8c2',
-                cursor: 'pointer',
-              }}
             >
-              Logout
+              Log out
             </button>
           )}
         </div>
       </header>
 
-      {/* Main Container */}
-      <main style={{ flex: 1, padding: '24px', display: 'flex', flexDirection: 'column', gap: '20px', zIndex: 2, maxWidth: '1400px', margin: '0 auto', width: '100%', boxSizing: 'border-box' }}>
-        {errorNotice && (
-          <div style={{ background: 'rgba(255, 77, 94, 0.15)', border: '1px solid #ff4d5e', padding: '16px', borderRadius: '8px', color: '#ffb3b8' }}>
-            <strong>Notice:</strong> {errorNotice}
+      <main
+        style={{
+          width: "min(1200px, calc(100% - 32px))",
+          margin: "24px auto",
+          flex: 1,
+        }}
+      >
+        {error && (
+          <div role="alert" style={{ marginBottom: 14, color: "#ffb3b8" }}>
+            {error}
           </div>
         )}
-
-        {/* NOT JOINED SCREEN: Station Selection */}
-        {!role && !loading && (
-          <section style={{ background: '#0a1620', border: '1px solid rgba(0, 200, 233, 0.3)', borderRadius: '12px', padding: '32px', textAlign: 'center', maxWidth: '800px', margin: '40px auto' }}>
-            <span style={{ color: '#00c8e9', fontSize: '12px', fontWeight: 800, letterSpacing: '1.5px', textTransform: 'uppercase' }}>IDENTITY CHECK & STATION CLAIM</span>
-            <h2 style={{ fontSize: '26px', margin: '10px 0 16px', fontWeight: 800 }}>Choose Your Investigation Station</h2>
-            <p style={{ color: '#9fb8c2', fontSize: '14px', lineHeight: 1.6, maxWidth: '620px', margin: '0 auto 32px' }}>
-              Round 3 operates on an authoritative cooperative case structure. The <strong>Lead Detective</strong> joins using the team login and receives a one-time invitation code. The <strong>Forensic Analyst</strong> joins from their device using that invitation.
+        {notice && (
+          <div role="status" style={{ marginBottom: 14, color: "#d4f04a" }}>
+            {notice}
+          </div>
+        )}
+        {loading ? (
+          <section
+            style={{ padding: 20, background: "#0a1620", borderRadius: 8 }}
+          >
+            Loading your investigation…
+          </section>
+        ) : !role ? (
+          <section
+            style={{
+              maxWidth: 680,
+              margin: "40px auto",
+              padding: 24,
+              background: "#0a1620",
+              border: "1px solid rgba(0,200,233,.22)",
+              borderRadius: 10,
+            }}
+          >
+            <h2>Start the investigation</h2>
+            <p style={{ color: "#9fb8c2" }}>
+              At 2:13 a.m., a restricted set of HELIX files was moved to a
+              temporary holding area inside the complex. The receipt lists no
+              approved project number for the move. Two minutes later, the
+              summary no longer showed that temporary maintenance access had
+              been used. You and a partner investigate from separate screens:
+              the Detective speaks with people and checks physical records,
+              while the Analyst checks computer activity and file records. Share
+              what you find to work out what happened.
             </p>
-
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px', textAlign: 'left' }}>
-              <div style={{ background: 'rgba(0, 200, 233, 0.05)', border: '1px solid rgba(0, 200, 233, 0.3)', borderRadius: '8px', padding: '20px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
-                <div>
-                  <span style={{ fontSize: '11px', color: '#00c8e9', fontWeight: 800 }}>STATION 01 // PRIMARY DEVICE</span>
-                  <h3 style={{ fontSize: '18px', margin: '8px 0', color: '#fff' }}>Lead Detective</h3>
-                  <p style={{ fontSize: '13px', color: '#9fb8c2', lineHeight: 1.5 }}>
-                    Inspects access logs, reviews witness debriefs, manages physical evidence, and coordinates the suspect dossier.
-                  </p>
-                </div>
+            <div style={{ display: "grid", gap: 18 }}>
+              {!caseState?.roles?.detective && (
                 <button
-                  onClick={handleJoinDetective}
                   className="product-btn product-btn--primary"
-                  style={{ width: '100%', marginTop: '20px', padding: '10px', fontSize: '13px', fontWeight: 800 }}
+                  disabled={busy || roundStatus !== "running"}
+                  onClick={() => void claimRole("/join", {}, "detective")}
                 >
-                  Claim Lead Detective Station ↗
+                  Join as Detective
                 </button>
-              </div>
-
-              <div style={{ background: 'rgba(212, 240, 74, 0.05)', border: '1px solid rgba(212, 240, 74, 0.3)', borderRadius: '8px', padding: '20px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
-                <div>
-                  <span style={{ fontSize: '11px', color: '#d4f04a', fontWeight: 800 }}>STATION 02 // SECOND DEVICE</span>
-                  <h3 style={{ fontSize: '18px', margin: '8px 0', color: '#fff' }}>Forensic Analyst</h3>
-                  <p style={{ fontSize: '13px', color: '#9fb8c2', lineHeight: 1.5 }}>
-                    Analyzes network packet dumps, decrypts intercepted auth payloads, and corroborates digital timestamps.
-                  </p>
-                  <div style={{ marginTop: '12px' }}>
-                    <input
-                      type="text"
-                      placeholder="Paste 43-character invite code..."
-                      value={inviteInput}
-                      onChange={(e) => setInviteInput(e.target.value)}
-                      style={{ width: '100%', padding: '8px 12px', background: '#050d14', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '4px', color: '#fff', fontSize: '12px', boxSizing: 'border-box' }}
-                    />
-                  </div>
-                </div>
+              )}
+              <form
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  void claimRole("/join/analyst", { invite }, "analyst");
+                }}
+              >
+                <label htmlFor="analyst-invite">Partner invitation code</label>
+                <input
+                  id="analyst-invite"
+                  value={inviteInput}
+                  onChange={(event) => setInviteInput(event.target.value)}
+                  autoComplete="off"
+                  style={{
+                    display: "block",
+                    width: "100%",
+                    boxSizing: "border-box",
+                    margin: "8px 0 14px",
+                    padding: 10,
+                    color: "#e6f4f8",
+                    background: "#050d14",
+                    border: "1px solid rgba(255,255,255,.2)",
+                    borderRadius: 5,
+                  }}
+                />
                 <button
-                  onClick={handleJoinAnalyst}
-                  className="product-btn"
-                  style={{ width: '100%', marginTop: '20px', padding: '10px', fontSize: '13px', fontWeight: 800, background: '#d4f04a', color: '#000', border: 0 }}
+                  className="product-btn product-btn--primary"
+                  disabled={busy || !invite}
                 >
-                  Join via Invitation ↗
+                  Join as Analyst
                 </button>
-              </div>
+              </form>
             </div>
           </section>
-        )}
-
-        {/* ACTIVE WORKSPACE */}
-        {role && caseState && (
+        ) : (
           <>
-            {/* Top Stat Ribbon & Analyst Invitation Bar */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px' }}>
-              <div style={{ background: '#0a1620', border: '1px solid rgba(0,200,233,0.2)', padding: '14px 18px', borderRadius: '8px' }}>
-                <span style={{ fontSize: '10px', color: '#9fb8c2', fontWeight: 700 }}>EVIDENCE COMMITTED</span>
-                <strong style={{ fontSize: '22px', display: 'block', color: '#00c8e9', marginTop: '4px' }}>
-                  {clues.length} / 4
-                </strong>
-              </div>
-              <div style={{ background: '#0a1620', border: '1px solid rgba(0,200,233,0.2)', padding: '14px 18px', borderRadius: '8px' }}>
-                <span style={{ fontSize: '10px', color: '#9fb8c2', fontWeight: 700 }}>NETWORK DECRYPTION</span>
-                <strong style={{ fontSize: '22px', display: 'block', color: caseState.decrypted ? '#d4f04a' : '#ff4d5e', marginTop: '4px' }}>
-                  {caseState.decrypted ? 'DECRYPTED ✓' : 'LOCKED ✗'}
-                </strong>
-              </div>
-              <div style={{ background: '#0a1620', border: '1px solid rgba(0,200,233,0.2)', padding: '14px 18px', borderRadius: '8px' }}>
-                <span style={{ fontSize: '10px', color: '#9fb8c2', fontWeight: 700 }}>CASE CONFIDENCE</span>
-                <strong style={{ fontSize: '22px', display: 'block', color: '#d4f04a', marginTop: '4px' }}>
-                  {confidencePercent}%
-                </strong>
-              </div>
-              <div style={{ background: '#0a1620', border: '1px solid rgba(0,200,233,0.2)', padding: '14px 18px', borderRadius: '8px' }}>
-                <span style={{ fontSize: '10px', color: '#9fb8c2', fontWeight: 700 }}>ACCUSATION STATUS</span>
-                <strong style={{ fontSize: '16px', display: 'block', color: isAgreed ? '#d4f04a' : isPendingApproval ? '#00c8e9' : '#9fb8c2', marginTop: '8px' }}>
-                  {isAgreed ? 'CASE CLOSED ✓' : isPendingApproval ? 'PENDING APPROVAL ⏳' : 'UNRESOLVED'}
-                </strong>
-              </div>
-            </div>
-
-            {/* Detective Analyst Share Bar */}
-            {analystInviteCode && role === 'detective' && !caseState.roles?.analyst && (
-              <div style={{ background: 'rgba(0, 200, 233, 0.08)', border: '1px solid #00c8e9', padding: '14px 20px', borderRadius: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <div>
-                  <strong style={{ color: '#00c8e9', fontSize: '13px' }}>Share with Forensic Analyst:</strong>
-                  <span style={{ marginLeft: '10px', fontFamily: 'monospace', fontSize: '13px', background: '#050d14', padding: '4px 10px', borderRadius: '4px', border: '1px solid rgba(0,200,233,0.3)', color: '#fff' }}>
-                    {analystInviteCode}
-                  </span>
-                  {analystInviteExpiresAt && <small style={{ display: 'block', marginTop: '6px', color: '#9fb8c2' }}>Expires {new Date(analystInviteExpiresAt).toLocaleTimeString()}</small>}
-                </div>
-                <button
-                  className="product-btn product-btn--small"
-                  onClick={() => {
-                    navigator.clipboard.writeText(analystInviteCode);
-                    showToast('Invite code copied to clipboard!', 'success');
-                  }}
-                  style={{ background: '#00c8e9', color: '#000', border: 0, fontWeight: 700 }}
-                >
-                  Copy Invite
-                </button>
-                <button
-                  className="product-btn product-btn--small"
-                  onClick={handleRenewInvite}
-                  style={{ background: 'transparent', color: '#00c8e9', border: '1px solid #00c8e9', fontWeight: 700 }}
-                >
-                  Renew Invite
-                </button>
-              </div>
-            )}
-
-            {/* Nav Tabs */}
-            <nav style={{ display: 'flex', gap: '8px', borderBottom: '1px solid rgba(0,200,233,0.2)', paddingBottom: '12px' }}>
-              {[
-                { id: 'overview', label: '◈ Case Overview' },
-                { id: 'evidence', label: `▧ Evidence Ledger (${clues.length}/4)` },
-                { id: 'forensics', label: '⌘ Forensic Terminal' },
-                { id: 'suspects', label: '◎ Suspect Dossiers' },
-                { id: 'accusation', label: isAgreed ? '⚑ Resolution (Completed)' : '⚑ Final Accusation' },
-              ].map((tab) => (
-                <button
-                  key={tab.id}
-                  onClick={() => setActiveTab(tab.id)}
-                  style={{
-                    background: activeTab === tab.id ? 'rgba(0, 200, 233, 0.15)' : 'transparent',
-                    border: `1px solid ${activeTab === tab.id ? '#00c8e9' : 'rgba(255,255,255,0.1)'}`,
-                    color: activeTab === tab.id ? '#00c8e9' : '#9fb8c2',
-                    padding: '8px 16px',
-                    borderRadius: '6px',
-                    fontSize: '12px',
-                    fontWeight: 700,
-                    cursor: 'pointer',
-                  }}
-                >
-                  {tab.label}
-                </button>
-              ))}
-            </nav>
-
-            {/* TAB 1: OVERVIEW */}
-            {activeTab === 'overview' && (
-              <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr', gap: '20px' }}>
-                <div style={{ background: '#0a1620', border: '1px solid rgba(0,200,233,0.2)', borderRadius: '8px', padding: '24px' }}>
-                  <span style={{ fontSize: '11px', color: '#00c8e9', fontWeight: 800 }}>MISSION BRIEF // INCIDENT CC-03-017</span>
-                  <h3 style={{ fontSize: '20px', margin: '8px 0 14px', fontWeight: 800 }}>The Helix Archive Breach</h3>
-                  <p style={{ color: '#9fb8c2', lineHeight: 1.6, fontSize: '14px' }}>
-                    At precisely 02:13 UTC, unauthorized telemetry was detected within the secure bio-research archive. The perpetrator utilized an internal access card and an encrypted cryptographic token (HELIX) to gain administrative execution privileges.
-                  </p>
-                  <p style={{ color: '#9fb8c2', lineHeight: 1.6, fontSize: '14px', marginTop: '10px' }}>
-                    <strong>Your Objective:</strong> Gather the 4 pieces of verified evidence, decrypt the captured token in the Forensic Terminal, cross-reference the suspect alibis, and submit a joint accusation with partner approval before the timer expires.
-                  </p>
-
-                  <div style={{ marginTop: '24px', display: 'flex', gap: '12px' }}>
-                    <button onClick={() => setActiveTab('evidence')} className="product-btn product-btn--primary" style={{ padding: '8px 18px', fontSize: '12px' }}>
-                      Review Evidence Ledger →
-                    </button>
-                    <button onClick={() => setActiveTab('forensics')} className="product-btn product-btn--light" style={{ padding: '8px 18px', fontSize: '12px' }}>
-                      Open Forensic Terminal →
-                    </button>
-                  </div>
-                </div>
-
-                {/* Activity Feed */}
-                <div style={{ background: '#0a1620', border: '1px solid rgba(0,200,233,0.2)', borderRadius: '8px', padding: '24px' }}>
-                  <span style={{ fontSize: '11px', color: '#00c8e9', fontWeight: 800 }}>INCIDENT ACTIVITY TELEMETRY</span>
-                  <div style={{ marginTop: '12px', display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '340px', overflowY: 'auto' }}>
-                    {(caseState.activity || []).slice().reverse().map((act, idx) => (
-                      <div key={idx} style={{ padding: '10px 12px', background: 'rgba(255,255,255,0.03)', borderLeft: `3px solid ${act.role === 'detective' ? '#00c8e9' : act.role === 'analyst' ? '#d4f04a' : '#9fb8c2'}`, borderRadius: '4px', fontSize: '12px' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                          <strong style={{ color: act.role === 'detective' ? '#00c8e9' : '#d4f04a' }}>
-                            {act.role === 'detective' ? 'Lead Detective' : act.role === 'analyst' ? 'Forensic Analyst' : 'System'}
-                          </strong>
-                          <span style={{ color: '#9fb8c2', fontSize: '10px' }}>
-                            {new Date(act.at).toLocaleTimeString()}
-                          </span>
-                        </div>
-                        <p style={{ margin: 0, color: '#e6f4f8' }}>{act.message}</p>
-                      </div>
-                    ))}
-                    {(!caseState.activity || caseState.activity.length === 0) && (
-                      <span style={{ color: '#9fb8c2', fontSize: '12px' }}>No actions logged yet.</span>
-                    )}
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* TAB 2: EVIDENCE LEDGER */}
-            {activeTab === 'evidence' && (
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '16px' }}>
-                {['ev1', 'ev2', 'ev3', 'ev4'].map((key) => {
-                  const item = EVIDENCE_ITEMS[key];
-                  const inLedger = cluesMap.has(key);
-                  const isDecryptable = key === 'ev4';
-
-                  return (
-                    <div
-                      key={key}
+            <div
+              style={{
+                display: "flex",
+                flexWrap: "wrap",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: 12,
+                marginBottom: 16,
+                padding: 14,
+                background: "#0a1620",
+                border: "1px solid rgba(0,200,233,.2)",
+                borderRadius: 8,
+              }}
+            >
+              <span>
+                {roleLabel} ·{" "}
+                {caseState?.roles?.analyst
+                  ? "Partner is here"
+                  : "Waiting for your partner"}
+              </span>
+              {analystInvite &&
+                role === "detective" &&
+                !caseState?.roles?.analyst && (
+                  <div
+                    style={{
+                      display: "flex",
+                      flexWrap: "wrap",
+                      alignItems: "center",
+                      gap: 8,
+                    }}
+                  >
+                    <code
                       style={{
-                        background: inLedger ? 'rgba(0, 200, 233, 0.06)' : '#0a1620',
-                        border: `1px solid ${inLedger ? '#00c8e9' : 'rgba(255,255,255,0.1)'}`,
-                        borderRadius: '8px',
-                        padding: '20px',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        justifyContent: 'space-between',
+                        padding: "6px 8px",
+                        background: "#050d14",
+                        overflowWrap: "anywhere",
                       }}
                     >
-                      <div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                          <span style={{ fontSize: '11px', color: '#00c8e9', fontWeight: 800 }}>{item.id} // {item.source}</span>
-                          <span style={{
-                            fontSize: '10px',
-                            fontWeight: 800,
-                            padding: '2px 8px',
-                            borderRadius: '4px',
-                            background: inLedger ? '#00c8e9' : 'rgba(255,255,255,0.1)',
-                            color: inLedger ? '#000' : '#9fb8c2',
-                          }}>
-                            {inLedger ? 'IN LEDGER ✓' : 'UNCOMMITTED'}
-                          </span>
-                        </div>
-                        <h4 style={{ fontSize: '16px', margin: '4px 0 10px', color: '#fff' }}>{item.title}</h4>
-                        <p style={{ fontSize: '13px', color: inLedger ? '#e6f4f8' : '#9fb8c2', lineHeight: 1.5 }}>
-                          {item.detail}
-                        </p>
-                        <p style={{ fontSize: '11px', color: '#00c8e9', fontStyle: 'italic', marginTop: '8px' }}>
-                          💡 {item.hint}
-                        </p>
-                      </div>
-
-                      <div style={{ marginTop: '16px' }}>
-                        {inLedger ? (
-                          <span style={{ fontSize: '12px', color: '#00c8e9', fontWeight: 700 }}>
-                            ✓ Added by {cluesMap.get(key)?.addedBy === 'detective' ? 'Lead Detective' : 'Forensic Analyst'}
-                          </span>
-                        ) : isDecryptable ? (
-                          <button
-                            onClick={() => setActiveTab('forensics')}
-                            className="product-btn product-btn--light"
-                            style={{ fontSize: '12px', padding: '6px 14px' }}
-                          >
-                            Go to Terminal to Decrypt →
-                          </button>
-                        ) : (
-                          <button
-                            onClick={() => handleAddEvidence(key)}
-                            className="product-btn product-btn--primary"
-                            style={{ fontSize: '12px', padding: '6px 14px' }}
-                          >
-                            Commit to Case Ledger ＋
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-
-            {/* TAB 3: FORENSIC TERMINAL */}
-            {activeTab === 'forensics' && (
-              <div style={{ background: '#0a1620', border: '1px solid rgba(0,200,233,0.3)', borderRadius: '8px', padding: '24px' }}>
-                <span style={{ fontSize: '11px', color: '#d4f04a', fontWeight: 800 }}>NETWORK INTERCEPTION TERMINAL</span>
-                <h3 style={{ fontSize: '20px', margin: '8px 0 14px', fontWeight: 800 }}>Packet #884 Cryptographic Analysis</h3>
-                <p style={{ color: '#9fb8c2', fontSize: '13px', lineHeight: 1.6, maxWidth: '750px' }}>
-                  Border sniffers captured an encrypted handshake between the rogue terminal and the internal archive. An analyst note recovered from memory registers hints at the research project codename: <strong>HELIX</strong>.
-                </p>
-
-                <div style={{ marginTop: '20px', background: '#050d14', border: '1px solid rgba(0,200,233,0.2)', borderRadius: '6px', padding: '16px', fontFamily: 'monospace', fontSize: '12px', color: '#00c8e9' }}>
-                  <div>FRAME: 0x2A14 // PROTOCOL: TLSv1.3 // CIPHER: CHACHA20-POLY1305</div>
-                  <div>PAYLOAD SHA-256: 3c9b7e...41a0e</div>
-                  <div>STATUS: {caseState.decrypted ? 'DECRYPTED — EV-004 COMMITTED' : 'AWAITING KEY DECRYPTION'}</div>
-                </div>
-
-                {!caseState.decrypted ? (
-                  <form onSubmit={handleDecrypt} style={{ marginTop: '20px', display: 'flex', gap: '12px', alignItems: 'center' }}>
-                    <input
-                      type="text"
-                      placeholder="Enter decryption token (e.g. HELIX)..."
-                      value={decryptToken}
-                      onChange={(e) => setDecryptToken(e.target.value)}
-                      style={{ padding: '10px 14px', background: '#050d14', border: '1px solid rgba(0,200,233,0.4)', borderRadius: '4px', color: '#fff', fontSize: '13px', width: '320px' }}
-                    />
-                    <button type="submit" className="product-btn" style={{ padding: '10px 20px', background: '#d4f04a', color: '#000', border: 0, fontWeight: 800, fontSize: '13px' }}>
-                      Execute Decryption ⚡
+                      {analystInvite}
+                    </code>
+                    <button
+                      className="product-btn product-btn--small"
+                      onClick={() => void copyInvite()}
+                    >
+                      Copy partner code
                     </button>
-                  </form>
-                ) : (
-                  <div style={{ marginTop: '20px', padding: '12px 16px', background: 'rgba(212, 240, 74, 0.1)', border: '1px solid #d4f04a', borderRadius: '4px', color: '#d4f04a', fontSize: '13px', fontWeight: 700 }}>
-                    ✓ Decryption Succeeded. Recovered Token: HELIX. Packet Accepted at 02:13:02. Evidence EV-004 is active in ledger.
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* TAB 4: SUSPECT DOSSIERS */}
-            {activeTab === 'suspects' && (
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '16px' }}>
-                {SUSPECTS.map((suspect) => (
-                  <div key={suspect.name} style={{ background: '#0a1620', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px', padding: '20px' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <h4 style={{ fontSize: '18px', margin: 0, color: '#fff' }}>{suspect.name}</h4>
-                      <span style={{
-                        fontSize: '10px',
-                        fontWeight: 800,
-                        padding: '2px 8px',
-                        borderRadius: '4px',
-                        background: suspect.risk === 'HIGH' ? '#ff4d5e' : suspect.risk === 'MEDIUM' ? '#d4f04a' : 'rgba(255,255,255,0.1)',
-                        color: suspect.risk === 'HIGH' ? '#fff' : suspect.risk === 'MEDIUM' ? '#000' : '#9fb8c2',
-                      }}>
-                        {suspect.risk} RISK
-                      </span>
-                    </div>
-                    <div style={{ fontSize: '12px', color: '#00c8e9', marginTop: '4px', fontWeight: 700 }}>
-                      {suspect.role} · BADGE {suspect.badge}
-                    </div>
-                    <p style={{ fontSize: '12px', color: '#9fb8c2', marginTop: '10px', lineHeight: 1.5 }}>
-                      <strong>Access Scope:</strong> {suspect.access}
-                    </p>
-                    <p style={{ fontSize: '12px', color: '#e6f4f8', marginTop: '6px', lineHeight: 1.5 }}>
-                      <strong>Alibi Claim:</strong> {suspect.alibi}
-                    </p>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {/* TAB 5: FINAL ACCUSATION */}
-            {activeTab === 'accusation' && (
-              <div style={{ background: '#0a1620', border: '1px solid rgba(0,200,233,0.3)', borderRadius: '8px', padding: '28px' }}>
-                <span style={{ fontSize: '11px', color: '#00c8e9', fontWeight: 800 }}>CASE RESOLUTION // FORMAL ACCUSATION</span>
-                <h3 style={{ fontSize: '20px', margin: '8px 0 16px', fontWeight: 800 }}>Synthesize Evidence & Name the Culprit</h3>
-
-                {/* If already agreed */}
-                {isAgreed ? (
-                  <div style={{ background: 'rgba(212, 240, 74, 0.1)', border: '1px solid #d4f04a', borderRadius: '8px', padding: '24px', textAlign: 'center' }}>
-                    <span style={{ fontSize: '32px' }}>🏆</span>
-                    <h4 style={{ fontSize: '22px', margin: '12px 0 6px', color: '#d4f04a' }}>Case Solved & Verified</h4>
-                    <p style={{ color: '#e6f4f8', fontSize: '14px', maxWidth: '540px', margin: '0 auto 16px', lineHeight: 1.6 }}>
-                      Both Lead Detective and Forensic Analyst agreed on the formal accusation against <strong>{caseState.accusation.suspect}</strong> supported by <strong>{EVIDENCE_ITEMS[caseState.accusation.evidenceKey]?.id}</strong>.
-                    </p>
-                    <div style={{ display: 'inline-block', background: '#050d14', border: '1px solid #d4f04a', padding: '8px 20px', borderRadius: '4px', fontSize: '13px', fontWeight: 800, color: '#d4f04a' }}>
-                      TOURNAMENT SCORE COMMITTED TO LEADERBOARD
-                    </div>
-                  </div>
-                ) : isPendingApproval ? (
-                  <div style={{ background: 'rgba(0, 200, 233, 0.08)', border: '1px solid #00c8e9', borderRadius: '8px', padding: '24px' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
-                      <h4 style={{ fontSize: '18px', margin: 0, color: '#fff' }}>Accusation Filed — Awaiting Partner Approval</h4>
-                      <span style={{ fontSize: '11px', background: '#00c8e9', color: '#000', padding: '3px 8px', borderRadius: '4px', fontWeight: 800 }}>
-                        SUBMITTED BY {caseState.accusation.submittedBy.toUpperCase()}
-                      </span>
-                    </div>
-                    <div style={{ fontSize: '14px', lineHeight: 1.6, color: '#e6f4f8' }}>
-                      <p><strong>Accused Suspect:</strong> {caseState.accusation.suspect}</p>
-                      <p><strong>Key Evidence:</strong> {EVIDENCE_ITEMS[caseState.accusation.evidenceKey]?.id} — {EVIDENCE_ITEMS[caseState.accusation.evidenceKey]?.title}</p>
-                      <p><strong>Reasoning:</strong> {caseState.accusation.reasoning}</p>
-                    </div>
-
-                    {canApprove ? (
-                      <div style={{ marginTop: '20px' }}>
-                        <button
-                          onClick={handleApproveAccusation}
-                          className="product-btn"
-                          style={{ background: '#d4f04a', color: '#000', border: 0, fontWeight: 800, padding: '10px 24px', fontSize: '14px', cursor: 'pointer' }}
-                        >
-                          Approve Accusation & Close Case ✓
-                        </button>
-                      </div>
-                    ) : (
-                      <div style={{ marginTop: '16px', color: '#9fb8c2', fontSize: '13px', fontStyle: 'italic' }}>
-                        Waiting for your partner ({caseState.accusation.submittedBy === 'detective' ? 'Forensic Analyst' : 'Lead Detective'}) to review and approve this filing.
-                      </div>
+                    <button
+                      className="product-btn product-btn--small"
+                      disabled={busy}
+                      onClick={() => void renewInvite()}
+                    >
+                      Create a new partner code
+                    </button>
+                    {inviteExpiresAt && (
+                      <small>
+                        Code expires at{" "}
+                        {new Date(inviteExpiresAt).toLocaleTimeString()}
+                      </small>
                     )}
                   </div>
-                ) : (
-                  <form onSubmit={handleSubmitAccusation} style={{ display: 'flex', flexDirection: 'column', gap: '18px', maxWidth: '640px' }}>
-                    <div>
-                      <label style={{ fontSize: '11px', color: '#00c8e9', fontWeight: 700, display: 'block', marginBottom: '6px' }}>NAME SUSPECT</label>
-                      <select
-                        value={accusedSuspect}
-                        onChange={(e) => setAccusedSuspect(e.target.value)}
-                        style={{ width: '100%', padding: '10px 12px', background: '#050d14', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '4px', color: '#fff', fontSize: '13px' }}
-                      >
-                        {SUSPECTS.map((s) => (
-                          <option key={s.name} value={s.name}>{s.name} ({s.role})</option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <div>
-                      <label style={{ fontSize: '11px', color: '#00c8e9', fontWeight: 700, display: 'block', marginBottom: '6px' }}>SUPPORTING EVIDENCE KEY</label>
-                      <select
-                        value={accusedEvidence}
-                        onChange={(e) => setAccusedEvidence(e.target.value)}
-                        style={{ width: '100%', padding: '10px 12px', background: '#050d14', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '4px', color: '#fff', fontSize: '13px' }}
-                      >
-                        {['ev1', 'ev2', 'ev3', 'ev4'].map((k) => (
-                          <option key={k} value={k} disabled={!cluesMap.has(k)}>
-                            {EVIDENCE_ITEMS[k]?.id} — {EVIDENCE_ITEMS[k]?.title} {!cluesMap.has(k) ? '(Not yet in ledger)' : '✓'}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <div>
-                      <label style={{ fontSize: '11px', color: '#00c8e9', fontWeight: 700, display: 'block', marginBottom: '6px' }}>CASE REASONING & TIMELINE CORROBORATION (Min 20 chars)</label>
-                      <textarea
-                        rows={4}
-                        placeholder="Detail how the physical and digital evidence disproves the alibi..."
-                        value={accusedReasoning}
-                        onChange={(e) => setAccusedReasoning(e.target.value)}
-                        style={{ width: '100%', padding: '10px 12px', background: '#050d14', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '4px', color: '#fff', fontSize: '13px', boxSizing: 'border-box' }}
-                      />
-                    </div>
-
-                    <button
-                      type="submit"
-                      className="product-btn product-btn--primary"
-                      style={{ padding: '12px 24px', fontSize: '14px', fontWeight: 800, alignSelf: 'flex-start' }}
-                    >
-                      File Formal Accusation ↗
-                    </button>
-                  </form>
                 )}
-              </div>
-            )}
+            </div>
+            <CaseBoard
+              teamId={caseState?.teamId || teamId}
+              role={role}
+              caseState={caseState}
+              setCaseState={setCaseState}
+              locked={mutationsLocked}
+            />
           </>
         )}
       </main>
 
-      {/* Toast Notice */}
-      {toastMessage && (
-        <div style={{
-          position: 'fixed',
-          bottom: '24px',
-          right: '24px',
-          background: toastMessage.type === 'error' ? '#ff4d5e' : toastMessage.type === 'success' ? '#00c8e9' : '#d4f04a',
-          color: '#000',
-          padding: '12px 20px',
-          borderRadius: '6px',
-          fontWeight: 800,
-          boxShadow: '0 8px 24px rgba(0,0,0,0.6)',
-          zIndex: 100,
-        }}>
-          {toastMessage.msg}
-        </div>
-      )}
-
-      {/* Guidelines Modal */}
       <InvestigationGuidelinesModal
         isOpen={showGuidelines}
         onClose={() => setShowGuidelines(false)}
@@ -963,4 +466,3 @@ export default function InvestigationApp({
     </div>
   );
 }
-

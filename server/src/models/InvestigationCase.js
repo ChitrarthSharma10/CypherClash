@@ -25,7 +25,18 @@ const accusationSchema = new mongoose.Schema(
   {
     suspect: {
       type: String,
-      enum: ["Mara Chen", "Idris Khan", "Sofia Laurent", "Evan Walsh"],
+      enum: [
+        "Mara Chen",
+        "Idris Khan",
+        "Sofia Laurent",
+        "Evan Walsh",
+        "Dr. Nisha Rao",
+        "Victor Hale",
+        "Anika Bose",
+        "Gabriel Price",
+        "Leena Kapoor",
+        "Tomas Varga",
+      ],
       required: true,
     },
     evidenceKey: {
@@ -49,7 +60,18 @@ const finalAccusationSchema = new mongoose.Schema(
     submitted: { type: Boolean, required: true },
     suspect: {
       type: String,
-      enum: ["Mara Chen", "Idris Khan", "Sofia Laurent", "Evan Walsh"],
+      enum: [
+        "Mara Chen",
+        "Idris Khan",
+        "Sofia Laurent",
+        "Evan Walsh",
+        "Dr. Nisha Rao",
+        "Victor Hale",
+        "Anika Bose",
+        "Gabriel Price",
+        "Leena Kapoor",
+        "Tomas Varga",
+      ],
       default: null,
     },
     evidenceKey: {
@@ -75,6 +97,7 @@ const finalAccusationSchema = new mongoose.Schema(
 const finalResultSchema = new mongoose.Schema(
   {
     evidence: { type: [clueSchema], required: true },
+    investigation: { type: mongoose.Schema.Types.Mixed, default: () => ({}) },
     decryption: {
       succeeded: { type: Boolean, required: true },
       succeededAt: { type: Date, default: null },
@@ -97,6 +120,12 @@ export const investigationCaseSchema = new mongoose.Schema(
     inviteHash: { type: String, default: null, select: false },
     inviteExpiresAt: { type: Date, default: null },
     clues: { type: [clueSchema], default: [] },
+    discoveredEvidence: { type: [String], default: [] },
+    solvedPuzzles: { type: [String], default: [] },
+    interviewFindings: { type: [String], default: [] },
+    resolvedHypotheses: { type: [String], default: [] },
+    gameState: { type: mongoose.Schema.Types.Mixed, default: () => ({}) },
+    reportAttempts: { type: Number, default: 0 },
     decrypted: { type: Boolean, default: false },
     decryptedAt: { type: Date, default: null },
     wrongAttempts: { type: Number, default: 0 },

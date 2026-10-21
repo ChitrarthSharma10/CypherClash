@@ -200,6 +200,7 @@ test("double finish scores only once", async () => {
     ]);
     const statuses = [first.status, second.status].sort();
     assert.deepEqual(statuses, [200, 409]);
+    await endRound(round, "game-test-admin");
     assert.equal((await finishGame(cookie)).status, 409);
     assert.equal(
       await ScoreEntry.countDocuments({
@@ -212,6 +213,27 @@ test("double finish scores only once", async () => {
   } finally {
     gameValidators.set("maze", originalValidator);
   }
+});
+
+test("finish after an unrelated round ends does not match an older completed session", async () => {
+  await startRound(round, 300, "game-test-admin");
+  await endRound(round, "game-test-admin");
+  await GameSession.create({
+    teamId: teamA,
+    round,
+    attemptNo: 1,
+    game: "maze",
+    seed: "prior-round-seed",
+    startedAt: new Date(),
+    deadline: new Date(Date.now() + 60_000),
+    status: "submitted",
+  });
+  await startRound(round + 1, 300, "game-test-admin");
+  await endRound(round + 1, "game-test-admin");
+
+  const cookie = await teamCookie(teamA);
+  const response = await finishGame(cookie);
+  assert.equal(response.status, 404);
 });
 
 test("validator rejection leaves the session active and logs only the reason", async () => {

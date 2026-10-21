@@ -8,6 +8,8 @@ import { InvestigationCase } from "../src/models/InvestigationCase.js";
 import { Admin } from "../src/models/Admin.js";
 import { RoundState } from "../src/models/RoundState.js";
 import { Team } from "../src/models/Team.js";
+import { TeamProgression } from "../src/models/TeamProgression.js";
+import { ScoreEntry } from "../src/models/ScoreEntry.js";
 import {
   endRound,
   initializeRoundStates,
@@ -128,6 +130,12 @@ before(async () => {
     name: `Test ${teamId}`,
     passwordHash: await hashPassword(password),
   });
+  await TeamProgression.create({
+    teamId,
+    initialRound: 3,
+    maxEligibleRound: 3,
+    waivedRounds: [1, 2],
+  });
   await Admin.create({
     username: adminUsername,
     passwordHash: await hashPassword(adminPassword),
@@ -139,6 +147,7 @@ before(async () => {
 
 beforeEach(async () => {
   await InvestigationCase.deleteMany({ teamId });
+  await ScoreEntry.deleteMany({ teamId, round: 3, game: "investigation" });
   await RoundState.deleteMany({ round: 3 });
   await initializeRoundStates();
 });
@@ -146,7 +155,9 @@ beforeEach(async () => {
 after(async () => {
   if (server) await new Promise((resolve) => server.close(resolve));
   await InvestigationCase.deleteMany({ teamId });
+  await ScoreEntry.deleteMany({ teamId, round: 3, game: "investigation" });
   await Team.deleteMany({ teamId });
+  await TeamProgression.deleteMany({ teamId });
   await Admin.deleteOne({ username: adminUsername });
   await RoundState.deleteMany({ round: 3 });
   await sessionStore.close();
@@ -239,6 +250,28 @@ test("detective and analyst roles are claimed once with the existing invite cont
   assert.equal((await joinAnalyst(joined.analystInvite)).status, 401);
 });
 
+test("Round 3 detective admission requires eligible team progression", async () => {
+  await startRound(3, 300, "investigation-progression-test");
+  await TeamProgression.updateOne(
+    { teamId },
+    { $set: { initialRound: 1, maxEligibleRound: 1, waivedRounds: [] } },
+  );
+  try {
+    const response = await joinDetective(await login());
+    assert.equal(response.status, 403);
+    assert.equal(
+      (await response.json()).code,
+      "PROGRESSION_PREREQUISITE_NOT_MET",
+    );
+    assert.equal(await getCase(), null);
+  } finally {
+    await TeamProgression.updateOne(
+      { teamId },
+      { $set: { initialRound: 3, maxEligibleRound: 3, waivedRounds: [1, 2] } },
+    );
+  }
+});
+
 test("Round 3 starts with a fixed 45-minute duration", async () => {
   const started = await startRound(3, 3600, "investigation-duration-test");
   assert.equal(started.durationSec, ROUND3_DURATION_SEC);
@@ -247,6 +280,22 @@ test("Round 3 starts with a fixed 45-minute duration", async () => {
     started.deadline.getTime() - started.startedAt.getTime(),
     2700 * 1000,
   );
+});
+
+test("paused participant state exposes the pause time and server deadline", async () => {
+  const started = await startRound(3, 300, "investigation-pause-test");
+  const detectiveCookie = await login();
+  assert.equal((await joinDetective(detectiveCookie)).status, 201);
+  const paused = await pauseRound(3, "investigation-pause-test");
+  const response = await request("/api/investigation/state", {
+    headers: { cookie: detectiveCookie },
+  });
+  assert.equal(response.status, 200);
+  const payload = await response.json();
+  assert.equal(payload.roundStatus, "paused");
+  assert.equal(payload.deadline, paused.deadline.toISOString());
+  assert.equal(payload.pausedAt, paused.pausedAt.toISOString());
+  assert.equal(payload.deadline, started.deadline.toISOString());
 });
 
 test("the detective can renew an expired invitation without replacing its session", async () => {
@@ -277,14 +326,527 @@ test("the detective can renew an expired invitation without replacing its sessio
   const analyst = await joinAnalyst(renewal.analystInvite);
   assert.equal(analyst.status, 201);
   assert.equal(
-    (await request("/api/investigation/state", {
-      headers: { cookie: detectiveCookie },
-    })).status,
+    (
+      await request("/api/investigation/state", {
+        headers: { cookie: detectiveCookie },
+      })
+    ).status,
     200,
   );
 });
 
-test("evidence 2 and 3 can be collected by either role while evidence 1 is detective-only", async () => {
+test("Case HELIX exposes role-appropriate branches and protects locked evidence", async () => {
+  await startRound(3, 300, "case-helix-branch-test");
+  const detectiveCookie = await login();
+  const joined = await (await joinDetective(detectiveCookie)).json();
+  const analystResponse = await joinAnalyst(joined.analystInvite);
+  const analystCookie = analystResponse.headers
+    .get("set-cookie")
+    .split(";", 1)[0];
+
+  const detectivePayload = await (
+    await request("/api/investigation/case", {
+      headers: { cookie: detectiveCookie },
+    })
+  ).json();
+  assert.equal(detectivePayload.case.suspects.length, 10);
+  assert.equal(detectivePayload.case.evidence.length, 28);
+  assert.equal(
+    detectivePayload.case.evidence.find(({ id }) => id === "EV01").available,
+    true,
+  );
+  assert.equal(
+    detectivePayload.case.evidence.find(({ id }) => id === "EV05").available,
+    false,
+  );
+  assert.equal(
+    detectivePayload.case.evidence.find(({ id }) => id === "EV26").detail,
+    null,
+  );
+  assert.equal(
+    JSON.stringify(detectivePayload).includes("privateSecret"),
+    false,
+  );
+
+  assert.equal(
+    (await post("/api/investigation/case/evidence/EV01", {}, analystCookie))
+      .status,
+    403,
+  );
+  assert.equal(
+    (await post("/api/investigation/case/evidence/EV07", {}, analystCookie))
+      .status,
+    409,
+  );
+  assert.equal(
+    (await post("/api/investigation/case/evidence/EV01", {}, detectiveCookie))
+      .status,
+    201,
+  );
+  const analystPayload = await (
+    await request("/api/investigation/case", {
+      headers: { cookie: analystCookie },
+    })
+  ).json();
+  assert.equal(analystPayload.state.discoveredEvidence.includes("EV01"), true);
+});
+
+test("clock puzzle validates exact answers, role, prerequisites, and shared persistence", async () => {
+  await startRound(3, 300, "case-helix-puzzle-test");
+  const detectiveCookie = await login();
+  const joined = await (await joinDetective(detectiveCookie)).json();
+  const analystResponse = await joinAnalyst(joined.analystInvite);
+  const analystCookie = analystResponse.headers
+    .get("set-cookie")
+    .split(";", 1)[0];
+
+  assert.equal(
+    (
+      await post(
+        "/api/investigation/case/puzzles/clocks",
+        { answer: {} },
+        detectiveCookie,
+      )
+    ).status,
+    403,
+  );
+  assert.equal(
+    (await post("/api/investigation/case/evidence/EV05", {}, analystCookie))
+      .status,
+    201,
+  );
+  assert.equal(
+    (await post("/api/investigation/case/evidence/EV06", {}, analystCookie))
+      .status,
+    201,
+  );
+  assert.equal(
+    (
+      await post(
+        "/api/investigation/case/puzzles/clocks",
+        { answer: {} },
+        analystCookie,
+      )
+    ).status,
+    422,
+  );
+  assert.equal(
+    (await post("/api/investigation/case/evidence/EV07", {}, analystCookie))
+      .status,
+    201,
+  );
+  const incorrect = await post(
+    "/api/investigation/case/puzzles/clocks",
+    {
+      answer: {
+        offsetMinutes: 1,
+        eventOrder: [
+          "maintenance-prepared",
+          "credential-event",
+          "service-relay",
+          "exception-active",
+          "token-accepted-export",
+          "audit-view-changed",
+        ],
+      },
+    },
+    analystCookie,
+  );
+  assert.equal(incorrect.status, 422);
+  const correct = await post(
+    "/api/investigation/case/puzzles/clocks",
+    {
+      answer: {
+        offsetMinutes: 2,
+        eventOrder: [
+          "maintenance-prepared",
+          "credential-event",
+          "service-relay",
+          "exception-active",
+          "token-accepted-export",
+          "audit-view-changed",
+        ],
+      },
+    },
+    analystCookie,
+  );
+  assert.equal(correct.status, 200);
+  assert.equal(
+    (await correct.json()).state.solvedPuzzles.includes("clocks"),
+    true,
+  );
+  const detectiveState = await request("/api/investigation/state", {
+    headers: { cookie: detectiveCookie },
+  });
+  assert.equal(
+    (await detectiveState.json()).state.solvedPuzzles.includes("clocks"),
+    true,
+  );
+});
+
+test("interview follow-ups require evidence and persist their transcript for both players", async () => {
+  await startRound(3, 300, "case-helix-interview-test");
+  const detectiveCookie = await login();
+  const joined = await (await joinDetective(detectiveCookie)).json();
+  const analystResponse = await joinAnalyst(joined.analystInvite);
+  const analystCookie = analystResponse.headers
+    .get("set-cookie")
+    .split(";", 1)[0];
+  const body = { suspectId: "mara", topicId: "badge", evidenceId: "EV01" };
+
+  assert.equal(
+    (await post("/api/investigation/case/interviews", body, analystCookie))
+      .status,
+    403,
+  );
+  assert.equal(
+    (await post("/api/investigation/case/interviews", body, detectiveCookie))
+      .status,
+    409,
+  );
+  assert.equal(
+    (await post("/api/investigation/case/evidence/EV01", {}, detectiveCookie))
+      .status,
+    201,
+  );
+  const response = await post(
+    "/api/investigation/case/interviews",
+    body,
+    detectiveCookie,
+  );
+  assert.equal(response.status, 200);
+  const payload = await response.json();
+  assert.match(payload.answer, /badge number.*who was holding it/i);
+  assert.equal(payload.unlockedEvidence, "EV10");
+  const shared = await (
+    await request("/api/investigation/state", {
+      headers: { cookie: analystCookie },
+    })
+  ).json();
+  assert.equal(shared.state.discoveredEvidence.includes("EV10"), true);
+  assert.equal(
+    shared.state.gameState.transcripts["mara:badge"],
+    payload.answer,
+  );
+});
+
+test("legacy four-clue accusation cannot bypass the structured report", async () => {
+  await startRound(3, 300, "case-helix-retirement-test");
+  const detectiveCookie = await login();
+  const joined = await (await joinDetective(detectiveCookie)).json();
+  const analystResponse = await joinAnalyst(joined.analystInvite);
+  const analystCookie = analystResponse.headers
+    .get("set-cookie")
+    .split(";", 1)[0];
+  const legacyReport = {
+    suspect: "Idris Khan",
+    evidenceKey: "ev1",
+    reasoning: "Legacy accusation must not finalize this case.",
+  };
+  assert.equal(
+    (await post("/api/investigation/accusation", legacyReport, detectiveCookie))
+      .status,
+    410,
+  );
+  assert.equal(
+    (await post("/api/investigation/accusation/approve", {}, analystCookie))
+      .status,
+    410,
+  );
+  assert.equal((await getCase()).accusation, null);
+});
+
+async function prepareReportReadyCase(roundName) {
+  await startRound(3, 1800, roundName);
+  const detectiveCookie = await login();
+  const joined = await (await joinDetective(detectiveCookie)).json();
+  const analystResponse = await joinAnalyst(joined.analystInvite);
+  const analystCookie = analystResponse.headers
+    .get("set-cookie")
+    .split(";", 1)[0];
+  const getPublicCase = async (cookie) =>
+    await (
+      await request("/api/investigation/case", { headers: { cookie } })
+    ).json();
+  const reportPathEvidence = new Set([
+    "EV01",
+    "EV03",
+    "EV05",
+    "EV06",
+    "EV07",
+    "EV08",
+    "EV09",
+    "EV11",
+    "EV14",
+    "EV17",
+    "EV18",
+    "EV19",
+    "EV20",
+    "EV22",
+    "EV24",
+    "EV26",
+    "EV27",
+    "EV28",
+  ]);
+
+  for (let pass = 0; pass < 12; pass += 1) {
+    let changed = false;
+    for (const [cookie, role] of [
+      [detectiveCookie, "detective"],
+      [analystCookie, "analyst"],
+    ]) {
+      const current = await getPublicCase(cookie);
+      for (const item of current.case.evidence) {
+        if (
+          !reportPathEvidence.has(item.id) ||
+          !item.available ||
+          current.state.discoveredEvidence.includes(item.id)
+        ) {
+          continue;
+        }
+        const response = await post(
+          `/api/investigation/case/evidence/${item.id}`,
+          {},
+          cookie,
+        );
+        assert.equal(
+          response.status,
+          201,
+          `${role} should discover ${item.id}`,
+        );
+        changed = true;
+      }
+    }
+
+    const detectiveCase = await getPublicCase(detectiveCookie);
+    const maraDeparture = detectiveCase.case.suspects
+      .find(({ id }) => id === "mara")
+      .topics.find(({ id }) => id === "departure");
+    if (!detectiveCase.state.interviewFindings.includes("mara:departure")) {
+      const response = await post(
+        "/api/investigation/case/interviews",
+        { suspectId: "mara", topicId: maraDeparture.id },
+        detectiveCookie,
+      );
+      assert.equal(response.status, 200, "one optional suspect interview");
+      changed = true;
+    }
+    if (!changed) break;
+  }
+
+  const fullCase = await getPublicCase(detectiveCookie);
+  const discovered = new Set(fullCase.state.discoveredEvidence);
+  assert.equal(discovered.size, reportPathEvidence.size);
+  assert.ok(fullCase.state.resolvedHypotheses.length < 6);
+  assert.equal(fullCase.state.interviewFindings.length, 1);
+
+  const eventOrder = [
+    "maintenance-prepared",
+    "credential-event",
+    "service-relay",
+    "exception-active",
+    "token-accepted-export",
+    "audit-view-changed",
+  ];
+  const solve = async (id, answer, cookie) => {
+    const response = await post(
+      `/api/investigation/case/puzzles/${id}`,
+      { answer },
+      cookie,
+    );
+    assert.equal(response.status, 200, `${id} should solve`);
+  };
+  await solve("clocks", { offsetMinutes: 2, eventOrder }, analystCookie);
+  await solve(
+    "audit",
+    {
+      missingField: "maintenanceContext",
+      sourceRecord: "authorization-source-ledger",
+      noteCreatedAt: "22:06",
+      noteIngestedAt: "08:40",
+      viewModifiedAt: "02:15",
+    },
+    analystCookie,
+  );
+  return { detectiveCookie, analystCookie, getCase };
+}
+
+function validCaseReport() {
+  return {
+    suspectId: "idris",
+    method: "temporary-maintenance-exception",
+    motive: "conceal-audit-exposure",
+    eventOrder: [
+      "maintenance-prepared",
+      "credential-event",
+      "service-relay",
+      "exception-active",
+      "token-accepted-export",
+      "audit-view-changed",
+    ],
+    evidenceIds: [
+      "EV01",
+      "EV03",
+      "EV07",
+      "EV11",
+      "EV14",
+      "EV18",
+      "EV17",
+      "EV24",
+      "EV26",
+      "EV27",
+      "EV28",
+    ],
+    auditExplanation: "later-summary-omitted-maintenance-context",
+    rejectedTheories: ["database", "contractor"],
+    alternativeReasoning: {
+      database:
+        "EV03 records a search of system information, and EV11 confirms it returned no research files; neither explains the separate transfer.",
+      contractor:
+        "EV14 closes Gabriel's approved repair at 9:14 p.m.; EV18 records his device return, while later access is separately documented.",
+    },
+    reasoning:
+      "The source event, signed exception, export receipt, and audit view diff support one sequence. Independent records also show that the database query and contractor work do not account for the authorization and later view change.",
+  };
+}
+
+test("short cooperative investigation submits a report without hypothesis assessments and completes partner approval", async () => {
+  const { detectiveCookie, analystCookie, getCase } =
+    await prepareReportReadyCase("case-helix-report-without-assessments");
+  const caseReport = validCaseReport();
+  const readyState = await getCase();
+  assert.equal(readyState.gameState.hypothesisAssessments, undefined);
+
+  const guess = await post(
+    "/api/investigation/case/report",
+    { ...caseReport, suspectId: "mara" },
+    detectiveCookie,
+  );
+  assert.equal(guess.status, 422);
+  assert.equal((await guess.json()).error.includes("Idris"), false);
+  assert.equal((await getCase()).gameState.report, undefined);
+
+  for (const invalidReport of [
+    {
+      ...caseReport,
+      evidenceIds: caseReport.evidenceIds.filter((id) => id !== "EV28"),
+    },
+    { ...caseReport, evidenceIds: [...caseReport.evidenceIds, "EV02"] },
+    { ...caseReport, evidenceIds: [...caseReport.evidenceIds, "EV01"] },
+    {
+      ...caseReport,
+      eventOrder: [
+        caseReport.eventOrder[0],
+        ...caseReport.eventOrder.slice(0, 5),
+      ],
+    },
+    { ...caseReport, motive: "research-credit" },
+    {
+      ...caseReport,
+      rejectedTheories: ["database", "malfunction"],
+      alternativeReasoning: {
+        database: caseReport.alternativeReasoning.database,
+        malfunction:
+          "EV24 alone does not establish that a computer fault caused the access.",
+      },
+    },
+  ]) {
+    assert.equal(
+      (
+        await post(
+          "/api/investigation/case/report",
+          invalidReport,
+          detectiveCookie,
+        )
+      ).status,
+      422,
+    );
+  }
+  const shortAlternativeReasoning = await post(
+    "/api/investigation/case/report",
+    {
+      ...caseReport,
+      alternativeReasoning: {
+        ...caseReport.alternativeReasoning,
+        contractor: "Gabriel's repair ended earlier.",
+      },
+    },
+    detectiveCookie,
+  );
+  assert.equal(shortAlternativeReasoning.status, 400);
+
+  const submission = await post(
+    "/api/investigation/case/report",
+    caseReport,
+    detectiveCookie,
+  );
+  assert.equal(submission.status, 201);
+  const proposed = (await submission.json()).state.gameState.report;
+  assert.deepEqual(proposed.approvals, ["detective"]);
+  const expectedScore = Math.max(0, 100 - 5 * readyState.wrongAttempts - 35);
+  assert.equal(proposed.score, expectedScore);
+  assert.equal(
+    (await post("/api/investigation/case/report/approve", {}, detectiveCookie))
+      .status,
+    409,
+  );
+  const approval = await post(
+    "/api/investigation/case/report/approve",
+    {},
+    analystCookie,
+  );
+  assert.equal(approval.status, 200);
+  assert.deepEqual(
+    (await approval.json()).state.gameState.report.approvals.sort(),
+    ["analyst", "detective"],
+  );
+  const score = await ScoreEntry.findOne({
+    teamId,
+    round: 3,
+    game: "investigation",
+    kind: "game_result",
+  }).lean();
+  assert.equal(score.amount, expectedScore);
+});
+
+test("report submission also works when players choose to save separate assessments", async () => {
+  const { detectiveCookie, analystCookie } = await prepareReportReadyCase(
+    "case-helix-report-with-assessments",
+  );
+  for (const [theoryId, evidenceIds] of [
+    ["database", ["EV03", "EV11"]],
+    ["contractor", ["EV14", "EV18"]],
+  ]) {
+    const assessment = await post(
+      `/api/investigation/case/hypotheses/${theoryId}`,
+      { status: "contradicted", evidenceIds },
+      detectiveCookie,
+    );
+    assert.equal(assessment.status, 200);
+  }
+
+  const submission = await post(
+    "/api/investigation/case/report",
+    validCaseReport(),
+    detectiveCookie,
+  );
+  assert.equal(submission.status, 201);
+  assert.equal((await submission.json()).state.gameState.report.score, 100);
+  assert.equal(
+    (await post("/api/investigation/case/report/approve", {}, analystCookie))
+      .status,
+    200,
+  );
+  const score = await ScoreEntry.findOne({
+    teamId,
+    round: 3,
+    game: "investigation",
+    kind: "game_result",
+  }).lean();
+  assert.equal(score.amount, 100);
+});
+
+test("legacy evidence 2 and 3 can be collected by either role while evidence 1 is detective-only", async () => {
   await startRound(3, 300, "investigation-branch-test");
   const detectiveCookie = await login();
   const joined = await (await joinDetective(detectiveCookie)).json();
@@ -400,54 +962,22 @@ test("evidence, decryption, accusation, and cross-role approvals are atomic", as
     [200, 200],
   );
 
-  const accusation = await Promise.all([
-    post(
-      "/api/investigation/accusation",
-      {
-        suspect: "Mara Chen",
-        evidenceKey: "ev2",
-        reasoning:
-          "The access record connects the suspect to the archive breach.",
-      },
-      detectiveCookie,
-    ),
-    post(
-      "/api/investigation/accusation",
-      {
-        suspect: "Idris Khan",
-        evidenceKey: "ev2",
-        reasoning:
-          "A competing accusation must not replace the original submission.",
-      },
-      detectiveCookie,
-    ),
-  ]);
-  assert.deepEqual(
-    accusation.map((response) => response.status).sort(),
-    [201, 409],
-  );
-  const winningAccusation = accusation[0].status === 201
-    ? { suspect: "Mara Chen", reasoning: "The access record connects the suspect to the archive breach." }
-    : { suspect: "Idris Khan", reasoning: "A competing accusation must not replace the original submission." };
-  const submitterApproval = await post(
-    "/api/investigation/accusation/approve",
-    {},
+  const retiredAccusation = await post(
+    "/api/investigation/accusation",
+    {
+      suspect: "Idris Khan",
+      evidenceKey: "ev2",
+      reasoning: "Legacy accusations cannot finalize the complete case.",
+    },
     detectiveCookie,
   );
-  assert.equal(submitterApproval.status, 409);
-
-  const approvals = await Promise.all([
-    post("/api/investigation/accusation/approve", {}, analystCookie),
-    post("/api/investigation/accusation/approve", {}, analystCookie),
-  ]);
-  assert.deepEqual(
-    approvals.map((response) => response.status).sort(),
-    [200, 409],
+  assert.equal(retiredAccusation.status, 410);
+  assert.equal(
+    (await post("/api/investigation/accusation/approve", {}, analystCookie))
+      .status,
+    410,
   );
-  const agreed = await approvals
-    .find((response) => response.status === 200)
-    .json();
-  assert.equal(agreed.state.accusation.agreed, true);
+  assert.equal((await getCase()).accusation, null);
   assert.equal(
     (await post("/api/investigation/evidence", { key: "ev3" }, detectiveCookie))
       .status,
@@ -475,17 +1005,7 @@ test("evidence, decryption, accusation, and cross-role approvals are atomic", as
   );
   assert.equal(savedCase.finalResult.decryption.succeeded, true);
   assert.ok(savedCase.finalResult.decryption.succeededAt instanceof Date);
-  assert.deepEqual(savedCase.finalResult.accusation, {
-    submitted: true,
-    suspect: winningAccusation.suspect,
-    evidenceKey: "ev2",
-    reasoning: winningAccusation.reasoning,
-    initiatedBy: "detective",
-    initiatedAt: savedCase.finalResult.accusation.initiatedAt,
-    approvals: { detective: true, analyst: true },
-    agreed: true,
-  });
-  assert.ok(savedCase.finalResult.accusation.initiatedAt instanceof Date);
+  assert.equal(savedCase.finalResult.accusation, null);
   assert.equal(
     savedCase.finalResult.roundEndedAt.getTime(),
     (await RoundState.findOne({ round: 3 })).endedAt.getTime(),
@@ -502,15 +1022,11 @@ test("evidence, decryption, accusation, and cross-role approvals are atomic", as
   assert.ok(result);
   assert.equal(result.decryption.succeeded, true);
   assert.ok(result.decryption.succeededAt);
-  assert.equal(result.accusation.agreed, true);
-  assert.deepEqual(result.accusation.approvals, {
-    detective: true,
-    analyst: true,
-  });
+  assert.equal(result.accusation, null);
   assert.ok(result.roundEndedAt);
 });
 
-test("analyst may initiate an accusation citing collected evidence and detective approval completes agreement", async () => {
+test("the analyst cannot finalize through the retired accusation endpoints", async () => {
   await startRound(3, 300, "investigation-branch-test");
   const detectiveCookie = await login();
   const joined = await (await joinDetective(detectiveCookie)).json();
@@ -526,59 +1042,20 @@ test("analyst may initiate an accusation citing collected evidence and detective
         {
           suspect: "Sofia Laurent",
           evidenceKey: "ev2",
-          reasoning:
-            "The evidence record links the suspect to the secured archive.",
+          reasoning: "A legacy guess is not a validated case report.",
         },
         analystCookie,
       )
     ).status,
-    409,
+    410,
   );
-  assert.equal(
-    (await post("/api/investigation/evidence", { key: "ev2" }, analystCookie))
-      .status,
-    201,
-  );
-  const submitted = await post(
-    "/api/investigation/accusation",
-    {
-      suspect: "Sofia Laurent",
-      evidenceKey: "ev2",
-      reasoning:
-        "The evidence record links the suspect to the secured archive.",
-    },
-    analystCookie,
-  );
-  assert.equal(submitted.status, 201);
-  assert.deepEqual((await submitted.json()).state.accusation.approvals, [
-    "analyst",
-  ]);
-  assert.equal(
-    (await post("/api/investigation/accusation/approve", {}, detectiveCookie))
-      .status,
-    200,
-  );
-  assert.equal(
-    (await post("/api/investigation/accusation/approve", {}, detectiveCookie))
-      .status,
-    409,
-  );
-  const state = await request("/api/investigation/state", {
-    headers: { cookie: detectiveCookie },
-  });
-  assert.equal((await state.json()).state.accusation.agreed, true);
+  assert.equal((await getCase()).accusation, null);
   await endRound(3, "investigation-branch-test");
   const finalResult = (await getCase()).finalResult;
-  assert.equal(finalResult.accusation.submitted, true);
-  assert.equal(finalResult.accusation.initiatedBy, "analyst");
-  assert.deepEqual(finalResult.accusation.approvals, {
-    detective: true,
-    analyst: true,
-  });
-  assert.equal(finalResult.accusation.agreed, true);
+  assert.equal(finalResult.accusation, null);
 });
 
-test("final result records a pending accusation when the round ends before dual approval", async () => {
+test("final result does not persist a retired, unvalidated accusation", async () => {
   await startRound(3, 300, "investigation-branch-test");
   const detectiveCookie = await login();
   const joined = await (await joinDetective(detectiveCookie)).json();
@@ -599,23 +1076,16 @@ test("final result records a pending accusation when the round ends before dual 
         {
           suspect: "Idris Khan",
           evidenceKey: "ev2",
-          reasoning:
-            "The recovered record places the suspect near the restricted archive.",
+          reasoning: "A guess cannot replace the structured report.",
         },
         analystCookie,
       )
     ).status,
-    201,
+    410,
   );
   await endRound(3, "investigation-branch-test");
   const finalAccusation = (await getCase()).finalResult.accusation;
-  assert.equal(finalAccusation.submitted, false);
-  assert.equal(finalAccusation.initiatedBy, "analyst");
-  assert.deepEqual(finalAccusation.approvals, {
-    detective: false,
-    analyst: true,
-  });
-  assert.equal(finalAccusation.agreed, false);
+  assert.equal(finalAccusation, null);
 });
 
 test("admin final result persists for rounds without decryption or accusation and cannot be overwritten", async () => {

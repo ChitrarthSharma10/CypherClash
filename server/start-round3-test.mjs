@@ -15,7 +15,7 @@ let admin = await Admin.findOne({ username });
 if (!admin) {
   admin = await Admin.create({
     username,
-    passwordHash: await hashPassword(adminPassword)
+    passwordHash: await hashPassword(adminPassword),
   });
 }
 
@@ -27,7 +27,7 @@ await advanceTeamProgression(teamId, {
   targetRound: 3,
   waivePriorRounds: true,
   reason: "Local Round 3 integration testing",
-  adminId: admin._id
+  adminId: admin._id,
 });
 
 console.log("Team progression set to Round 3.");
@@ -41,4 +41,3 @@ try {
 }
 
 await mongoose.disconnect();
-

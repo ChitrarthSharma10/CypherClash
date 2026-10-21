@@ -11,16 +11,23 @@ export async function requireInvestigationParticipant(req, res, next) {
     if (!teamId || !["team", "investigation"].includes(req.session.role)) {
       return res
         .status(401)
-        .json({ error: "Investigation authentication required" });
+        .json({
+          error: "Sign in with your team account before joining the case.",
+        });
     }
     const team = await Team.findOne({ teamId }).select("teamId active");
     if (!team?.active)
-      return res.status(401).json({ error: "Active team session required" });
+      return res
+        .status(401)
+        .json({ error: "Your team session has expired. Sign in again." });
     const round = await getRound3State();
     if (!round)
       return res
         .status(409)
-        .json({ error: "Round 3 has not started", code: "ROUND_NOT_STARTED" });
+        .json({
+          error: "Round 3 has not started yet.",
+          code: "ROUND_NOT_STARTED",
+        });
     const attemptNo = round.attemptNo ?? 1;
     const currentSessionHash = sessionHash(req.sessionID);
     const assignedAttempt = round.investigations?.find(
@@ -34,13 +41,18 @@ export async function requireInvestigationParticipant(req, res, next) {
     if (assignedAttempt && assignedAttempt.attemptNo !== attemptNo) {
       return res
         .status(403)
-        .json({ error: "Investigation assignment is stale" });
+        .json({
+          error:
+            "This session belongs to an earlier attempt. Rejoin the current case.",
+        });
     }
     const investigation = round.investigations?.find(
       (entry) => entry.teamId === teamId && entry.attemptNo === attemptNo,
     );
     if (!investigation)
-      return res.status(409).json({ error: "Join the investigation first" });
+      return res
+        .status(409)
+        .json({ error: "Join the case before opening this page." });
     const role =
       req.session.role === "team" &&
       investigation.detectiveSessionHash === currentSessionHash
@@ -52,7 +64,9 @@ export async function requireInvestigationParticipant(req, res, next) {
     if (!role)
       return res
         .status(403)
-        .json({ error: "No investigation role assigned to this session" });
+        .json({
+          error: "This session has not joined as Detective or Analyst.",
+        });
     req.team = team;
     req.investigation = investigation;
     req.investigationRole = role;
@@ -73,7 +87,10 @@ export function requireRunningInvestigation(req, res, next) {
   ) {
     return res
       .status(409)
-      .json({ error: "Round 3 is locked", code: "ROUND_NOT_RUNNING" });
+      .json({
+        error: "Round 3 is closed, so you cannot make changes.",
+        code: "ROUND_NOT_RUNNING",
+      });
   }
   return next();
 }

@@ -66,6 +66,14 @@ async function finalizeRound3State(filter, endedAt, close = false) {
                 {
                   finalResult: {
                     evidence: { $ifNull: ["$$investigation.clues", []] },
+                    investigation: {
+                      discoveredEvidence: { $ifNull: ["$$investigation.discoveredEvidence", []] },
+                      solvedPuzzles: { $ifNull: ["$$investigation.solvedPuzzles", []] },
+                      interviewFindings: { $ifNull: ["$$investigation.interviewFindings", []] },
+                      resolvedHypotheses: { $ifNull: ["$$investigation.resolvedHypotheses", []] },
+                      gameState: { $ifNull: ["$$investigation.gameState", {}] },
+                      reportAttempts: { $ifNull: ["$$investigation.reportAttempts", 0] },
+                    },
                     decryption: {
                       succeeded: { $eq: ["$$investigation.decrypted", true] },
                       succeededAt: {
@@ -244,6 +252,14 @@ function legacyFinalResult(investigation, endedAt) {
   const approvals = new Set(investigation.accusation?.approvals || []);
   return {
     evidence: investigation.clues || [],
+    investigation: {
+      discoveredEvidence: investigation.discoveredEvidence || [],
+      solvedPuzzles: investigation.solvedPuzzles || [],
+      interviewFindings: investigation.interviewFindings || [],
+      resolvedHypotheses: investigation.resolvedHypotheses || [],
+      gameState: investigation.gameState || {},
+      reportAttempts: investigation.reportAttempts || 0,
+    },
     decryption: {
       succeeded: investigation.decrypted === true,
       succeededAt: investigation.decryptedAt || null,
@@ -308,12 +324,11 @@ export async function initializeRoundStates() {
   await migrateLegacyInvestigationCases();
   states.clear();
   const roundFilter = {
-    $or: [
-      { round: { $gte: 1, $lte: TOTAL_ROUNDS } },
-      { round: { $gt: 1000 } },
-    ],
+    $or: [{ round: { $gte: 1, $lte: TOTAL_ROUNDS } }, { round: { $gt: 1000 } }],
   };
-  const savedStates = await RoundState.find(roundFilter).sort({ round: 1 }).lean();
+  const savedStates = await RoundState.find(roundFilter)
+    .sort({ round: 1 })
+    .lean();
   for (const state of savedStates) {
     states.set(state.round, state);
   }
@@ -326,7 +341,9 @@ export async function initializeRoundStates() {
   }
   await autoEndExpiredRounds();
   states.clear();
-  const currentStates = await RoundState.find(roundFilter).sort({ round: 1 }).lean();
+  const currentStates = await RoundState.find(roundFilter)
+    .sort({ round: 1 })
+    .lean();
   for (const state of currentStates) {
     states.set(state.round, state);
   }
@@ -344,7 +361,10 @@ export async function initializeRoundStates() {
 
 export function listRoundStates() {
   return [...states.values()]
-    .filter((state) => (state.round >= 1 && state.round <= TOTAL_ROUNDS) || state.round > 1000)
+    .filter(
+      (state) =>
+        (state.round >= 1 && state.round <= TOTAL_ROUNDS) || state.round > 1000,
+    )
     .sort((first, second) => first.round - second.round)
     .map(snapshot);
 }
@@ -416,12 +436,16 @@ async function withTransitionLock(operation) {
   }
 }
 
-export async function startRound(round, durationSec, adminId = 'system') {
+export async function startRound(round, durationSec, adminId = "system") {
   if (!Number.isInteger(round) || round < 1) {
-    throw new RoundStateError('INVALID_ROUND', 'Round must be a positive integer');
+    throw new RoundStateError(
+      "INVALID_ROUND",
+      "Round must be a positive integer",
+    );
   }
   return withTransitionLock(async () => {
-    const effectiveDurationSec = round === 3 ? ROUND3_DURATION_SEC : durationSec;
+    const effectiveDurationSec =
+      round === 3 ? ROUND3_DURATION_SEC : durationSec;
     const current = states.get(round);
     if (current?.status === "running" || current?.status === "paused") {
       throw new RoundStateError(
@@ -461,9 +485,12 @@ export async function startRound(round, durationSec, adminId = 'system') {
   });
 }
 
-export async function pauseRound(round, adminId = 'system') {
+export async function pauseRound(round, adminId = "system") {
   if (!Number.isInteger(round) || round < 1) {
-    throw new RoundStateError('INVALID_ROUND', 'Round must be a positive integer');
+    throw new RoundStateError(
+      "INVALID_ROUND",
+      "Round must be a positive integer",
+    );
   }
   return withTransitionLock(async () => {
     const current = states.get(round);
@@ -480,9 +507,12 @@ export async function pauseRound(round, adminId = 'system') {
   });
 }
 
-export async function resumeRound(round, adminId = 'system') {
+export async function resumeRound(round, adminId = "system") {
   if (!Number.isInteger(round) || round < 1) {
-    throw new RoundStateError('INVALID_ROUND', 'Round must be a positive integer');
+    throw new RoundStateError(
+      "INVALID_ROUND",
+      "Round must be a positive integer",
+    );
   }
   return withTransitionLock(async () => {
     const current = states.get(round);
@@ -508,9 +538,12 @@ export async function resumeRound(round, adminId = 'system') {
   });
 }
 
-export async function endRound(round, adminId = 'system') {
+export async function endRound(round, adminId = "system") {
   if (!Number.isInteger(round) || round < 1) {
-    throw new RoundStateError('INVALID_ROUND', 'Round must be a positive integer');
+    throw new RoundStateError(
+      "INVALID_ROUND",
+      "Round must be a positive integer",
+    );
   }
   return withTransitionLock(async () => {
     const current = states.get(round);
