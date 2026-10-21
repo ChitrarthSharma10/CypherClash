@@ -78,6 +78,17 @@ const addActivityUpdate = (type, message, role, at = new Date()) => ({
   $slice: -100,
 });
 function publicState(doc, role) {
+  const report = doc.gameState?.report;
+  const approvals = report?.approvals ?? doc.accusation?.approvals ?? [];
+
+  const isAgreed =
+    approvals.includes("detective") && approvals.includes("analyst");
+
+  const wrongAttempts = doc.wrongAttempts || 0;
+  const score = isAgreed
+    ? (report?.score ?? Math.max(150, 500 - 15 * wrongAttempts))
+    : null;
+
   return {
     teamId: doc.teamId,
     round: doc.round,
@@ -99,7 +110,10 @@ function publicState(doc, role) {
     resolvedHypotheses: doc.resolvedHypotheses || [],
     gameState: doc.gameState || {},
     reportAttempts: doc.reportAttempts || 0,
-    activity: doc.activity.slice(-50).map((item) => ({
+    wrongAttempts,
+    score,
+    completed: isAgreed,
+    activity: (doc.activity || []).slice(-50).map((item) => ({
       type: item.type,
       message: item.message,
       role: item.role,
@@ -113,9 +127,7 @@ function publicState(doc, role) {
           submittedBy: doc.accusation.submittedBy,
           approvals: doc.accusation.approvals,
           submittedAt: doc.accusation.submittedAt,
-          agreed:
-            doc.accusation.approvals.includes("detective") &&
-            doc.accusation.approvals.includes("analyst"),
+          agreed: isAgreed,
         }
       : null,
   };
@@ -267,6 +279,122 @@ router.post(
         state: publicState(doc, "detective"),
         analystInvite: invite,
         inviteExpiresAt,
+      });
+    } catch (error) {
+      return next(error);
+    }
+  },
+);
+
+// Same-screen mode: authenticated team session holds both seats simultaneously.
+router.post(
+  "/join/same-screen",
+  requireTeam,
+  validateBody(emptySchema),
+  async (req, res, next) => {
+    try {
+      const round = await runningRound3();
+      if (!round)
+        return res
+          .status(409)
+          .json({ error: "Round 3 is not running", code: "ROUND_NOT_RUNNING" });
+      const attemptNo = round.attemptNo ?? 1;
+      const now = new Date();
+      const currentSessionHash = hashSession(req.sessionID);
+
+      const existing = round.investigations?.find(
+        (entry) =>
+          entry.teamId === req.team.teamId && entry.attemptNo === attemptNo,
+      );
+
+      let doc;
+      if (!existing) {
+        doc = await claimRound3Investigation(attemptNo, {
+          teamId: req.team.teamId,
+          round: 3,
+          attemptNo,
+          detectiveJoinedAt: now,
+          detectiveSessionHash: currentSessionHash,
+          analystJoinedAt: now,
+          analystSessionHash: currentSessionHash,
+          clues: [],
+          decrypted: false,
+          decryptedAt: null,
+          activity: [
+            {
+              type: "role_joined",
+              message: "Lead Detective joined the case",
+              role: "detective",
+              at: now,
+            },
+            {
+              type: "role_joined",
+              message: "Forensic Analyst joined the case",
+              role: "analyst",
+              at: now,
+            },
+          ],
+          accusation: null,
+        });
+      } else if (
+        existing.detectiveSessionHash === currentSessionHash &&
+        existing.analystJoinedAt == null
+      ) {
+        doc = await updateRound3Investigation(
+          attemptNo,
+          {
+            _id: existing._id,
+            teamId: req.team.teamId,
+            attemptNo,
+            detectiveSessionHash: currentSessionHash,
+            analystJoinedAt: null,
+            finalResult: { $exists: false },
+          },
+          {
+            $set: {
+              "investigations.$.analystJoinedAt": now,
+              "investigations.$.analystSessionHash": currentSessionHash,
+            },
+            $unset: {
+              "investigations.$.inviteHash": 1,
+              "investigations.$.inviteExpiresAt": 1,
+            },
+            $push: {
+              "investigations.$.activity": {
+                type: "role_joined",
+                message: "Forensic Analyst joined the case",
+                role: "analyst",
+                at: now,
+              },
+            },
+          },
+        );
+      } else if (
+        existing.detectiveSessionHash === currentSessionHash &&
+        existing.analystSessionHash === currentSessionHash
+      ) {
+        doc = existing;
+      } else {
+        return res
+          .status(409)
+          .json({
+            error: "Station seats are already claimed by another session",
+          });
+      }
+
+      if (!doc) {
+        return res
+          .status(409)
+          .json({ error: "Unable to claim stations for same-screen mode" });
+      }
+
+      req.session.investigationSeats = ["detective", "analyst"];
+      await saveSession(req);
+
+      return res.status(200).json({
+        ok: true,
+        detectiveState: publicState(doc, "detective"),
+        analystState: publicState(doc, "analyst"),
       });
     } catch (error) {
       return next(error);
@@ -433,6 +561,7 @@ router.get("/state", requireInvestigationParticipant, async (req, res) =>
     serverNow: new Date(),
     deadline: req.investigationRound.deadline,
     pausedAt: req.investigationRound.pausedAt,
+    hasBothSeats: Boolean(req.investigationHasBothSeats),
   }),
 );
 

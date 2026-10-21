@@ -6,7 +6,11 @@ const router = express.Router();
 
 function requireLeaderboardReader(req, res, next) {
   if (req.session.role === 'admin') return next();
-  return requireTeam(req, res, next);
+  if (req.session.role === 'team' && req.session.teamId) {
+    return requireTeam(req, res, next);
+  }
+  // Public / guest view for main landing page scoreboard
+  return next();
 }
 
 router.get('/', requireLeaderboardReader, async (req, res, next) => {

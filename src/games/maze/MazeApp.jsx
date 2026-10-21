@@ -249,6 +249,8 @@ function MazeMonitor({
 export default function MazeApp({
   teamId = 'CC-001',
   playerSlot = 'P1',
+  round,
+  serverNow,
   onBack,
   onLogout,
   onSlotChange,
@@ -261,6 +263,8 @@ export default function MazeApp({
   const [showGuidelines, setShowGuidelines] = useState(true);
 
   const socketClientRef = useRef(null);
+
+  const isRoundEnded = round?.status === 'ended' || (round?.deadline && new Date(round.deadline).getTime() <= Date.now());
 
   useEffect(() => {
     setCurrentSlot(playerSlot);
@@ -287,9 +291,9 @@ export default function MazeApp({
   }, [teamId, currentSlot]);
 
   const sendInput = useCallback((targetRole, axis, dir) => {
-    if (!socketClientRef.current) return;
+    if (isRoundEnded || !socketClientRef.current) return;
     socketClientRef.current.sendInput(targetRole, axis, dir);
-  }, []);
+  }, [isRoundEnded]);
 
   useEffect(() => {
     const activeKeys = new Set();
@@ -440,6 +444,7 @@ export default function MazeApp({
           )}
         </div>
       </header>
+      {isRoundEnded && <p className="product-message is-error" role="status" style={{ margin: '12px 24px 0', textAlign: 'center' }}>The round has ended. Inputs are disabled.</p>}
 
       <div className="single-monitor-container" style={{ padding: '20px 24px' }}>
         <MazeMonitor

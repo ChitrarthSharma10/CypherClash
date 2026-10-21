@@ -53,7 +53,7 @@ export const INVESTIGATION_CLUES = Object.freeze([
 export const STAGE_HINTS = Object.freeze({
   1: 'Examine the internal structure and source metadata of the alert portal. Web applications often record origin routing headers where raw network transactions are logged.',
   2: 'Cross-reference the contradictory timestamps across the door sensors and surveillance records. The specialist crime lab report isolates the exact frame marker injected during the video freeze.',
-  3: 'Examine the historical commit ledger of the repository. Changes made in earlier revisions often preserve diagnostic credentials that were later expunged from the active tree.',
+  3: 'Examine the historical commit ledger of the repository.',
   4: 'Filter out decoy and noise artifacts on the console by matching their carrier stream and parity status. Align the surviving authentic fragments in ascending sequence order.',
 });
 
@@ -180,15 +180,12 @@ export const RESOURCE_CONTENTS = Object.freeze({
         </p>
       </div>
       <p style="color: #a3a3ad; line-height: 1.6;">
-        An internal repository managing diagnostic relay telemetry was audited after an unauthorized access attempt.
+        An internal repository (<code>campus-relay-telemetry</code>) managing diagnostic relay telemetry was audited after an unauthorized access attempt.
         The current head revision appears sanitized, but code versioning systems record every historical delta.
         Follow the repository link below, inspect the commit history, and examine what was added in earlier commits and subsequently removed.
       </p>
       <div class="mock-terminal-screen">
-        <p>&gt; GIT AUDIT TARGET: campus-relay-telemetry</p>
-        <p>&gt; STATUS: HEAD SANITIZED // HISTORICAL COMMITS PRESERVED</p>
-        <p>&gt; REPOSITORY INSPECTION PROTOCOL: Compare commit diffs on config/telemetry.json</p>
-        <div class="cc-terminal-repo-box" style="margin-top: 14px; padding: 14px; background: rgba(0, 200, 233, 0.08); border: 1px solid rgba(0, 200, 233, 0.25); border-radius: 6px;">
+        <div class="cc-terminal-repo-box" style="padding: 14px; background: rgba(0, 200, 233, 0.08); border: 1px solid rgba(0, 200, 233, 0.25); border-radius: 6px;">
           ${
             config.investigationLead3GithubUrl
               ? `

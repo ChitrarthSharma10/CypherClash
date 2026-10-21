@@ -41,6 +41,8 @@ export class RunnerGameEngine {
     this.checkpointsPassed = 0;
     this.agilityBonuses = 0;
     this.stunRemainingSec = 0;
+    this.slowdownTimer = 0;
+    this.recoveryTimer = 1.0;
 
     // Active Power-Ups Timers (Seconds)
     this.activePowerUps = {
@@ -237,6 +239,8 @@ export class RunnerGameEngine {
     this.checkpointsPassed = 0;
     this.agilityBonuses = 0;
     this.stunRemainingSec = 0;
+    this.slowdownTimer = 0;
+    this.recoveryTimer = 1.0;
     this.currentLane = 0;
     this.targetLane = 0;
     this.isJumping = false;
@@ -384,23 +388,21 @@ export class RunnerGameEngine {
       }
     }
 
-    // Progressive speed escalation for intense challenge:
-    // 0s - 25s: Tier 1 (18.5 m/s Responsive Base)
-    // 25s - 50s: Tier 2 (25.0 m/s Speed Surge)
-    // 50s+: Tier 3 (33.0 m/s Hyper Sprint)
+    // Base speed and tiers derived from GAME_CONFIG.BASE_SPEED (tunable constant)
     const elapsedSec = this.timeElapsedMs / 1000;
-    let targetSpeed = 18.5;
+    const base = GAME_CONFIG.BASE_SPEED;
+    let targetSpeed = base;
     let tier = 1;
 
     if (elapsedSec >= 50) {
       tier = 3;
-      targetSpeed = 33.0;
+      targetSpeed = base * 1.5;
     } else if (elapsedSec >= 25) {
       tier = 2;
-      targetSpeed = 25.0;
+      targetSpeed = base * 1.25;
     } else {
       tier = 1;
-      targetSpeed = 18.5;
+      targetSpeed = base;
     }
 
     if (this.speedTier !== tier) {
@@ -414,15 +416,24 @@ export class RunnerGameEngine {
 
     // Accelerate smoothly towards target tier speed
     if (this.speed < targetSpeed) {
-      this.speed = Math.min(targetSpeed, this.speed + 2.2 * dt);
+      this.speed = Math.min(targetSpeed, this.speed + 2.0 * dt);
     } else if (this.speed > targetSpeed) {
       this.speed = Math.max(targetSpeed, this.speed - 1.0 * dt);
     }
 
-    let currentSpeed = this.speed;
-    if (this.stunRemainingSec > 0) {
-      currentSpeed *= GAME_CONFIG.COLLISION_SLOWDOWN_FACTOR;
+    // Collision slowdown: massively slow for 3 seconds to 25%, then smoothly return to normal speed
+    let speedMultiplier = 1.0;
+    if (this.slowdownTimer > 0) {
+      this.slowdownTimer = Math.max(0, this.slowdownTimer - dt);
+      speedMultiplier = GAME_CONFIG.COLLISION_SLOWDOWN_FACTOR;
+      this.recoveryTimer = 0;
+    } else if (this.recoveryTimer < 1.0) {
+      // Smooth return back to 1.0 over 1 second
+      this.recoveryTimer = Math.min(1.0, this.recoveryTimer + dt / 1.0);
+      speedMultiplier = GAME_CONFIG.COLLISION_SLOWDOWN_FACTOR + (1.0 - GAME_CONFIG.COLLISION_SLOWDOWN_FACTOR) * this.recoveryTimer;
     }
+
+    let currentSpeed = this.speed * speedMultiplier;
 
     // Forward progression
     this.distanceMeters += currentSpeed * dt;
@@ -533,41 +544,23 @@ export class RunnerGameEngine {
               });
             } else {
               this.collisionsCount++;
-              this.penalties = 0;
-              this.score = 0;
-              this.totalCalculatedScore = 0;
-              this.goldBarsCollected = 0;
-              this.coinsCollected = 0;
-              this.vaultsCollected = 0;
-              this.checkpointsPassed = 0;
-              this.agilityBonuses = 0;
-              this.stunRemainingSec = 1.0;
+              const penalty = GAME_CONFIG.SCORING.COLLISION_PENALTY || 20;
+              this.penalties += penalty;
+              this.score = Math.max(0, this.score - penalty);
 
-              // RESET RUNNER TO BEGINNING (0.0M) AND RESET ALL ACCUMULATED POINTS
-              this.distanceMeters = 0.0;
-              this.currentLane = 0;
-              this.targetLane = 0;
-              this.isJumping = false;
-              this.isSliding = false;
-              this.jumpY = 0;
-              this.speed = GAME_CONFIG.BASE_SPEED;
-              this.speedTier = 1;
-              this.respawnNotice = '⚠️ COLLISION! ALL POINTS RESET · RESTARTED AT 0.0M';
+              // On hitting an obstacle, slow runner massively for 3 seconds (to ~25% normal speed)
+              // Obstacles hit while already slowed must not extend or stack beyond a simple refresh
+              this.slowdownTimer = GAME_CONFIG.COLLISION_RECOVERY_TIME_SEC;
+              this.recoveryTimer = 0;
+              this.stunRemainingSec = GAME_CONFIG.COLLISION_RECOVERY_TIME_SEC;
 
-              // Reset track items, coins, powerups, and obstacles so runner restarts from the beginning
-              this.obstacles.forEach((o) => { o.hit = false; o.cleared = false; });
-              this.coins.forEach((c) => { c.collected = false; });
-              this.powerUps.forEach((p) => { p.collected = false; });
-              this.checkpoints.forEach((cp) => { cp.cleared = false; });
-
-              this.activePowerUps.magnetTimer = 0;
-              this.activePowerUps.doubleGoldTimer = 0;
-              this.activePowerUps.shieldTimer = 0;
-
-              this.repository.logEvent(this.sessionId, 'COLLISION_RESTART', {
+              // Do NOT restart the level or reset distance. Runner continues forward.
+              this.repository.logEvent(this.sessionId, 'COLLISION_PENALTY', {
                 obsId: obs.id,
                 type: obs.type,
-                elapsedSec: Math.round(this.timeElapsedMs / 1000),
+                distance: Math.round(this.distanceMeters),
+                penalty,
+                score: this.score,
                 collisions: this.collisionsCount,
               });
             }
@@ -676,12 +669,11 @@ export class RunnerGameEngine {
 
     // Points divided according to the time taken to finish the game:
     // Faster completion yields substantially higher score!
-    // Formula: 120,000 / finishTimeSec (e.g. 30s = 4000 pts, 40s = 3000 pts, 60s = 2000 pts, 120s = 1000 pts)
-    const timePoints = completed ? Math.round(GAME_CONFIG.SCORING.TIME_POINTS_DIVIDEND / finishTimeSec) : 0;
+    const timePoints = completed ? Math.min(60, Math.round(GAME_CONFIG.SCORING.TIME_POINTS_DIVIDEND / finishTimeSec)) : 0;
     const completionBonus = completed ? GAME_CONFIG.SCORING.BASE_COMPLETION_BONUS : 0;
 
     const baseScore = this.totalCalculatedScore || 0;
-    const finalScore = Math.max(0, Math.min(500, baseScore + timePoints + completionBonus));
+    const finalScore = Math.max(0, Math.min(500, Math.round(baseScore + timePoints + completionBonus)));
 
     const result = {
       gameId: GAME_CONFIG.GAME_ID,

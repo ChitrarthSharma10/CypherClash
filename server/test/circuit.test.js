@@ -75,8 +75,8 @@ test('the five provided answer keys solve their fixed circuits', () => {
     [true, false, true],
     [true, true, true, false],
     [true, true, true, false],
-    [false, false, false, false, false],
-    [true, false, false, true, true, true],
+    [false, false, true, true, false],
+    [true, false, true, true, false, false],
   ];
   const game = createCircuitGame('provided-puzzle-answers');
   let timestamp = 0;

@@ -34,26 +34,21 @@ function RunnerMonitor({
   }, [telemetryLogs]);
 
   useEffect(() => {
-    const collisions = gameState?.collisionsCount || 0;
     const respNotice = gameState?.respawnNotice;
-
-    if (collisions > prevCollisionsRef.current || (respNotice && !restartAlert)) {
+    if (respNotice && !restartAlert) {
       setRestartAlert({
         id: Date.now(),
-        title: 'Collision Restart',
-        subtext: respNotice || 'CRASHED INTO ROADBLOCK · RESET TO 0.0m · STOPWATCH RUNNING',
+        title: 'Notice',
+        subtext: respNotice,
       });
 
       const timer = setTimeout(() => {
         setRestartAlert(null);
       }, 2500);
 
-      prevCollisionsRef.current = collisions;
       return () => clearTimeout(timer);
     }
-
-    prevCollisionsRef.current = collisions;
-  }, [gameState?.collisionsCount, gameState?.respawnNotice, restartAlert]);
+  }, [gameState?.respawnNotice, restartAlert]);
 
   return (
     <div className="participant-monitor-card" style={{ width: '100%', maxWidth: '1440px', margin: '0 auto', display: 'flex', flexDirection: 'column' }}>
@@ -81,7 +76,7 @@ function RunnerMonitor({
               <span className="restarted-title">{restartAlert.title || 'GAME RESTARTED'}</span>
             </div>
             <p className="restarted-subtext">
-              {restartAlert.subtext || 'COLLISION DETECTED · RESET TO 0.0M · CLOCK RUNNING'}
+              {restartAlert.subtext || 'COLLISION DETECTED · SPEED REDUCED · RECOVERING'}
             </p>
           </div>
         )}
@@ -231,6 +226,8 @@ function RunnerMonitor({
 export default function RunnerApp({
   teamId = 'CC-001',
   playerSlot = 'P1',
+  round,
+  serverNow,
   onBack,
   onLogout,
   onSlotChange,
@@ -244,6 +241,8 @@ export default function RunnerApp({
   const [showGuidelines, setShowGuidelines] = useState(true);
 
   const socketClientRef = useRef(null);
+
+  const isRoundEnded = round?.status === 'ended' || (round?.deadline && new Date(round.deadline).getTime() <= Date.now());
 
   useEffect(() => {
     setCurrentSlot(playerSlot);
@@ -283,14 +282,13 @@ export default function RunnerApp({
   }, [teamId, currentSlot, addTelemetry]);
 
   const handleAction = useCallback((role, action) => {
-    if (!socketClientRef.current) return;
+    if (isRoundEnded || !socketClientRef.current) return;
     socketClientRef.current.sendInput(action, role);
-  }, []);
+  }, [isRoundEnded]);
 
   const handleStartSprint = () => {
-    if (socketClientRef.current) {
-      socketClientRef.current.playGame(`runner_${teamId}`);
-    }
+    if (isRoundEnded || !socketClientRef.current) return;
+    socketClientRef.current.playGame(`runner_${teamId}`);
   };
 
   const handleRestart = () => {
@@ -406,6 +404,7 @@ export default function RunnerApp({
           )}
         </div>
       </header>
+      {isRoundEnded && <p className="product-message is-error" role="status" style={{ margin: '12px 24px 0', textAlign: 'center' }}>The round has ended. Inputs are disabled.</p>}
 
       <div className="single-monitor-container" style={{ padding: '20px 24px' }}>
         <RunnerMonitor

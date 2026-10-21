@@ -1,4 +1,4 @@
-﻿import "./bootstrap.js";
+import "./bootstrap.js";
 import test, { after, before, beforeEach } from "node:test";
 import assert from "node:assert/strict";
 import { connectDatabase, disconnectDatabase } from "../src/db.js";
@@ -1523,3 +1523,97 @@ test("expired analyst invites cannot be redeemed", async () => {
   );
   assert.equal((await joinAnalyst(joined.analystInvite)).status, 401);
 });
+
+test("same-screen mode: one session holds both seats and role permissions are strictly enforced", async () => {
+  await startRound(3, 300, "investigation-branch-test");
+  const teamCookie = await login();
+
+  // Same-screen join with single session
+  const joinRes = await post("/api/investigation/join/same-screen", {}, teamCookie);
+  assert.equal(joinRes.status, 200);
+  const joinData = await joinRes.json();
+  assert.equal(joinData.ok, true);
+  assert.equal(joinData.detectiveState.role, "detective");
+  assert.equal(joinData.analystState.role, "analyst");
+
+  // Detective fetches state with x-acting-role: detective
+  const detStateRes = await request("/api/investigation/state", {
+    headers: { cookie: teamCookie, "x-acting-role": "detective" },
+  });
+  assert.equal(detStateRes.status, 200);
+  const detState = await detStateRes.json();
+  assert.equal(detState.state.role, "detective");
+
+  // Analyst fetches state with x-acting-role: analyst on SAME cookie
+  const anaStateRes = await request("/api/investigation/state", {
+    headers: { cookie: teamCookie, "x-acting-role": "analyst" },
+  });
+  assert.equal(anaStateRes.status, 200);
+  const anaState = await anaStateRes.json();
+  assert.equal(anaState.state.role, "analyst");
+
+  // ev1 is detective-only: analyst attempting ev1 gets 403
+  const anaEv1 = await request("/api/investigation/evidence", {
+    method: "POST",
+    headers: { cookie: teamCookie, "Content-Type": "application/json", "x-acting-role": "analyst" },
+    body: JSON.stringify({ key: "ev1" }),
+  });
+  assert.equal(anaEv1.status, 403);
+
+  // Detective successfully submits ev1
+  const detEv1 = await request("/api/investigation/evidence", {
+    method: "POST",
+    headers: { cookie: teamCookie, "Content-Type": "application/json", "x-acting-role": "detective" },
+    body: JSON.stringify({ key: "ev1" }),
+  });
+  assert.equal(detEv1.status, 201);
+
+  // Detective cannot decrypt (only analyst decrypts)
+  const detDecrypt = await request("/api/investigation/decrypt", {
+    method: "POST",
+    headers: { cookie: teamCookie, "Content-Type": "application/json", "x-acting-role": "detective" },
+    body: JSON.stringify({ token: "HELIX" }),
+  });
+  assert.equal(detDecrypt.status, 403);
+
+  // Analyst successfully decrypts
+  const anaDecrypt = await request("/api/investigation/decrypt", {
+    method: "POST",
+    headers: { cookie: teamCookie, "Content-Type": "application/json", "x-acting-role": "analyst" },
+    body: JSON.stringify({ token: "HELIX" }),
+  });
+  assert.equal(anaDecrypt.status, 200);
+  const decryptData = await anaDecrypt.json();
+  assert.equal(decryptData.state.decrypted, true);
+
+  // Detective submits accusation citing ev1
+  const detAccuse = await request("/api/investigation/accusation", {
+    method: "POST",
+    headers: { cookie: teamCookie, "Content-Type": "application/json", "x-acting-role": "detective" },
+    body: JSON.stringify({
+      suspect: "Mara Chen",
+      evidenceKey: "ev1",
+      reasoning: "Comprehensive forensic audit reveals physical access log anomaly.",
+    }),
+  });
+  assert.equal(detAccuse.status, 201);
+
+  // Submitter (detective) cannot approve their own accusation
+  const detSelfApprove = await request("/api/investigation/accusation/approve", {
+    method: "POST",
+    headers: { cookie: teamCookie, "Content-Type": "application/json", "x-acting-role": "detective" },
+    body: JSON.stringify({}),
+  });
+  assert.equal(detSelfApprove.status, 409);
+
+  // Partner (analyst) approves the accusation
+  const anaApprove = await request("/api/investigation/accusation/approve", {
+    method: "POST",
+    headers: { cookie: teamCookie, "Content-Type": "application/json", "x-acting-role": "analyst" },
+    body: JSON.stringify({}),
+  });
+  assert.equal(anaApprove.status, 200);
+  const finalData = await anaApprove.json();
+  assert.equal(finalData.state.accusation.agreed, true);
+});
+

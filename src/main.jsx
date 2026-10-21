@@ -220,6 +220,149 @@ function App() {
   );
 }
 
+function getInitials(name = '') {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return 'CC';
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[1][0]).toUpperCase();
+}
+
+function LandingScoreboard() {
+  const { data: board, error, updatedAt } = useVisiblePolling(() => apiRequest('/api/leaderboard'));
+  const now = useVisibleClock();
+
+  const rows = board?.rows || [];
+  const topThree = rows.slice(0, 3);
+  const remainingRows = rows.slice(3, 10);
+
+  // Podium slots: Rank 2 (Left), Rank 1 (Center), Rank 3 (Right)
+  const first = topThree[0];
+  const second = topThree[1];
+  const third = topThree[2];
+
+  return (
+    <section className="cc-board" id="scoreboard">
+      <p className="cc-board__eyebrow">
+        Live Scoreboard
+        {updatedAt && <span className="cc-board__sample" style={{ color: '#22c1f1', borderColor: 'rgba(34, 193, 241, 0.3)' }}>{formatUpdatedAgo(updatedAt, now)}</span>}
+      </p>
+      <h2 className="cc-board__title">Live tournament leaderboard. Scores update automatically.</h2>
+
+      {error && !board && (
+        <p className="cc-poll-offline" role="status" style={{ justifyContent: 'center', margin: '20px auto', maxWidth: '400px' }}>
+          Unable to load live standings.
+        </p>
+      )}
+
+      {rows.length === 0 ? (
+        <div className="cc-rank" role="table" aria-label="Live standings" style={{ margin: '36px auto 0' }}>
+          <div className="cc-rank__row cc-rank__row--head" role="row">
+            <span role="columnheader">#</span><span role="columnheader">Team</span>
+            <span role="columnheader">R1</span><span role="columnheader">R2</span>
+            <span role="columnheader">R3</span>
+            <span role="columnheader">Total</span>
+          </div>
+          <div className="cc-rank__row" role="row">
+            <span role="cell">—</span>
+            <span role="cell" className="cc-rank__team">Waiting for tournament scores…</span>
+            <span role="cell">—</span><span role="cell">—</span><span role="cell">—</span>
+            <span role="cell" className="cc-rank__total">—</span>
+          </div>
+        </div>
+      ) : (
+        <>
+          <div className="cc-podium is-in" aria-label="Top three teams">
+            {/* Rank 2 */}
+            <div className="cc-pod cc-pod--2">
+              {second ? (
+                <div className="cc-pod__who">
+                  <span className="cc-pod__avatar" aria-hidden="true">{getInitials(second.name)}</span>
+                  <span className="cc-pod__name" title={second.name}>{second.name}</span>
+                  <span className="cc-pod__pts">{second.total} pts</span>
+                </div>
+              ) : (
+                <div className="cc-pod__who" style={{ opacity: 0.4 }}>
+                  <span className="cc-pod__avatar" aria-hidden="true">—</span>
+                  <span className="cc-pod__name">TBD</span>
+                  <span className="cc-pod__pts">— pts</span>
+                </div>
+              )}
+              <div className="cc-pod__block"><span>2</span></div>
+            </div>
+
+            {/* Rank 1 */}
+            <div className="cc-pod cc-pod--1">
+              <svg className="cc-pod__trophy" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                <path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6" />
+                <path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18" />
+                <path d="M4 22h16" />
+                <path d="M10 14.66V17c0 .55-.47.98-1.97 1.21C7.85 18.75 7 20.24 7 22" />
+                <path d="M14 14.66V17c0 .55.47.98 1.97 1.21C16.15 18.75 17 20.24 17 22" />
+                <path d="M18 2H6v7a6 6 0 0 0 12 0V2Z" />
+              </svg>
+              {first ? (
+                <div className="cc-pod__who">
+                  <span className="cc-pod__avatar" aria-hidden="true">{getInitials(first.name)}</span>
+                  <span className="cc-pod__name" title={first.name}>{first.name}</span>
+                  <span className="cc-pod__pts">{first.total} pts</span>
+                </div>
+              ) : (
+                <div className="cc-pod__who" style={{ opacity: 0.4 }}>
+                  <span className="cc-pod__avatar" aria-hidden="true">—</span>
+                  <span className="cc-pod__name">TBD</span>
+                  <span className="cc-pod__pts">— pts</span>
+                </div>
+              )}
+              <div className="cc-pod__block"><span>1</span></div>
+            </div>
+
+            {/* Rank 3 */}
+            <div className="cc-pod cc-pod--3">
+              {third ? (
+                <div className="cc-pod__who">
+                  <span className="cc-pod__avatar" aria-hidden="true">{getInitials(third.name)}</span>
+                  <span className="cc-pod__name" title={third.name}>{third.name}</span>
+                  <span className="cc-pod__pts">{third.total} pts</span>
+                </div>
+              ) : (
+                <div className="cc-pod__who" style={{ opacity: 0.4 }}>
+                  <span className="cc-pod__avatar" aria-hidden="true">—</span>
+                  <span className="cc-pod__name">TBD</span>
+                  <span className="cc-pod__pts">— pts</span>
+                </div>
+              )}
+              <div className="cc-pod__block"><span>3</span></div>
+            </div>
+          </div>
+
+          {remainingRows.length > 0 && (
+            <div className="cc-rank" role="table" aria-label="Leaderboard from rank 4">
+              <div className="cc-rank__row cc-rank__row--head" role="row">
+                <span role="columnheader">#</span><span role="columnheader">Team</span>
+                <span role="columnheader">R1</span><span role="columnheader">R2</span>
+                <span role="columnheader">R3</span>
+                <span role="columnheader">Total</span>
+              </div>
+              {remainingRows.map((row, index) => (
+                <div className="cc-rank__row" role="row" key={`${row.name}-${index + 4}`}>
+                  <span role="cell">{row.rank}</span>
+                  <span role="cell" className="cc-rank__team">{row.name}</span>
+                  <span role="cell">{row.r1 === null ? '–' : row.r1}</span>
+                  <span role="cell">{row.r2 === null ? '–' : row.r2}</span>
+                  <span role="cell">{row.r3 === null ? '–' : row.r3}</span>
+                  <span role="cell" className="cc-rank__total">{row.total}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </>
+      )}
+
+      <a className="cc-btn cc-btn--ghost cc-board__cta" href="/login">Login <span aria-hidden="true">↗</span></a>
+    </section>
+  );
+}
+
 function Landing() {
   return (
     <main>
@@ -1303,6 +1446,7 @@ function DualControlMazeScreen({ onBack, onLogout }) {
       screenData.score?.games?.["maze"] ?? screenData.score?.games?.["1_maze"];
     return (
       <main className="product-page cc-circuit-page">
+        <TimeLeftBanner round={screenData.team?.currentRound} serverNow={screenData.team?.serverNow} />
         <div className="product-heading cc-circuit-heading">
           <div>
             <p className="product-eyebrow">ROUND 01 / TEAM PUZZLE</p>
@@ -1368,6 +1512,7 @@ function CyberRunnerScreen({ onBack, onLogout }) {
       screenData.score?.games?.["1_runner"];
     return (
       <main className="product-page cc-circuit-page">
+        <TimeLeftBanner round={screenData.team?.currentRound} serverNow={screenData.team?.serverNow} />
         <div className="product-heading cc-circuit-heading">
           <div>
             <p className="product-eyebrow">ROUND 01 / REFLEX SPRINT</p>
@@ -4024,6 +4169,19 @@ function CopyButton({ value }) {
   );
 }
 
+const LOCAL_PASSWORD_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789';
+
+function generateLocalRandomPassword(length = 12) {
+  let result = '';
+  const cryptoObj = window.crypto || window.msCrypto;
+  const values = new Uint32Array(length);
+  cryptoObj.getRandomValues(values);
+  for (let i = 0; i < length; i++) {
+    result += LOCAL_PASSWORD_ALPHABET[values[i] % LOCAL_PASSWORD_ALPHABET.length];
+  }
+  return result;
+}
+
 function CredentialBox({ credentials }) {
   if (!credentials) return null;
   return (
@@ -4969,6 +5127,7 @@ function AdminDashboard({ onLogout }) {
   };
 
   const updateTeam = async (teamId, patch) => {
+    setEditErrors((prev) => ({ ...prev, [teamId]: '' }));
     try {
       await apiRequest(`/api/admin/teams/${teamId}`, {
         method: "PATCH",

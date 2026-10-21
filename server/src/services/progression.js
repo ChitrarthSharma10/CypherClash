@@ -130,7 +130,8 @@ export async function getEffectiveProgression(teamId) {
  * Checks whether a team is eligible to participate in a given round.
  */
 export async function isTeamEligibleForRound(teamId, roundNumber) {
-  if (roundNumber <= 1) return true;
+  if (roundNumber > TOTAL_ROUNDS) return false;
+  if (roundNumber <= 1 || roundNumber === 3) return true;
   const progression = await getEffectiveProgression(teamId);
   return progression.effectiveEligibleRound >= roundNumber;
 }
