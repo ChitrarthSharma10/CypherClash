@@ -9,7 +9,6 @@ import { rebuildLeaderboard } from './services/leaderboard.js';
 import { ScoreEntry } from './models/ScoreEntry.js';
 import { GameSession } from './models/GameSession.js';
 import { setupSocketIO } from './socket.js';
-import { rebuildLeaderboard } from './services/leaderboard.js';
 import { MAZE_LAYOUTS } from './games/maze_engine/config.js';
 import { validateLayout } from './games/maze_engine/validateLayout.js';
 
