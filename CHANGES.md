@@ -1,7 +1,7 @@
-# CypherClash System Updates — Changes & Verification Report
+# Cyber Clash System Updates — Changes & Verification Report
 
 ## Overview
-This document records surgical updates across CypherClash in the four required areas:
+This document records surgical updates across Cyber Clash in the four required areas:
 1. **Task 4 — Scoring Constants & Deterministic Pools** (Dual-Control Maze & Cyber Runner)
 2. **Task 1 — Maze Physics & Solvability Guarantees** (Dual-Control Maze)
 3. **Task 2 — Unified Round Timers & Admin Synchronization** (All Games & Rounds 1–3)

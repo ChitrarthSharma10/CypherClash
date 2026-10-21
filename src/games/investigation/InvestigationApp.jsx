@@ -8,7 +8,10 @@ import SharedBoard from "./components/SharedBoard.jsx";
 import PlayerDossier from "./components/PlayerDossier.jsx";
 import { useRoundTimer } from "../../components/TimeLeftBanner.jsx";
 
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:4000";
+const API_URL = (
+  import.meta.env.VITE_API_URL ??
+  (import.meta.env.PROD ? "" : "http://localhost:4000")
+).replace(/\/+$/, "");
 
 const NAV_TABS = [
   { id: "overview", label: "Case Overview", icon: "🔍", desc: "Background & recent findings" },
@@ -244,7 +247,7 @@ export default function InvestigationApp({
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <small style={{ color: "#00c8e9", fontWeight: 800, letterSpacing: 1 }}>
-                CYPHERCLASH · ROUND 3
+                CYBER CLASH · ROUND 3
               </small>
               <span
                 style={{

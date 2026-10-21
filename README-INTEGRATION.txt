@@ -1,4 +1,4 @@
-# CypherClash Round 3 integration handover
+# Cyber Clash Round 3 integration handover
 
 ## Current implementation status
 
@@ -17,7 +17,7 @@ Current implementation status:
 - The round deadline is enforced using MongoDB database time (`$$NOW`) inside the admission predicate, not only in the request middleware.
 - Final results are stored in the embedded `finalResult` field for each case and are preserved immutably after closure or expiry.
 - The investigation routes use team and session binding to enforce role assignment and stale-assignment rejection.
-- Round 3 currently exists as a standalone prototype under `round3_investigation/`. It does not log a team in: the Lead Detective must first use the existing CypherClash team login in the same browser profile. The prototype and login page must use a compatible hostname for the session cookie to be sent.
+- Round 3 currently exists as a standalone prototype under `round3_investigation/`. It does not log a team in: the Lead Detective must first use the existing Cyber Clash team login in the same browser profile. The prototype and login page must use a compatible hostname for the session cookie to be sent.
 - The root production build does not integrate the prototype into the main app or copy it into `dist/`. The repository retains `scripts/copy-round3-prototype.js`, but the root build does not invoke it.
 
 Previously verified results (not rerun as part of this rewrite):
@@ -77,7 +77,7 @@ Each investigation entry includes role claims, invite data, clue ledger, decrypt
 
 ### End-to-end flow
 1. An admin starts Round 3 via the round-state service.
-2. A team member signs in through the existing CypherClash team login at `http://localhost:5177/`.
+2. A team member signs in through the existing Cyber Clash team login at `http://localhost:5177/`.
 3. In the same browser profile, the team member opens `http://localhost:5177/round3_investigation/index.html` and chooses Lead Detective.
 4. The page sends `POST /api/investigation/join` with the existing team session. The server verifies the round is running and the deadline is still in the future using the document predicate.
 5. The server creates or claims the case in the same `RoundState` document, storing the detective session hash and invite hash, and returns the one-use analyst invitation.

@@ -130,7 +130,6 @@ export const RESOURCE_CONTENTS = Object.freeze({
           <div class="cc-forensic-item" data-item="6">
             <img src="/assets/forensic/doc-forensic-report.svg" alt="Exhibit 06: DFU Video Integrity Report (DFU-REP-2026-042)" />
             <span class="cc-card-caption">Exhibit 06: DFU Video Integrity Report</span>
-            <div class="cc-concealed-plate" style="display:none;">FRAME-SHIFT-246</div>
           </div>
           <div class="cc-forensic-item" data-item="7">
             <img src="/assets/forensic/hardware-network-tap.jpg" alt="Exhibit 07: Hardware Ethernet Tap Splicer" />

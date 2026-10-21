@@ -5,6 +5,7 @@ import { createApp } from './app.js';
 import { connectDatabase } from './db.js';
 import { config } from './config.js';
 import { initializeRoundStates, startRoundStateMonitor } from './services/roundState.js';
+import { rebuildLeaderboard } from './services/leaderboard.js';
 import { ScoreEntry } from './models/ScoreEntry.js';
 import { GameSession } from './models/GameSession.js';
 import { setupSocketIO } from './socket.js';

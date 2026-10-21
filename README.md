@@ -1,12 +1,12 @@
-# CypherClash
+# Cyber Clash
 
-CypherClash is an event-grade web platform and competition engine built for cybersecurity tournament operations. The entire competition lifecycle is managed through a single unified application: team authentication, real-time cooperative mini-games, forensic inspect-element investigations, collaborative dual-role incident response, append-only score ledgers, live leaderboards, and administrative tournament controls.
+Cyber Clash is an event-grade web platform and competition engine built for cybersecurity tournament operations. The entire competition lifecycle is managed through a single unified application: team authentication, real-time cooperative mini-games, forensic inspect-element investigations, collaborative dual-role incident response, append-only score ledgers, live leaderboards, and administrative tournament controls.
 
 ---
 
 ## 1. Tournament Structure & Games
 
-CypherClash features a structured 3-round competitive tournament where all gameplay scores are audited, append-only, and capped at **500 points maximum per game**. Once a team completes a game, it is finalized and cannot be replayed.
+Cyber Clash features a structured 3-round competitive tournament where all gameplay scores are audited, append-only, and capped at **500 points maximum per game**. Once a team completes a game, it is finalized and cannot be replayed.
 
 ### Round 1: Cooperative Mini-Games
 1. **Circuit Sync (Logic Challenge)**

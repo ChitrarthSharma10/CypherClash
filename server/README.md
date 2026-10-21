@@ -1,4 +1,4 @@
-# CypherClash API
+# Cyber Clash API
 
 ## Setup
 
