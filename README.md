@@ -28,10 +28,10 @@ CypherClash features a structured 3-round competitive tournament where all gamep
 
 ### Round 2: Operation Shadow Beacon (Hidden Clue Investigation)
 - 4-stage sequential web UI incident investigation:
-  - **Lead 1**: High-Priority Gateway Alert Log analysis (`ALPHA-RELAY-77`).
-  - **Lead 2**: Digital Forensic Evidence Desk with 13 photo/document exhibits, timeline correlation, and CCTV analysis (`FRAME-SHIFT-246`).
-  - **Lead 3**: Historical Git repository commit ledger inspection via challenge repository link (`hellowor!d`).
-  - **Lead 4**: Core Signal Vault with interactive Signal Reconstruction Matrix (`UNMASKED`).
+  - **Lead 1**: High-Priority Gateway Alert Log analysis.
+  - **Lead 2**: Digital Forensic Evidence Desk with 13 photo/document exhibits, timeline correlation, and CCTV analysis.
+  - **Lead 3**: Historical Git repository commit ledger inspection via challenge repository link.
+  - **Lead 4**: Core Signal Vault with interactive Signal Reconstruction Matrix.
 - Features stage-gated resources, answer normalization, wrong-answer penalties (-15 pts), and single-use tactical hints (-25 pts).
 - Scoring: $\max(150, 500 - (15 \times \text{wrongAttempts}) - (25 \times \text{hintsUsed}))$. Capped at **500 points max** (floor: 150 pts).
 
